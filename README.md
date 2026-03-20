@@ -20,6 +20,7 @@ The goal is to create a small but serious product:
 The local development setup will start small:
 - Postgres and Redis run through Docker Compose
 - the frontend and backend applications will run directly on the host during development
+- the frontend uses `pnpm` as its package manager
 
 Planned local ports:
 - `3000`: Next.js web app
@@ -31,5 +32,6 @@ Current helper commands:
 - `make infra-up`
 - `make infra-down`
 - `make infra-logs`
+- `make dev-web`
 
 At this stage, Compose is only responsible for local infrastructure services.

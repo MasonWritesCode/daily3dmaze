@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: infra-up infra-down infra-logs
+.PHONY: infra-up infra-down infra-logs dev-web
 
 infra-up:
 	docker compose up -d postgres redis
@@ -11,3 +11,6 @@ infra-down:
 
 infra-logs:
 	docker compose logs -f postgres redis
+
+dev-web:
+	cd web && pnpm dev
