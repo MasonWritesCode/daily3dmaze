@@ -10,6 +10,7 @@ node_modules/
 .next/
 dist/
 coverage/
+.cache/
 
 # Go / general build outputs
 bin/
