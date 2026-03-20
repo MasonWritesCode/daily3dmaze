@@ -66,6 +66,26 @@ h1 {
   line-height: 1.6;
 }
 
+.maze-summary {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: rgba(17, 19, 24, 0.45);
+}
+
+.maze-summary .body-copy:last-child {
+  margin-bottom: 0;
+}
+
+.status-copy {
+  margin-top: 24px;
+}
+
+.error-copy {
+  color: #fca5a5;
+}
+
 .actions {
   display: flex;
   gap: 12px;
