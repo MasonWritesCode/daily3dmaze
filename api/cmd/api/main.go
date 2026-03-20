@@ -2,16 +2,18 @@ package main
 
 import (
 	"encoding/json"
+	"hash/fnv"
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 type dailyMazeResponse struct {
-	Date  string    `json:"date"`
-	Title string    `json:"title"`
-	Seed  string    `json:"seed"`
-	Size  mazeSize  `json:"size"`
+	Date  string   `json:"date"`
+	Title string   `json:"title"`
+	Seed  string   `json:"seed"`
+	Size  mazeSize `json:"size"`
 }
 
 type mazeSize struct {
@@ -68,18 +70,38 @@ func dailyMazeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	response := dailyMazeResponse{
-		Date:  "2026-03-20",
-		Title: "Daily Maze",
-		Seed:  "2026-03-20",
-		Size: mazeSize{
-			Width:  15,
-			Height: 15,
-		},
-	}
+	response := generateDailyMaze(time.Now().UTC())
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func generateDailyMaze(now time.Time) dailyMazeResponse {
+	challengeDate := now.Format("2006-01-02")
+	seed := "daily3dmaze:" + challengeDate
+	size := generateMazeSize(seed)
+
+	return dailyMazeResponse{
+		Date:  challengeDate,
+		Title: "Daily Maze",
+		Seed:  seed,
+		Size:  size,
+	}
+}
+
+func generateMazeSize(seed string) mazeSize {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(seed))
+	value := hash.Sum32()
+
+	// Keep early daily challenges compact while still varying by date.
+	baseWidth := 13
+	baseHeight := 13
+
+	return mazeSize{
+		Width:  baseWidth + int(value%5)*2,
+		Height: baseHeight + int((value/5)%5)*2,
 	}
 }
 
