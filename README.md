@@ -14,3 +14,22 @@ The goal is to create a small but serious product:
 - `api/`: Go backend and background workers
 - Postgres for relational data
 - Redis for caching, queues, and rate limiting
+
+## Local Development
+
+The local development setup will start small:
+- Postgres and Redis run through Docker Compose
+- the frontend and backend applications will run directly on the host during development
+
+Planned local ports:
+- `3000`: Next.js web app
+- `8080`: Go API
+- `5432`: Postgres
+- `6379`: Redis
+
+Current helper commands:
+- `make infra-up`
+- `make infra-down`
+- `make infra-logs`
+
+At this stage, Compose is only responsible for local infrastructure services.
