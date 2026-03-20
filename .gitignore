@@ -1,0 +1,19 @@
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node / frontend
+node_modules/
+.next/
+dist/
+coverage/
+
+# Go / general build outputs
+bin/
+tmp/
+
+# Logs
+*.log
