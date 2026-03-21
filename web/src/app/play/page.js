@@ -16,7 +16,9 @@ const TURN_DURATION_MS = 150;
 const TEXTURE_PATHS = {
   wall: "/assets/3d-maze/wall.png",
   floor: "/assets/3d-maze/floor.png",
-  ceiling: "/assets/3d-maze/ceiling.png"
+  ceiling: "/assets/3d-maze/ceiling.png",
+  start: "/assets/3d-maze/start.png",
+  exit: "/assets/3d-maze/smiley.png"
 };
 
 function renderGridRows(maze, playerPosition, directionIndex) {
@@ -91,7 +93,9 @@ function useMazeTextures() {
   const [textures, setTextures] = useState({
     wall: null,
     floor: null,
-    ceiling: null
+    ceiling: null,
+    start: null,
+    exit: null
   });
 
   useEffect(() => {
@@ -257,6 +261,7 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
     const fieldOfView = Math.PI / 3;
     const maxDistance = 24;
     const horizon = height / 2;
+    const depthBuffer = new Array(width).fill(maxDistance);
     context.imageSmoothingEnabled = false;
 
     if (textureSurfaceRef.current.source !== textures) {
@@ -372,6 +377,7 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
         0.0001,
         distance * Math.cos(rayAngle - playerAngle)
       );
+      depthBuffer[column] = correctedDistance;
       const wallHeight = Math.min(height, height / correctedDistance);
       const wallTop = (height - wallHeight) / 2;
       const shade = Math.max(50, Math.min(200, 215 - correctedDistance * 18));
@@ -395,6 +401,85 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
       } else {
         context.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 24})`;
         context.fillRect(column, wallTop, 1, wallHeight);
+      }
+    }
+
+    const spriteDefinitions = [
+      {
+        image: textures.start,
+        worldX: maze.start.x + 0.5,
+        worldY: maze.start.y + 0.5,
+        scale: 0.42,
+        alpha: 0.5
+      },
+      {
+        image: textures.exit,
+        worldX: maze.exit.x + 0.5,
+        worldY: maze.exit.y + 0.5,
+        scale: 1.1,
+        alpha: 1
+      }
+    ]
+      .filter((sprite) => sprite.image)
+      .map((sprite) => {
+        const deltaX = sprite.worldX - originX;
+        const deltaY = sprite.worldY - originY;
+        const spriteAngle = normalizeAngle(Math.atan2(deltaY, deltaX) - playerAngle);
+        const distance = Math.hypot(deltaX, deltaY);
+
+        return {
+          ...sprite,
+          angle: spriteAngle,
+          distance
+        };
+      })
+      .filter(
+        (sprite) =>
+          sprite.distance > 0.2 &&
+          Math.abs(sprite.angle) < fieldOfView * 0.75
+      )
+      .sort((left, right) => right.distance - left.distance);
+
+    for (const sprite of spriteDefinitions) {
+      const correctedDistance = Math.max(
+        0.0001,
+        sprite.distance * Math.cos(sprite.angle)
+      );
+      const projectedCenter =
+        (0.5 + sprite.angle / fieldOfView) * width;
+      const projectedHeight = (height / correctedDistance) * sprite.scale;
+      const projectedWidth =
+        (projectedHeight * sprite.image.width) / sprite.image.height;
+      const top = (height - projectedHeight) / 2;
+      const left = projectedCenter - projectedWidth / 2;
+
+      for (let stripe = 0; stripe < projectedWidth; stripe += 1) {
+        const screenX = Math.floor(left + stripe);
+
+        if (screenX < 0 || screenX >= width) {
+          continue;
+        }
+
+        if (correctedDistance >= depthBuffer[screenX]) {
+          continue;
+        }
+
+        const textureX = Math.floor((stripe / projectedWidth) * sprite.image.width);
+        context.save();
+        context.globalAlpha = sprite.alpha;
+
+        context.drawImage(
+          sprite.image,
+          textureX,
+          0,
+          1,
+          sprite.image.height,
+          screenX,
+          top,
+          1,
+          projectedHeight
+        );
+        context.restore();
       }
     }
 
