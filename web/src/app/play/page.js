@@ -11,6 +11,8 @@ const DIRECTION_ORDER = [
   { name: "South", marker: "v", vector: { x: 0, y: 1 }, angle: Math.PI / 2 },
   { name: "West", marker: "<", vector: { x: -1, y: 0 }, angle: Math.PI }
 ];
+const MOVE_DURATION_MS = 180;
+const TURN_DURATION_MS = 150;
 
 function renderGridRows(maze, playerPosition, directionIndex) {
   const playerMarker = DIRECTION_ORDER[directionIndex].marker;
@@ -54,7 +56,33 @@ function attemptMove(playerPosition, direction, maze) {
   return nextPosition;
 }
 
-function FirstPersonView({ maze, playerPosition, directionIndex }) {
+function normalizeAngle(angle) {
+  let value = angle;
+
+  while (value > Math.PI) {
+    value -= Math.PI * 2;
+  }
+
+  while (value < -Math.PI) {
+    value += Math.PI * 2;
+  }
+
+  return value;
+}
+
+function formatElapsedTime(elapsedMs) {
+  const totalMilliseconds = Math.max(0, elapsedMs);
+  const minutes = Math.floor(totalMilliseconds / 60000);
+  const seconds = Math.floor((totalMilliseconds % 60000) / 1000);
+  const centiseconds = Math.floor((totalMilliseconds % 1000) / 10);
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
+    2,
+    "0"
+  )}.${String(centiseconds).padStart(2, "0")}`;
+}
+
+function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -72,8 +100,6 @@ function FirstPersonView({ maze, playerPosition, directionIndex }) {
 
     const width = canvas.width;
     const height = canvas.height;
-    const playerDirection = DIRECTION_ORDER[directionIndex];
-    const playerAngle = playerDirection.angle;
     const originX = playerPosition.x + 0.5;
     const originY = playerPosition.y + 0.5;
     const fieldOfView = Math.PI / 3;
@@ -129,15 +155,13 @@ function FirstPersonView({ maze, playerPosition, directionIndex }) {
     context.moveTo(0, height / 2);
     context.lineTo(width, height / 2);
     context.stroke();
-  }, [directionIndex, maze, playerPosition]);
+  }, [maze, playerAngle, playerPosition]);
 
   return (
     <div className="raycast-panel">
       <div className="raycast-header">
         <p className="body-copy panel-title">First-person debug view</p>
-        <p className="body-copy panel-subtitle">
-          Facing {DIRECTION_ORDER[directionIndex].name}
-        </p>
+        <p className="body-copy panel-subtitle">Facing {facingName}</p>
       </div>
       <canvas
         ref={canvasRef}
@@ -153,20 +177,144 @@ function FirstPersonView({ maze, playerPosition, directionIndex }) {
 function MazeDetails({ maze }) {
   const [playerPosition, setPlayerPosition] = useState(maze.start);
   const [directionIndex, setDirectionIndex] = useState(0);
+  const [renderPosition, setRenderPosition] = useState(maze.start);
+  const [renderAngle, setRenderAngle] = useState(DIRECTION_ORDER[0].angle);
   const [moveCount, setMoveCount] = useState(0);
   const [hasFinished, setHasFinished] = useState(false);
+  const [runStartTime, setRunStartTime] = useState(null);
+  const [finishTime, setFinishTime] = useState(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const animationRef = useRef(null);
+  const actionLockRef = useRef(false);
   const gridRows = renderGridRows(maze, playerPosition, directionIndex);
 
   useEffect(() => {
     setPlayerPosition(maze.start);
     setDirectionIndex(0);
+    setRenderPosition(maze.start);
+    setRenderAngle(DIRECTION_ORDER[0].angle);
     setMoveCount(0);
     setHasFinished(false);
+    setRunStartTime(null);
+    setFinishTime(null);
+    setElapsedMs(0);
+    actionLockRef.current = false;
   }, [maze]);
 
   useEffect(() => {
+    if (!runStartTime || hasFinished) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setElapsedMs(Date.now() - runStartTime);
+    }, 16);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [hasFinished, runStartTime]);
+
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        window.cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    function beginRunIfNeeded() {
+      if (runStartTime) {
+        return runStartTime;
+      }
+
+      const startedAt = Date.now();
+      setRunStartTime(startedAt);
+      setElapsedMs(0);
+      return startedAt;
+    }
+
+    function animateMovement(nextPosition, startedAtForRun) {
+      const startPosition = playerPosition;
+      const startedAt = performance.now();
+      actionLockRef.current = true;
+
+      function step(now) {
+        const progress = Math.min(1, (now - startedAt) / MOVE_DURATION_MS);
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+        setRenderPosition({
+          x: startPosition.x + (nextPosition.x - startPosition.x) * easedProgress,
+          y: startPosition.y + (nextPosition.y - startPosition.y) * easedProgress
+        });
+
+        if (progress < 1) {
+          animationRef.current = window.requestAnimationFrame(step);
+          return;
+        }
+
+        setPlayerPosition(nextPosition);
+        setRenderPosition(nextPosition);
+        setMoveCount((currentCount) => currentCount + 1);
+        actionLockRef.current = false;
+
+        if (isExitReached(nextPosition, maze)) {
+          const completedAt = Date.now();
+          setHasFinished(true);
+          setFinishTime(completedAt);
+          setElapsedMs(completedAt - startedAtForRun);
+        }
+      }
+
+      animationRef.current = window.requestAnimationFrame(step);
+    }
+
+    function animateTurn(nextDirectionIndex) {
+      const startAngle = renderAngle;
+      const targetAngle = DIRECTION_ORDER[nextDirectionIndex].angle;
+      const delta = normalizeAngle(targetAngle - startAngle);
+      const startedAt = performance.now();
+      actionLockRef.current = true;
+
+      function step(now) {
+        const progress = Math.min(1, (now - startedAt) / TURN_DURATION_MS);
+        const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+        setRenderAngle(startAngle + delta * easedProgress);
+
+        if (progress < 1) {
+          animationRef.current = window.requestAnimationFrame(step);
+          return;
+        }
+
+        setDirectionIndex(nextDirectionIndex);
+        setRenderAngle(DIRECTION_ORDER[nextDirectionIndex].angle);
+        actionLockRef.current = false;
+      }
+
+      animationRef.current = window.requestAnimationFrame(step);
+    }
+
     function handleKeyDown(event) {
-      if (hasFinished) {
+      if (hasFinished || actionLockRef.current) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft" || event.key === "a") {
+        event.preventDefault();
+        beginRunIfNeeded();
+        const nextDirectionIndex =
+          (directionIndex + DIRECTION_ORDER.length - 1) % DIRECTION_ORDER.length;
+        animateTurn(nextDirectionIndex);
+        return;
+      }
+
+      if (event.key === "ArrowRight" || event.key === "d") {
+        event.preventDefault();
+        beginRunIfNeeded();
+        const nextDirectionIndex = (directionIndex + 1) % DIRECTION_ORDER.length;
+        animateTurn(nextDirectionIndex);
         return;
       }
 
@@ -179,22 +327,6 @@ function MazeDetails({ maze }) {
                 y: -DIRECTION_ORDER[directionIndex].vector.y
               }
             : null;
-
-      if (event.key === "ArrowLeft" || event.key === "a") {
-        event.preventDefault();
-        setDirectionIndex((currentIndex) =>
-          (currentIndex + DIRECTION_ORDER.length - 1) % DIRECTION_ORDER.length
-        );
-        return;
-      }
-
-      if (event.key === "ArrowRight" || event.key === "d") {
-        event.preventDefault();
-        setDirectionIndex((currentIndex) =>
-          (currentIndex + 1) % DIRECTION_ORDER.length
-        );
-        return;
-      }
 
       if (!movementDirection) {
         return;
@@ -211,12 +343,8 @@ function MazeDetails({ maze }) {
         return;
       }
 
-      setPlayerPosition(nextPosition);
-      setMoveCount((currentCount) => currentCount + 1);
-
-      if (isExitReached(nextPosition, maze)) {
-        setHasFinished(true);
-      }
+      const startedAt = beginRunIfNeeded();
+      animateMovement(nextPosition, startedAt);
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -224,21 +352,32 @@ function MazeDetails({ maze }) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [directionIndex, hasFinished, maze, playerPosition]);
+  }, [directionIndex, hasFinished, maze, playerPosition, renderAngle, runStartTime]);
 
   function handleReset() {
+    if (animationRef.current) {
+      window.cancelAnimationFrame(animationRef.current);
+    }
+
     setPlayerPosition(maze.start);
     setDirectionIndex(0);
+    setRenderPosition(maze.start);
+    setRenderAngle(DIRECTION_ORDER[0].angle);
     setMoveCount(0);
     setHasFinished(false);
+    setRunStartTime(null);
+    setFinishTime(null);
+    setElapsedMs(0);
+    actionLockRef.current = false;
   }
 
   return (
     <div className="maze-summary">
       <FirstPersonView
         maze={maze}
-        playerPosition={playerPosition}
-        directionIndex={directionIndex}
+        playerPosition={renderPosition}
+        playerAngle={renderAngle}
+        facingName={DIRECTION_ORDER[directionIndex].name}
       />
       <p className="body-copy">
         <strong>Date:</strong> {maze.date}
@@ -262,6 +401,10 @@ function MazeDetails({ maze }) {
         <strong>Moves:</strong> {moveCount}
       </p>
       <p className="body-copy">
+        <strong>Time:</strong>{" "}
+        {finishTime ? formatElapsedTime(finishTime - runStartTime) : formatElapsedTime(elapsedMs)}
+      </p>
+      <p className="body-copy">
         <strong>Facing:</strong> {DIRECTION_ORDER[directionIndex].name}
       </p>
       <p className="body-copy">
@@ -269,7 +412,7 @@ function MazeDetails({ maze }) {
       </p>
       <p className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}>
         {hasFinished
-          ? "Maze complete. You reached the exit."
+          ? `Maze complete in ${formatElapsedTime(finishTime - runStartTime)}.`
           : "Navigate from S to E. The top-down player marker shows facing."}
       </p>
       <div className="maze-grid-preview" aria-label="Daily maze debug view">
