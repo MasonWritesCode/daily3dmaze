@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"regexp"
 	"testing"
 	"time"
@@ -55,6 +56,19 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 		WillReturnRows(
 			sqlmock.NewRows([]string{"id", "username", "created_at", "count", "days", "min", "avg", "max"}).
 				AddRow(7, "mason_dev", createdAt, 2, 2, 12345, 13000.0, acceptedAt),
+		)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT DISTINCT run_date::text
+		FROM runs
+		WHERE user_id = $1
+		ORDER BY run_date ASC
+	`)).
+		WithArgs(int64(7)).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"run_date"}).
+				AddRow("2026-03-20").
+				AddRow("2026-03-21"),
 		)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
@@ -111,11 +125,68 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 		t.Fatalf("expected last played %q, got %#v", acceptedAt.Format(time.RFC3339), payload.Stats.LastPlayedAt)
 	}
 
+	if payload.Stats.CurrentStreakDays != 2 {
+		t.Fatalf("expected current streak 2, got %d", payload.Stats.CurrentStreakDays)
+	}
+
+	if payload.Stats.BestStreakDays != 2 {
+		t.Fatalf("expected best streak 2, got %d", payload.Stats.BestStreakDays)
+	}
+
 	if len(payload.RecentRuns) != 1 {
 		t.Fatalf("expected 1 recent run, got %d", len(payload.RecentRuns))
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestCalculateStreaks(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name     string
+		runDates []string
+		expected []int
+	}{
+		{
+			name:     "empty",
+			runDates: nil,
+			expected: []int{0, 0},
+		},
+		{
+			name:     "active streak through today",
+			runDates: []string{"2026-03-19", "2026-03-20", "2026-03-21"},
+			expected: []int{3, 3},
+		},
+		{
+			name:     "active streak through yesterday",
+			runDates: []string{"2026-03-18", "2026-03-19", "2026-03-20"},
+			expected: []int{3, 3},
+		},
+		{
+			name:     "old streak only",
+			runDates: []string{"2026-03-10", "2026-03-11", "2026-03-13"},
+			expected: []int{0, 2},
+		},
+		{
+			name:     "best streak larger than current",
+			runDates: []string{"2026-03-10", "2026-03-11", "2026-03-12", "2026-03-20", "2026-03-21"},
+			expected: []int{2, 3},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			current, best := calculateStreaks(tc.runDates, now)
+			if !reflect.DeepEqual([]int{current, best}, tc.expected) {
+				t.Fatalf("expected streaks %v, got [%d %d]", tc.expected, current, best)
+			}
+		})
 	}
 }

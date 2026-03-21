@@ -29,6 +29,8 @@ type profileResponse struct {
 		BestElapsedTimeMs    *int    `json:"bestElapsedTimeMs"`
 		AverageElapsedTimeMs *int    `json:"averageElapsedTimeMs"`
 		LastPlayedAt         *string `json:"lastPlayedAt"`
+		CurrentStreakDays    int     `json:"currentStreakDays"`
+		BestStreakDays       int     `json:"bestStreakDays"`
 	} `json:"stats"`
 	RecentRuns []profileRun `json:"recentRuns"`
 }
@@ -139,6 +141,35 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 		profile.Stats.LastPlayedAt = &lastPlayedAt
 	}
 
+	const streakDatesQuery = `
+		SELECT DISTINCT run_date::text
+		FROM runs
+		WHERE user_id = $1
+		ORDER BY run_date ASC
+	`
+
+	streakRows, err := a.db.Query(streakDatesQuery, profile.User.ID)
+	if err != nil {
+		return profileResponse{}, err
+	}
+	defer streakRows.Close()
+
+	runDates := make([]string, 0, profile.Stats.DaysPlayed)
+	for streakRows.Next() {
+		var runDate string
+		if err := streakRows.Scan(&runDate); err != nil {
+			return profileResponse{}, err
+		}
+
+		runDates = append(runDates, runDate)
+	}
+
+	if err := streakRows.Err(); err != nil {
+		return profileResponse{}, err
+	}
+
+	profile.Stats.CurrentStreakDays, profile.Stats.BestStreakDays = calculateStreaks(runDates, time.Now().UTC())
+
 	const recentRunsQuery = `
 		SELECT run_date::text, seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
@@ -170,4 +201,61 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 	}
 
 	return profile, nil
+}
+
+func calculateStreaks(runDates []string, now time.Time) (int, int) {
+	if len(runDates) == 0 {
+		return 0, 0
+	}
+
+	parsedDates := make([]time.Time, 0, len(runDates))
+	for _, runDate := range runDates {
+		parsed, err := time.Parse(dateLayoutISO, runDate)
+		if err != nil {
+			continue
+		}
+
+		parsedDates = append(parsedDates, parsed.UTC())
+	}
+
+	if len(parsedDates) == 0 {
+		return 0, 0
+	}
+
+	bestStreak := 1
+	currentRun := 1
+	for index := 1; index < len(parsedDates); index += 1 {
+		diff := int(parsedDates[index].Sub(parsedDates[index-1]).Hours() / 24)
+		if diff == 1 {
+			currentRun += 1
+		} else if diff > 1 {
+			if currentRun > bestStreak {
+				bestStreak = currentRun
+			}
+			currentRun = 1
+		}
+	}
+	if currentRun > bestStreak {
+		bestStreak = currentRun
+	}
+
+	today := now.UTC().Format(dateLayoutISO)
+	yesterday := now.UTC().AddDate(0, 0, -1).Format(dateLayoutISO)
+	lastDate := parsedDates[len(parsedDates)-1].Format(dateLayoutISO)
+
+	if lastDate != today && lastDate != yesterday {
+		return 0, bestStreak
+	}
+
+	currentStreak := 1
+	for index := len(parsedDates) - 1; index > 0; index -= 1 {
+		diff := int(parsedDates[index].Sub(parsedDates[index-1]).Hours() / 24)
+		if diff == 1 {
+			currentStreak += 1
+			continue
+		}
+		break
+	}
+
+	return currentStreak, bestStreak
 }

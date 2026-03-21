@@ -120,6 +120,14 @@ export default function ProfilePage() {
                       : new Date(profile.stats.lastPlayedAt).toLocaleString()}
                   </dd>
                 </div>
+                <div className="metadata-row">
+                  <dt>Current streak</dt>
+                  <dd>{profile.stats.currentStreakDays} day(s)</dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Best streak</dt>
+                  <dd>{profile.stats.bestStreakDays} day(s)</dd>
+                </div>
               </dl>
             </section>
 

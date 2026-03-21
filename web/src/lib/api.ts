@@ -64,6 +64,8 @@ export interface PlayerProfile {
     bestElapsedTimeMs: number | null;
     averageElapsedTimeMs: number | null;
     lastPlayedAt: string | null;
+    currentStreakDays: number;
+    bestStreakDays: number;
   };
   recentRuns: ProfileRun[];
 }
