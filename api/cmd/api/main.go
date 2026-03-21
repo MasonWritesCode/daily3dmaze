@@ -30,6 +30,22 @@ type mazePoint struct {
 	Y int `json:"y"`
 }
 
+type runSubmissionRequest struct {
+	Date          string `json:"date"`
+	Seed          string `json:"seed"`
+	MoveCount     int    `json:"moveCount"`
+	ElapsedTimeMs int    `json:"elapsedTimeMs"`
+}
+
+type runSubmissionResponse struct {
+	Status        string `json:"status"`
+	Date          string `json:"date"`
+	Seed          string `json:"seed"`
+	MoveCount     int    `json:"moveCount"`
+	ElapsedTimeMs int    `json:"elapsedTimeMs"`
+	AcceptedAt    string `json:"acceptedAt"`
+}
+
 func main() {
 	port := os.Getenv("API_PORT")
 	if port == "" {
@@ -39,6 +55,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/daily-maze", dailyMazeHandler)
+	mux.HandleFunc("/api/runs", runSubmissionHandler)
 
 	addr := ":" + port
 	log.Printf("api listening on %s", addr)
@@ -80,6 +97,55 @@ func dailyMazeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	response := generateDailyMaze(time.Now().UTC())
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request runSubmissionRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if request.Date == "" || request.Seed == "" {
+		http.Error(w, "date and seed are required", http.StatusBadRequest)
+		return
+	}
+
+	if request.MoveCount <= 0 {
+		http.Error(w, "moveCount must be greater than zero", http.StatusBadRequest)
+		return
+	}
+
+	if request.ElapsedTimeMs <= 0 {
+		http.Error(w, "elapsedTimeMs must be greater than zero", http.StatusBadRequest)
+		return
+	}
+
+	response := runSubmissionResponse{
+		Status:        "accepted",
+		Date:          request.Date,
+		Seed:          request.Seed,
+		MoveCount:     request.MoveCount,
+		ElapsedTimeMs: request.ElapsedTimeMs,
+		AcceptedAt:    time.Now().UTC().Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
@@ -240,7 +306,7 @@ func hashSeed(seed string) uint32 {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 		next.ServeHTTP(w, r)

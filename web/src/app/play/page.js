@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import FirstPersonView from "../../components/game/FirstPersonView";
-import { dailyMazeEndpoint } from "../../lib/config";
+import { dailyMazeEndpoint, runsEndpoint } from "../../lib/config";
 import {
   DIRECTION_ORDER,
   MOVE_DURATION_MS,
@@ -26,8 +26,11 @@ function MazeDetails({ maze }) {
   const [runStartTime, setRunStartTime] = useState(null);
   const [finishTime, setFinishTime] = useState(null);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [submissionStatus, setSubmissionStatus] = useState("idle");
+  const [submissionSummary, setSubmissionSummary] = useState(null);
   const animationRef = useRef(null);
   const actionLockRef = useRef(false);
+  const submittedRunRef = useRef(null);
   const gridRows = renderGridRows(maze, playerPosition, directionIndex);
 
   useEffect(() => {
@@ -40,7 +43,10 @@ function MazeDetails({ maze }) {
     setRunStartTime(null);
     setFinishTime(null);
     setElapsedMs(0);
+    setSubmissionStatus("idle");
+    setSubmissionSummary(null);
     actionLockRef.current = false;
+    submittedRunRef.current = null;
   }, [maze]);
 
   useEffect(() => {
@@ -56,6 +62,52 @@ function MazeDetails({ maze }) {
       window.clearInterval(intervalId);
     };
   }, [hasFinished, runStartTime]);
+
+  useEffect(() => {
+    if (!hasFinished || !finishTime || !runStartTime) {
+      return;
+    }
+
+    const elapsedTimeMs = finishTime - runStartTime;
+    const runFingerprint = `${maze.seed}:${moveCount}:${elapsedTimeMs}`;
+
+    if (submittedRunRef.current === runFingerprint) {
+      return;
+    }
+
+    submittedRunRef.current = runFingerprint;
+    setSubmissionStatus("submitting");
+
+    async function submitRun() {
+      try {
+        const response = await fetch(runsEndpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            date: maze.date,
+            seed: maze.seed,
+            moveCount,
+            elapsedTimeMs
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Run submission failed with status ${response.status}`);
+        }
+
+        const payload = await response.json();
+        setSubmissionSummary(payload);
+        setSubmissionStatus("submitted");
+      } catch (error) {
+        console.error("Failed to submit completed run", error);
+        setSubmissionStatus("error");
+      }
+    }
+
+    submitRun();
+  }, [finishTime, hasFinished, maze.date, maze.seed, moveCount, runStartTime]);
 
   useEffect(() => {
     return () => {
@@ -210,7 +262,10 @@ function MazeDetails({ maze }) {
     setRunStartTime(null);
     setFinishTime(null);
     setElapsedMs(0);
+    setSubmissionStatus("idle");
+    setSubmissionSummary(null);
     actionLockRef.current = false;
+    submittedRunRef.current = null;
   }
 
   return (
@@ -259,6 +314,19 @@ function MazeDetails({ maze }) {
           ? `Maze complete in ${formatElapsedTime(finishTime - runStartTime)}.`
           : "Navigate from S to E. The top-down player marker shows facing."}
       </p>
+      {submissionStatus === "submitting" && (
+        <p className="body-copy status-copy">Submitting run to the API...</p>
+      )}
+      {submissionStatus === "submitted" && submissionSummary && (
+        <p className="body-copy status-copy success-copy">
+          Run accepted by the API at <code>{submissionSummary.acceptedAt}</code>.
+        </p>
+      )}
+      {submissionStatus === "error" && (
+        <p className="body-copy status-copy error-copy">
+          The run finished locally, but submission to the API failed.
+        </p>
+      )}
       <div className="maze-grid-preview" aria-label="Daily maze debug view">
         {gridRows.map((row, index) => (
           <code key={`${index}-${row}`} className="maze-grid-row">
