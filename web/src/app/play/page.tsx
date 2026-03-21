@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import FirstPersonView from "../../components/game/FirstPersonView";
@@ -671,7 +673,9 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
   );
 }
 
-export default function PlayPage() {
+function PlayPageContent() {
+  const searchParams = useSearchParams();
+  const archiveDate = searchParams.get("date") ?? "";
   const [maze, setMaze] = useState<DailyMaze | null>(null);
   const [status, setStatus] = useState<AsyncStatus>("loading");
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
@@ -685,7 +689,7 @@ export default function PlayPage() {
 
     async function loadMaze() {
       try {
-        const payload = await fetchDailyMaze();
+        const payload = await fetchDailyMaze(archiveDate || undefined);
 
         if (!isMounted) {
           return;
@@ -709,7 +713,7 @@ export default function PlayPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [archiveDate]);
 
   useEffect(() => {
     let isMounted = true;
@@ -786,6 +790,11 @@ export default function PlayPage() {
         <p className="eyebrow">{uiText.play.eyebrow}</p>
         <h1>{uiText.play.title}</h1>
         <p className="body-copy">{uiText.play.intro}</p>
+        {archiveDate && (
+          <p className="body-copy">
+            Viewing archived challenge <code>{archiveDate}</code>.
+          </p>
+        )}
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">
@@ -836,11 +845,34 @@ export default function PlayPage() {
         )}
 
         <div className="actions">
+          <Link href="/history" className="secondary-link">
+            Browse history
+          </Link>
           <Link href="/" className="secondary-link">
             {uiText.actions.backHome}
           </Link>
         </div>
       </div>
     </main>
+  );
+}
+
+export default function PlayPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="page-shell">
+          <div className="content-card">
+            <p className="eyebrow">{uiText.play.eyebrow}</p>
+            <h1>{uiText.play.title}</h1>
+            <p className="body-copy status-copy" aria-live="polite">
+              {uiText.play.loadingMaze}
+            </p>
+          </div>
+        </main>
+      }
+    >
+      <PlayPageContent />
+    </Suspense>
   );
 }

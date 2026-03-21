@@ -103,8 +103,11 @@ async function readTextError(response: Response, fallback: string): Promise<Erro
   return new Error(message || fallback);
 }
 
-export async function fetchDailyMaze(): Promise<DailyMaze> {
-  const response = await fetch(dailyMazeEndpoint);
+export async function fetchDailyMaze(date?: string): Promise<DailyMaze> {
+  const endpoint = date
+    ? `${dailyMazeEndpoint}?date=${encodeURIComponent(date)}`
+    : dailyMazeEndpoint;
+  const response = await fetch(endpoint);
 
   if (!response.ok) {
     throw await readTextError(

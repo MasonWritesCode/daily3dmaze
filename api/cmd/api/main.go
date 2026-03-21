@@ -152,7 +152,23 @@ func dailyMazeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	response := generateDailyMaze(time.Now().UTC())
+	challengeTime := time.Now().UTC()
+	if date := r.URL.Query().Get("date"); date != "" {
+		if err := validateLeaderboardDate(date); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		parsedDate, err := time.Parse(dateLayoutISO, date)
+		if err != nil {
+			http.Error(w, "date must use YYYY-MM-DD format", http.StatusBadRequest)
+			return
+		}
+
+		challengeTime = parsedDate.UTC()
+	}
+
+	response := generateDailyMaze(challengeTime)
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)

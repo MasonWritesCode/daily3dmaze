@@ -153,6 +153,9 @@ export default function HistoryDayPage() {
         )}
 
         <div className="actions">
+          <Link href={`/play?date=${date}`} className="primary-link">
+            Play this challenge
+          </Link>
           <Link href="/history" className="primary-link">
             Back to history
           </Link>

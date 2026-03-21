@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -132,6 +134,35 @@ func TestGenerateDailyMazeIsDeterministic(t *testing.T) {
 		if first.Grid[index] != second.Grid[index] {
 			t.Fatalf("expected deterministic grid row %d to match", index)
 		}
+	}
+}
+
+func TestDailyMazeHandlerSupportsExplicitDate(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/daily-maze?date=2026-03-19", nil)
+	recorder := httptest.NewRecorder()
+
+	dailyMazeHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.StatusCode)
+	}
+
+	var payload dailyMazeResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode daily maze response: %v", err)
+	}
+
+	if payload.Date != "2026-03-19" {
+		t.Fatalf("expected challenge date 2026-03-19, got %q", payload.Date)
+	}
+
+	if payload.Seed != "daily3dmaze:2026-03-19" {
+		t.Fatalf("expected seed for archived date, got %q", payload.Seed)
 	}
 }
 
