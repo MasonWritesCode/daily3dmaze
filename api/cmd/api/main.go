@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/fnv"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -67,6 +69,13 @@ type leaderboardResponse struct {
 type app struct {
 	db *sql.DB
 }
+
+const (
+	maxJSONBodyBytes = 4 * 1024
+	maxMoveCount     = 100000
+	maxElapsedTimeMs = 24 * 60 * 60 * 1000
+	dateLayoutISO    = "2006-01-02"
+)
 
 func main() {
 	port := os.Getenv("API_PORT")
@@ -145,23 +154,13 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request runSubmissionRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+	if err := decodeJSONBody(w, r, &request); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	if request.Date == "" || request.Seed == "" {
-		http.Error(w, "date and seed are required", http.StatusBadRequest)
-		return
-	}
-
-	if request.MoveCount <= 0 {
-		http.Error(w, "moveCount must be greater than zero", http.StatusBadRequest)
-		return
-	}
-
-	if request.ElapsedTimeMs <= 0 {
-		http.Error(w, "elapsedTimeMs must be greater than zero", http.StatusBadRequest)
+	if err := validateRunSubmission(request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -201,7 +200,12 @@ func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	date := r.URL.Query().Get("date")
 	if date == "" {
-		date = time.Now().UTC().Format("2006-01-02")
+		date = time.Now().UTC().Format(dateLayoutISO)
+	}
+
+	if err := validateLeaderboardDate(date); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	entries, err := a.listLeaderboard(date)
@@ -222,7 +226,7 @@ func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func generateDailyMaze(now time.Time) dailyMazeResponse {
-	challengeDate := now.Format("2006-01-02")
+	challengeDate := now.Format(dateLayoutISO)
 	seed := "daily3dmaze:" + challengeDate
 	size := generateMazeSize(seed)
 	grid, start, exit := generateMazeLayout(seed, size)
@@ -459,7 +463,6 @@ func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
 			return nil, err
 		}
 
-		entry.Rank = len(entries) + 1
 		entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
 		entries = append(entries, entry)
 	}
@@ -468,7 +471,75 @@ func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
 		return nil, err
 	}
 
-	return entries, nil
+	return rankLeaderboardEntries(entries), nil
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, destination any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+
+	if err := decoder.Decode(destination); err != nil {
+		return err
+	}
+
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("request body must contain a single JSON object")
+	}
+
+	return nil
+}
+
+func validateRunSubmission(request runSubmissionRequest) error {
+	if request.Date == "" || request.Seed == "" {
+		return errors.New("date and seed are required")
+	}
+
+	if _, err := time.Parse(dateLayoutISO, request.Date); err != nil {
+		return errors.New("date must use YYYY-MM-DD format")
+	}
+
+	expectedSeed := "daily3dmaze:" + request.Date
+	if request.Seed != expectedSeed {
+		return errors.New("seed does not match the submitted date")
+	}
+
+	if request.MoveCount <= 0 {
+		return errors.New("moveCount must be greater than zero")
+	}
+
+	if request.MoveCount > maxMoveCount {
+		return errors.New("moveCount is unreasonably large")
+	}
+
+	if request.ElapsedTimeMs <= 0 {
+		return errors.New("elapsedTimeMs must be greater than zero")
+	}
+
+	if request.ElapsedTimeMs > maxElapsedTimeMs {
+		return errors.New("elapsedTimeMs is unreasonably large")
+	}
+
+	return nil
+}
+
+func validateLeaderboardDate(date string) error {
+	if _, err := time.Parse(dateLayoutISO, date); err != nil {
+		return errors.New("date must use YYYY-MM-DD format")
+	}
+
+	return nil
+}
+
+func rankLeaderboardEntries(entries []leaderboardEntry) []leaderboardEntry {
+	ranked := make([]leaderboardEntry, len(entries))
+	copy(ranked, entries)
+
+	for index := range ranked {
+		ranked[index].Rank = index + 1
+	}
+
+	return ranked
 }
 
 func withCORS(next http.Handler) http.Handler {

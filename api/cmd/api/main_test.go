@@ -1,0 +1,135 @@
+package main
+
+import (
+	"testing"
+	"time"
+)
+
+func TestValidateRunSubmission(t *testing.T) {
+	t.Parallel()
+
+	valid := runSubmissionRequest{
+		Date:          "2026-03-21",
+		Seed:          "daily3dmaze:2026-03-21",
+		MoveCount:     42,
+		ElapsedTimeMs: 12345,
+	}
+
+	if err := validateRunSubmission(valid); err != nil {
+		t.Fatalf("expected valid submission, got error: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		request runSubmissionRequest
+	}{
+		{
+			name: "missing seed",
+			request: runSubmissionRequest{
+				Date:          "2026-03-21",
+				MoveCount:     42,
+				ElapsedTimeMs: 12345,
+			},
+		},
+		{
+			name: "invalid date format",
+			request: runSubmissionRequest{
+				Date:          "03-21-2026",
+				Seed:          "daily3dmaze:03-21-2026",
+				MoveCount:     42,
+				ElapsedTimeMs: 12345,
+			},
+		},
+		{
+			name: "seed mismatch",
+			request: runSubmissionRequest{
+				Date:          "2026-03-21",
+				Seed:          "daily3dmaze:2026-03-20",
+				MoveCount:     42,
+				ElapsedTimeMs: 12345,
+			},
+		},
+		{
+			name: "move count too large",
+			request: runSubmissionRequest{
+				Date:          "2026-03-21",
+				Seed:          "daily3dmaze:2026-03-21",
+				MoveCount:     maxMoveCount + 1,
+				ElapsedTimeMs: 12345,
+			},
+		},
+		{
+			name: "elapsed time too large",
+			request: runSubmissionRequest{
+				Date:          "2026-03-21",
+				Seed:          "daily3dmaze:2026-03-21",
+				MoveCount:     42,
+				ElapsedTimeMs: maxElapsedTimeMs + 1,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := validateRunSubmission(tc.request); err == nil {
+				t.Fatalf("expected validation error for case %q", tc.name)
+			}
+		})
+	}
+}
+
+func TestValidateLeaderboardDate(t *testing.T) {
+	t.Parallel()
+
+	if err := validateLeaderboardDate("2026-03-21"); err != nil {
+		t.Fatalf("expected valid leaderboard date, got error: %v", err)
+	}
+
+	if err := validateLeaderboardDate("21/03/2026"); err == nil {
+		t.Fatal("expected invalid leaderboard date to fail validation")
+	}
+}
+
+func TestRankLeaderboardEntries(t *testing.T) {
+	t.Parallel()
+
+	entries := []leaderboardEntry{
+		{Date: "2026-03-21", MoveCount: 10, ElapsedTimeMs: 1000},
+		{Date: "2026-03-21", MoveCount: 12, ElapsedTimeMs: 1200},
+	}
+
+	ranked := rankLeaderboardEntries(entries)
+
+	if ranked[0].Rank != 1 || ranked[1].Rank != 2 {
+		t.Fatalf("expected ranks 1 and 2, got %d and %d", ranked[0].Rank, ranked[1].Rank)
+	}
+
+	if entries[0].Rank != 0 || entries[1].Rank != 0 {
+		t.Fatal("expected original slice to remain unmodified")
+	}
+}
+
+func TestGenerateDailyMazeIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
+	first := generateDailyMaze(now)
+	second := generateDailyMaze(now)
+
+	if first.Seed != second.Seed {
+		t.Fatalf("expected matching seeds, got %q and %q", first.Seed, second.Seed)
+	}
+
+	if len(first.Grid) != len(second.Grid) {
+		t.Fatalf("expected matching grid heights, got %d and %d", len(first.Grid), len(second.Grid))
+	}
+
+	for index := range first.Grid {
+		if first.Grid[index] != second.Grid[index] {
+			t.Fatalf("expected deterministic grid row %d to match", index)
+		}
+	}
+}
