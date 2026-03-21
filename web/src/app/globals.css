@@ -74,10 +74,6 @@ h1 {
   background: rgba(17, 19, 24, 0.45);
 }
 
-.maze-summary .body-copy:last-child {
-  margin-bottom: 0;
-}
-
 .status-copy {
   margin-top: 24px;
 }
@@ -107,6 +103,36 @@ h1 {
   font-size: 0.9rem;
   line-height: 1.2;
   white-space: pre;
+}
+
+.raycast-panel {
+  margin-bottom: 24px;
+}
+
+.raycast-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.panel-title,
+.panel-subtitle {
+  margin-bottom: 0;
+}
+
+.panel-subtitle {
+  text-align: right;
+}
+
+.raycast-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: #0b0f14;
+  image-rendering: pixelated;
 }
 
 .secondary-button {
@@ -148,4 +174,14 @@ h1 {
 
 .secondary-link {
   border: 1px solid var(--panel-border);
+}
+
+@media (max-width: 640px) {
+  .raycast-header {
+    flex-direction: column;
+  }
+
+  .panel-subtitle {
+    text-align: left;
+  }
 }
