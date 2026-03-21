@@ -13,6 +13,11 @@ const DIRECTION_ORDER = [
 ];
 const MOVE_DURATION_MS = 180;
 const TURN_DURATION_MS = 150;
+const TEXTURE_PATHS = {
+  wall: "/assets/3d-maze/wall.png",
+  floor: "/assets/3d-maze/floor.png",
+  ceiling: "/assets/3d-maze/ceiling.png"
+};
 
 function renderGridRows(maze, playerPosition, directionIndex) {
   const playerMarker = DIRECTION_ORDER[directionIndex].marker;
@@ -82,8 +87,110 @@ function formatElapsedTime(elapsedMs) {
   )}.${String(centiseconds).padStart(2, "0")}`;
 }
 
+function useMazeTextures() {
+  const [textures, setTextures] = useState({
+    wall: null,
+    floor: null,
+    ceiling: null
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadTextures() {
+      const entries = await Promise.all(
+        Object.entries(TEXTURE_PATHS).map(([key, src]) => {
+          return new Promise((resolve) => {
+            const image = new Image();
+            image.onload = () => resolve([key, image]);
+            image.onerror = () => resolve([key, null]);
+            image.src = src;
+          });
+        })
+      );
+
+      if (!isMounted) {
+        return;
+      }
+
+      setTextures(Object.fromEntries(entries));
+    }
+
+    loadTextures();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return textures;
+}
+
+function getTextureColumn(image, hitX, hitY) {
+  const fractionalX = hitX - Math.floor(hitX);
+  const fractionalY = hitY - Math.floor(hitY);
+  const edgeDistances = [
+    { edge: "left", distance: fractionalX },
+    { edge: "right", distance: 1 - fractionalX },
+    { edge: "top", distance: fractionalY },
+    { edge: "bottom", distance: 1 - fractionalY }
+  ];
+  const nearestEdge = edgeDistances.reduce((closest, candidate) =>
+    candidate.distance < closest.distance ? candidate : closest
+  );
+  const offset =
+    nearestEdge.edge === "left" || nearestEdge.edge === "right"
+      ? fractionalY
+      : fractionalX;
+
+  return Math.max(0, Math.min(image.width - 1, Math.floor(offset * image.width)));
+}
+
+function createTextureSurface(image) {
+  if (!image) {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return null;
+  }
+
+  context.drawImage(image, 0, 0);
+
+  return {
+    width: image.width,
+    height: image.height,
+    data: context.getImageData(0, 0, image.width, image.height).data
+  };
+}
+
+function sampleTexture(texture, x, y) {
+  const wrappedX = ((x % texture.width) + texture.width) % texture.width;
+  const wrappedY = ((y % texture.height) + texture.height) % texture.height;
+  const offset = (wrappedY * texture.width + wrappedX) * 4;
+
+  return {
+    r: texture.data[offset],
+    g: texture.data[offset + 1],
+    b: texture.data[offset + 2],
+    a: texture.data[offset + 3]
+  };
+}
+
 function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
   const canvasRef = useRef(null);
+  const textures = useMazeTextures();
+  const textureSurfaceRef = useRef({
+    source: null,
+    wall: null,
+    floor: null,
+    ceiling: null
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -104,11 +211,78 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
     const originY = playerPosition.y + 0.5;
     const fieldOfView = Math.PI / 3;
     const maxDistance = 24;
+    const horizon = height / 2;
+    context.imageSmoothingEnabled = false;
 
-    context.fillStyle = "#182031";
-    context.fillRect(0, 0, width, height / 2);
-    context.fillStyle = "#0d1015";
-    context.fillRect(0, height / 2, width, height / 2);
+    if (textureSurfaceRef.current.source !== textures) {
+      textureSurfaceRef.current = {
+        source: textures,
+        wall: createTextureSurface(textures.wall),
+        floor: createTextureSurface(textures.floor),
+        ceiling: createTextureSurface(textures.ceiling)
+      };
+    }
+
+    const textureSurfaces = textureSurfaceRef.current;
+    const imageBuffer = context.createImageData(width, height);
+    const pixels = imageBuffer.data;
+    const hasSurfaceTextures = textureSurfaces.floor || textureSurfaces.ceiling;
+
+    if (hasSurfaceTextures) {
+      const leftRayAngle = playerAngle - fieldOfView / 2;
+      const rightRayAngle = playerAngle + fieldOfView / 2;
+      const leftRayX = Math.cos(leftRayAngle);
+      const leftRayY = Math.sin(leftRayAngle);
+      const rightRayX = Math.cos(rightRayAngle);
+      const rightRayY = Math.sin(rightRayAngle);
+
+      for (let y = 0; y < height; y += 1) {
+        const isFloor = y > horizon;
+        const texture = isFloor ? textureSurfaces.floor : textureSurfaces.ceiling;
+
+        if (!texture) {
+          continue;
+        }
+
+        const rowOffset = isFloor ? y - horizon : horizon - y;
+
+        if (rowOffset <= 0) {
+          continue;
+        }
+
+        const rowDistance = (0.5 * height) / rowOffset;
+        const stepX = (rowDistance * (rightRayX - leftRayX)) / width;
+        const stepY = (rowDistance * (rightRayY - leftRayY)) / width;
+        let worldX = originX + rowDistance * leftRayX;
+        let worldY = originY + rowDistance * leftRayY;
+
+        for (let x = 0; x < width; x += 1) {
+          const textureX = Math.floor((worldX - Math.floor(worldX)) * texture.width);
+          const textureY = Math.floor((worldY - Math.floor(worldY)) * texture.height);
+          const sampled = sampleTexture(texture, textureX, textureY);
+          const distanceShade = Math.max(0.28, 1 - rowDistance / maxDistance);
+          const index = (y * width + x) * 4;
+          const shadeBoost = isFloor ? 0.82 : 0.68;
+
+          pixels[index] = sampled.r * distanceShade * shadeBoost;
+          pixels[index + 1] = sampled.g * distanceShade * shadeBoost;
+          pixels[index + 2] = sampled.b * distanceShade * shadeBoost;
+          pixels[index + 3] = sampled.a;
+
+          worldX += stepX;
+          worldY += stepY;
+        }
+      }
+    } else {
+      context.fillStyle = "#182031";
+      context.fillRect(0, 0, width, horizon);
+      context.fillStyle = "#0d1015";
+      context.fillRect(0, horizon, width, height / 2);
+    }
+
+    if (hasSurfaceTextures) {
+      context.putImageData(imageBuffer, 0, 0);
+    }
 
     for (let column = 0; column < width; column += 1) {
       const cameraRatio = column / width;
@@ -117,12 +291,16 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
       const rayDirectionY = Math.sin(rayAngle);
       let distance = 0;
       let hitWall = false;
+      let hitPointX = originX;
+      let hitPointY = originY;
 
       while (distance < maxDistance && !hitWall) {
         distance += 0.02;
+        hitPointX = originX + rayDirectionX * distance;
+        hitPointY = originY + rayDirectionY * distance;
 
-        const sampleX = Math.floor(originX + rayDirectionX * distance);
-        const sampleY = Math.floor(originY + rayDirectionY * distance);
+        const sampleX = Math.floor(hitPointX);
+        const sampleY = Math.floor(hitPointY);
 
         if (
           sampleX < 0 ||
@@ -146,8 +324,26 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
       const wallTop = (height - wallHeight) / 2;
       const shade = Math.max(50, Math.min(200, 215 - correctedDistance * 18));
 
-      context.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 24})`;
-      context.fillRect(column, wallTop, 1, wallHeight);
+      if (textureSurfaces.wall) {
+        const textureColumn = getTextureColumn(textureSurfaces.wall, hitPointX, hitPointY);
+        context.save();
+        context.globalAlpha = Math.max(0.55, Math.min(1, shade / 180));
+        context.drawImage(
+          textures.wall,
+          textureColumn,
+          0,
+          1,
+          textureSurfaces.wall.height,
+          column,
+          wallTop,
+          1,
+          wallHeight
+        );
+        context.restore();
+      } else {
+        context.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 24})`;
+        context.fillRect(column, wallTop, 1, wallHeight);
+      }
     }
 
     context.strokeStyle = "rgba(255, 255, 255, 0.18)";
@@ -155,7 +351,7 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
     context.moveTo(0, height / 2);
     context.lineTo(width, height / 2);
     context.stroke();
-  }, [maze, playerAngle, playerPosition]);
+  }, [maze, playerAngle, playerPosition, textures]);
 
   return (
     <div className="raycast-panel">
