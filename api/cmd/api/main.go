@@ -9,8 +9,11 @@ import (
 	"io"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -68,7 +71,8 @@ type leaderboardResponse struct {
 }
 
 type app struct {
-	db *sql.DB
+	db          *sql.DB
+	authLimiter *authRateLimiter
 }
 
 const (
@@ -76,6 +80,8 @@ const (
 	maxMoveCount     = 100000
 	maxElapsedTimeMs = 24 * 60 * 60 * 1000
 	dateLayoutISO    = "2006-01-02"
+	authRateLimit    = 10
+	authWindow       = 5 * time.Minute
 )
 
 func main() {
@@ -90,7 +96,10 @@ func main() {
 	}
 	defer db.Close()
 
-	application := app{db: db}
+	application := app{
+		db:          db,
+		authLimiter: newAuthRateLimiter(authRateLimit, authWindow),
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/daily-maze", dailyMazeHandler)
@@ -543,4 +552,70 @@ func withCORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+type authRateLimiter struct {
+	limit         int
+	window        time.Duration
+	now           func() time.Time
+	mu            sync.Mutex
+	requestsByKey map[string][]time.Time
+}
+
+func newAuthRateLimiter(limit int, window time.Duration) *authRateLimiter {
+	return &authRateLimiter{
+		limit:         limit,
+		window:        window,
+		now:           time.Now,
+		requestsByKey: make(map[string][]time.Time),
+	}
+}
+
+func (l *authRateLimiter) allow(action, key string) bool {
+	if l == nil || key == "" {
+		return true
+	}
+
+	now := l.now().UTC()
+	cutoff := now.Add(-l.window)
+	bucketKey := action + ":" + key
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	existing := l.requestsByKey[bucketKey]
+	kept := existing[:0]
+	for _, timestamp := range existing {
+		if !timestamp.Before(cutoff) {
+			kept = append(kept, timestamp)
+		}
+	}
+
+	if len(kept) >= l.limit {
+		l.requestsByKey[bucketKey] = kept
+		return false
+	}
+
+	l.requestsByKey[bucketKey] = append(kept, now)
+	return true
+}
+
+func rateLimitKeyFromRequest(r *http.Request) string {
+	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
+		first := strings.TrimSpace(strings.Split(forwardedFor, ",")[0])
+		if first != "" {
+			return first
+		}
+	}
+
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil && host != "" {
+		return host
+	}
+
+	return strings.TrimSpace(r.RemoteAddr)
 }

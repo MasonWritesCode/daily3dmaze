@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -53,6 +54,10 @@ func (a app) registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !a.allowAuthAttempt(w, r, "register") {
+		return
+	}
+
 	var request authRequest
 	if err := decodeJSONBody(w, r, &request); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -97,6 +102,10 @@ func (a app) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !a.allowAuthAttempt(w, r, "login") {
+		return
+	}
+
 	var request authRequest
 	if err := decodeJSONBody(w, r, &request); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -137,6 +146,10 @@ func (a app) logoutHandler(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !a.allowAuthAttempt(w, r, "logout") {
 		return
 	}
 
@@ -261,6 +274,20 @@ func (a app) currentUserFromRequest(r *http.Request) (currentUser, error) {
 	}
 
 	return user, nil
+}
+
+func (a app) allowAuthAttempt(w http.ResponseWriter, r *http.Request, action string) bool {
+	if a.authLimiter == nil {
+		return true
+	}
+
+	if a.authLimiter.allow(action, rateLimitKeyFromRequest(r)) {
+		return true
+	}
+
+	w.Header().Set("Retry-After", fmt.Sprintf("%.0f", authWindow.Seconds()))
+	http.Error(w, "too many requests", http.StatusTooManyRequests)
+	return false
 }
 
 func (a app) deleteSessionByToken(token string) error {

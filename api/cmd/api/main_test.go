@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -131,5 +132,43 @@ func TestGenerateDailyMazeIsDeterministic(t *testing.T) {
 		if first.Grid[index] != second.Grid[index] {
 			t.Fatalf("expected deterministic grid row %d to match", index)
 		}
+	}
+}
+
+func TestRateLimitKeyFromRequestPrefersForwardedHeaders(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest("GET", "/health", nil)
+	request.RemoteAddr = "127.0.0.1:4000"
+	request.Header.Set("X-Forwarded-For", "203.0.113.10, 10.0.0.1")
+
+	if key := rateLimitKeyFromRequest(request); key != "203.0.113.10" {
+		t.Fatalf("expected forwarded IP, got %q", key)
+	}
+}
+
+func TestAuthRateLimiterExpiresOldAttempts(t *testing.T) {
+	t.Parallel()
+
+	limiter := newAuthRateLimiter(2, time.Minute)
+	now := time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
+	limiter.now = func() time.Time { return now }
+
+	if !limiter.allow("login", "127.0.0.1") {
+		t.Fatal("expected first request to be allowed")
+	}
+
+	if !limiter.allow("login", "127.0.0.1") {
+		t.Fatal("expected second request to be allowed")
+	}
+
+	if limiter.allow("login", "127.0.0.1") {
+		t.Fatal("expected third request in the window to be denied")
+	}
+
+	now = now.Add(2 * time.Minute)
+
+	if !limiter.allow("login", "127.0.0.1") {
+		t.Fatal("expected request after the window to be allowed")
 	}
 }

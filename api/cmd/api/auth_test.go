@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"golang.org/x/crypto/bcrypt"
@@ -285,5 +286,53 @@ func TestLogoutHandlerDeletesSessionAndClearsCookie(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestLoginHandlerReturnsTooManyRequestsWhenRateLimited(t *testing.T) {
+	t.Parallel()
+
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	limiter := newAuthRateLimiter(1, time.Minute)
+	start := time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
+	limiter.now = func() time.Time { return start }
+
+	application := app{
+		db:          db,
+		authLimiter: limiter,
+	}
+
+	firstRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(
+		`{"username":"mason_dev","password":"supersecure123"}`,
+	))
+	firstRequest.Header.Set("Content-Type", "application/json")
+	firstRequest.RemoteAddr = "127.0.0.1:4000"
+
+	firstRecorder := httptest.NewRecorder()
+	application.loginHandler(firstRecorder, firstRequest)
+
+	secondRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(
+		`{"username":"mason_dev","password":"supersecure123"}`,
+	))
+	secondRequest.Header.Set("Content-Type", "application/json")
+	secondRequest.RemoteAddr = "127.0.0.1:4000"
+
+	secondRecorder := httptest.NewRecorder()
+	application.loginHandler(secondRecorder, secondRequest)
+
+	response := secondRecorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected status %d, got %d", http.StatusTooManyRequests, response.StatusCode)
+	}
+
+	if response.Header.Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header on rate-limited response")
 	}
 }
