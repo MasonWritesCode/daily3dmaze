@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import { normalizeAngle } from "../../lib/game/maze";
 
 const FLOOR_TEXTURE_SCALE = 0.9;
@@ -12,10 +13,47 @@ const TEXTURE_PATHS = {
   ceiling: "/assets/3d-maze/ceiling.png",
   start: "/assets/3d-maze/start.png",
   exit: "/assets/3d-maze/smiley.png"
-};
+} as const;
 
-function useMazeTextures() {
-  const [textures, setTextures] = useState({
+type TextureKey = keyof typeof TEXTURE_PATHS;
+type TextureMap = Record<TextureKey, HTMLImageElement | null>;
+
+interface TextureSurface {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+}
+
+interface TextureSurfaceState {
+  source: TextureMap | null;
+  supportsSurfaceTextures: boolean;
+  wall: TextureSurface | null;
+  floor: TextureSurface | null;
+  ceiling: TextureSurface | null;
+}
+
+interface SpriteDefinition {
+  image: HTMLImageElement;
+  worldX: number;
+  worldY: number;
+  scale: number;
+  alpha: number;
+}
+
+interface SpriteProjection extends SpriteDefinition {
+  angle: number;
+  distance: number;
+}
+
+interface FirstPersonViewProps {
+  maze: DailyMaze;
+  playerPosition: MazePoint;
+  playerAngle: number;
+  facingName: string;
+}
+
+function useMazeTextures(): TextureMap {
+  const [textures, setTextures] = useState<TextureMap>({
     wall: null,
     floor: null,
     ceiling: null,
@@ -28,24 +66,25 @@ function useMazeTextures() {
 
     async function loadTextures() {
       const entries = await Promise.all(
-        Object.entries(TEXTURE_PATHS).map(([key, src]) => {
-          return new Promise((resolve) => {
-            const image = new Image();
-            image.onload = () => resolve([key, image]);
-            image.onerror = () => resolve([key, null]);
-            image.src = src;
-          });
-        })
+        (Object.entries(TEXTURE_PATHS) as Array<[TextureKey, string]>).map(
+          ([key, src]) =>
+            new Promise<[TextureKey, HTMLImageElement | null]>((resolve) => {
+              const image = new Image();
+              image.onload = () => resolve([key, image]);
+              image.onerror = () => resolve([key, null]);
+              image.src = src;
+            })
+        )
       );
 
       if (!isMounted) {
         return;
       }
 
-      setTextures(Object.fromEntries(entries));
+      setTextures(Object.fromEntries(entries) as TextureMap);
     }
 
-    loadTextures();
+    void loadTextures();
 
     return () => {
       isMounted = false;
@@ -55,7 +94,7 @@ function useMazeTextures() {
   return textures;
 }
 
-function getTextureColumn(image, hitX, hitY) {
+function getTextureColumn(image: TextureSurface, hitX: number, hitY: number): number {
   const fractionalX = hitX - Math.floor(hitX);
   const fractionalY = hitY - Math.floor(hitY);
   const edgeDistances = [
@@ -63,7 +102,7 @@ function getTextureColumn(image, hitX, hitY) {
     { edge: "right", distance: 1 - fractionalX },
     { edge: "top", distance: fractionalY },
     { edge: "bottom", distance: 1 - fractionalY }
-  ];
+  ] as const;
   const nearestEdge = edgeDistances.reduce((closest, candidate) =>
     candidate.distance < closest.distance ? candidate : closest
   );
@@ -75,7 +114,7 @@ function getTextureColumn(image, hitX, hitY) {
   return Math.max(0, Math.min(image.width - 1, Math.floor(offset * image.width)));
 }
 
-function createTextureSurface(image) {
+function createTextureSurface(image: HTMLImageElement | null): TextureSurface | null {
   if (!image) {
     return null;
   }
@@ -98,7 +137,7 @@ function createTextureSurface(image) {
   };
 }
 
-function hasStableCanvasReadback(image) {
+function hasStableCanvasReadback(image: HTMLImageElement | null): boolean {
   if (!image) {
     return false;
   }
@@ -112,7 +151,7 @@ function hasStableCanvasReadback(image) {
     return false;
   }
 
-  const samplePoints = [
+  const samplePoints: Array<[number, number]> = [
     [0, 0],
     [Math.max(0, image.width - 1), 0],
     [0, Math.max(0, image.height - 1)],
@@ -142,16 +181,16 @@ function hasStableCanvasReadback(image) {
   });
 }
 
-function sampleTexture(texture, x, y) {
+function sampleTexture(texture: TextureSurface, x: number, y: number) {
   const wrappedX = ((x % texture.width) + texture.width) % texture.width;
   const wrappedY = ((y % texture.height) + texture.height) % texture.height;
   const offset = (wrappedY * texture.width + wrappedX) * 4;
 
   return {
-    r: texture.data[offset],
-    g: texture.data[offset + 1],
-    b: texture.data[offset + 2],
-    a: texture.data[offset + 3]
+    r: texture.data[offset] ?? 0,
+    g: texture.data[offset + 1] ?? 0,
+    b: texture.data[offset + 2] ?? 0,
+    a: texture.data[offset + 3] ?? 255
   };
 }
 
@@ -160,10 +199,10 @@ export default function FirstPersonView({
   playerPosition,
   playerAngle,
   facingName
-}) {
-  const canvasRef = useRef(null);
+}: FirstPersonViewProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textures = useMazeTextures();
-  const textureSurfaceRef = useRef({
+  const textureSurfaceRef = useRef<TextureSurfaceState>({
     source: null,
     supportsSurfaceTextures: false,
     wall: null,
@@ -191,7 +230,7 @@ export default function FirstPersonView({
     const fieldOfView = Math.PI / 3;
     const maxDistance = 24;
     const horizon = height / 2;
-    const depthBuffer = new Array(width).fill(maxDistance);
+    const depthBuffer = new Array<number>(width).fill(maxDistance);
     context.imageSmoothingEnabled = false;
 
     if (textureSurfaceRef.current.source !== textures) {
@@ -213,7 +252,9 @@ export default function FirstPersonView({
     const textureSurfaces = textureSurfaceRef.current;
     const imageBuffer = context.createImageData(width, height);
     const pixels = imageBuffer.data;
-    const hasSurfaceTextures = textureSurfaces.floor || textureSurfaces.ceiling;
+    const hasSurfaceTextures = Boolean(
+      textureSurfaces.floor || textureSurfaces.ceiling
+    );
 
     if (hasSurfaceTextures) {
       const leftRayAngle = playerAngle - fieldOfView / 2;
@@ -307,7 +348,7 @@ export default function FirstPersonView({
           break;
         }
 
-        hitWall = maze.grid[sampleY][sampleX] === "#";
+        hitWall = maze.grid[sampleY]?.[sampleX] === "#";
       }
 
       const correctedDistance = Math.max(
@@ -319,7 +360,7 @@ export default function FirstPersonView({
       const wallTop = (height - wallHeight) / 2;
       const shade = Math.max(50, Math.min(200, 215 - correctedDistance * 18));
 
-      if (textureSurfaces.wall) {
+      if (textureSurfaces.wall && textures.wall) {
         const textureColumn = getTextureColumn(textureSurfaces.wall, hitPointX, hitPointY);
         context.save();
         context.globalAlpha = Math.max(0.55, Math.min(1, shade / 180));
@@ -341,23 +382,31 @@ export default function FirstPersonView({
       }
     }
 
-    const spriteDefinitions = [
-      {
-        image: textures.start,
-        worldX: maze.start.x + 0.5,
-        worldY: maze.start.y + 0.5,
-        scale: 0.42,
-        alpha: 0.5
-      },
-      {
-        image: textures.exit,
-        worldX: maze.exit.x + 0.5,
-        worldY: maze.exit.y + 0.5,
-        scale: 1.1,
-        alpha: 1
-      }
+    const spriteDefinitions: SpriteProjection[] = [
+      textures.start
+        ? {
+            image: textures.start,
+            worldX: maze.start.x + 0.5,
+            worldY: maze.start.y + 0.5,
+            scale: 0.42,
+            alpha: 0.5,
+            angle: 0,
+            distance: 0
+          }
+        : null,
+      textures.exit
+        ? {
+            image: textures.exit,
+            worldX: maze.exit.x + 0.5,
+            worldY: maze.exit.y + 0.5,
+            scale: 1.1,
+            alpha: 1,
+            angle: 0,
+            distance: 0
+          }
+        : null
     ]
-      .filter((sprite) => sprite.image)
+      .filter((sprite): sprite is SpriteProjection => sprite !== null)
       .map((sprite) => {
         const deltaX = sprite.worldX - originX;
         const deltaY = sprite.worldY - originY;
@@ -372,8 +421,7 @@ export default function FirstPersonView({
       })
       .filter(
         (sprite) =>
-          sprite.distance > 0.2 &&
-          Math.abs(sprite.angle) < fieldOfView * 0.75
+          sprite.distance > 0.2 && Math.abs(sprite.angle) < fieldOfView * 0.75
       )
       .sort((left, right) => right.distance - left.distance);
 
@@ -403,7 +451,6 @@ export default function FirstPersonView({
         const textureX = Math.floor((stripe / projectedWidth) * sprite.image.width);
         context.save();
         context.globalAlpha = sprite.alpha;
-
         context.drawImage(
           sprite.image,
           textureX,

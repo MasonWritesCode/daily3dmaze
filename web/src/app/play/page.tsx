@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -13,6 +14,7 @@ import {
   registerEndpoint,
   runsEndpoint
 } from "../../lib/config";
+import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import {
   DIRECTION_ORDER,
   MOVE_DURATION_MS,
@@ -23,6 +25,67 @@ import {
   normalizeAngle,
   renderGridRows
 } from "../../lib/game/maze";
+
+type AsyncStatus = "idle" | "loading" | "success" | "error";
+type SubmissionStatus = "idle" | "submitting" | "submitted" | "error";
+type AuthMode = "login" | "register";
+type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+
+interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  date: string;
+  seed: string;
+  moveCount: number;
+  elapsedTimeMs: number;
+  acceptedAt: string;
+}
+
+interface LeaderboardResponse {
+  date: string;
+  entries: LeaderboardEntry[];
+}
+
+interface RunSubmissionResponse {
+  status: string;
+  date: string;
+  seed: string;
+  moveCount: number;
+  elapsedTimeMs: number;
+  acceptedAt: string;
+}
+
+interface AuthUser {
+  id: number;
+  username: string;
+}
+
+interface AuthResponse {
+  user: AuthUser;
+}
+
+interface MetadataItem {
+  label: string;
+  value: ReactNode;
+}
+
+interface MetadataListProps {
+  items: MetadataItem[];
+}
+
+interface MazeDetailsProps {
+  maze: DailyMaze;
+  onRunSubmitted: () => void;
+}
+
+interface LeaderboardProps {
+  entries: LeaderboardEntry[];
+}
+
+interface AuthPanelProps {
+  user: AuthUser | null;
+  onAuthChange: (nextUser: AuthUser | null) => void;
+}
 
 const uiText = {
   play: {
@@ -82,9 +145,9 @@ const uiText = {
     debugViewLabel: "Daily maze debug view",
     summaryHeading: "Maze summary"
   }
-};
+} as const;
 
-function MetadataList({ items }) {
+function MetadataList({ items }: MetadataListProps) {
   return (
     <dl className="metadata-list">
       {items.map((item) => (
@@ -97,21 +160,22 @@ function MetadataList({ items }) {
   );
 }
 
-function MazeDetails({ maze, onRunSubmitted }) {
-  const [playerPosition, setPlayerPosition] = useState(maze.start);
-  const [directionIndex, setDirectionIndex] = useState(0);
-  const [renderPosition, setRenderPosition] = useState(maze.start);
-  const [renderAngle, setRenderAngle] = useState(DIRECTION_ORDER[0].angle);
-  const [moveCount, setMoveCount] = useState(0);
-  const [hasFinished, setHasFinished] = useState(false);
-  const [runStartTime, setRunStartTime] = useState(null);
-  const [finishTime, setFinishTime] = useState(null);
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [submissionStatus, setSubmissionStatus] = useState("idle");
-  const [submissionSummary, setSubmissionSummary] = useState(null);
-  const animationRef = useRef(null);
-  const actionLockRef = useRef(false);
-  const submittedRunRef = useRef(null);
+function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
+  const [playerPosition, setPlayerPosition] = useState<MazePoint>(maze.start);
+  const [directionIndex, setDirectionIndex] = useState<number>(0);
+  const [renderPosition, setRenderPosition] = useState<MazePoint>(maze.start);
+  const [renderAngle, setRenderAngle] = useState<number>(DIRECTION_ORDER[0].angle);
+  const [moveCount, setMoveCount] = useState<number>(0);
+  const [hasFinished, setHasFinished] = useState<boolean>(false);
+  const [runStartTime, setRunStartTime] = useState<number | null>(null);
+  const [finishTime, setFinishTime] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus>("idle");
+  const [submissionSummary, setSubmissionSummary] =
+    useState<RunSubmissionResponse | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const actionLockRef = useRef<boolean>(false);
+  const submittedRunRef = useRef<string | null>(null);
   const gridRows = renderGridRows(maze, playerPosition, directionIndex);
 
   useEffect(() => {
@@ -179,7 +243,7 @@ function MazeDetails({ maze, onRunSubmitted }) {
           throw new Error(`Run submission failed with status ${response.status}`);
         }
 
-        const payload = await response.json();
+        const payload = (await response.json()) as RunSubmissionResponse;
         setSubmissionSummary(payload);
         setSubmissionStatus("submitted");
         onRunSubmitted();
@@ -189,19 +253,19 @@ function MazeDetails({ maze, onRunSubmitted }) {
       }
     }
 
-    submitRun();
-  }, [finishTime, hasFinished, maze.date, maze.seed, moveCount, runStartTime]);
+    void submitRun();
+  }, [finishTime, hasFinished, maze.date, maze.seed, moveCount, onRunSubmitted, runStartTime]);
 
   useEffect(() => {
     return () => {
-      if (animationRef.current) {
+      if (animationRef.current !== null) {
         window.cancelAnimationFrame(animationRef.current);
       }
     };
   }, []);
 
   useEffect(() => {
-    function isTypingTarget(target) {
+    function isTypingTarget(target: EventTarget | null): boolean {
       if (!(target instanceof HTMLElement)) {
         return false;
       }
@@ -216,7 +280,7 @@ function MazeDetails({ maze, onRunSubmitted }) {
       );
     }
 
-    function beginRunIfNeeded() {
+    function beginRunIfNeeded(): number {
       if (runStartTime) {
         return runStartTime;
       }
@@ -227,12 +291,12 @@ function MazeDetails({ maze, onRunSubmitted }) {
       return startedAt;
     }
 
-    function animateMovement(nextPosition, startedAtForRun) {
+    function animateMovement(nextPosition: MazePoint, startedAtForRun: number) {
       const startPosition = playerPosition;
       const startedAt = performance.now();
       actionLockRef.current = true;
 
-      function step(now) {
+      function step(now: number) {
         const progress = Math.min(1, (now - startedAt) / MOVE_DURATION_MS);
         const easedProgress = 1 - Math.pow(1 - progress, 3);
 
@@ -262,14 +326,14 @@ function MazeDetails({ maze, onRunSubmitted }) {
       animationRef.current = window.requestAnimationFrame(step);
     }
 
-    function animateTurn(nextDirectionIndex) {
+    function animateTurn(nextDirectionIndex: number) {
       const startAngle = renderAngle;
       const targetAngle = DIRECTION_ORDER[nextDirectionIndex].angle;
       const delta = normalizeAngle(targetAngle - startAngle);
       const startedAt = performance.now();
       actionLockRef.current = true;
 
-      function step(now) {
+      function step(now: number) {
         const progress = Math.min(1, (now - startedAt) / TURN_DURATION_MS);
         const easedProgress = 1 - Math.pow(1 - progress, 3);
 
@@ -288,7 +352,7 @@ function MazeDetails({ maze, onRunSubmitted }) {
       animationRef.current = window.requestAnimationFrame(step);
     }
 
-    function handleKeyDown(event) {
+    function handleKeyDown(event: KeyboardEvent) {
       if (isTypingTarget(event.target)) {
         return;
       }
@@ -351,7 +415,7 @@ function MazeDetails({ maze, onRunSubmitted }) {
   }, [directionIndex, hasFinished, maze, playerPosition, renderAngle, runStartTime]);
 
   function handleReset() {
-    if (animationRef.current) {
+    if (animationRef.current !== null) {
       window.cancelAnimationFrame(animationRef.current);
     }
 
@@ -370,10 +434,10 @@ function MazeDetails({ maze, onRunSubmitted }) {
     submittedRunRef.current = null;
   }
 
-  const elapsedTime = finishTime
+  const elapsedTime = finishTime && runStartTime
     ? formatElapsedTime(finishTime - runStartTime)
     : formatElapsedTime(elapsedMs);
-  const metadataItems = [
+  const metadataItems: MetadataItem[] = [
     { label: uiText.labels.date, value: maze.date },
     { label: uiText.labels.title, value: maze.title },
     { label: uiText.labels.seed, value: <code>{maze.seed}</code> },
@@ -453,15 +517,13 @@ function MazeDetails({ maze, onRunSubmitted }) {
   );
 }
 
-function Leaderboard({ entries }) {
+function Leaderboard({ entries }: LeaderboardProps) {
   return (
     <section className="maze-summary" aria-labelledby="leaderboard-title">
       <h2 id="leaderboard-title" className="section-title">
         {uiText.leaderboard.heading}
       </h2>
-      {entries.length === 0 && (
-        <p className="body-copy">{uiText.leaderboard.empty}</p>
-      )}
+      {entries.length === 0 && <p className="body-copy">{uiText.leaderboard.empty}</p>}
       {entries.length > 0 && (
         <div className="leaderboard-list" aria-label={uiText.leaderboard.ariaLabel}>
           <div className="leaderboard-row leaderboard-row-header" aria-hidden="true">
@@ -484,16 +546,14 @@ function Leaderboard({ entries }) {
   );
 }
 
-function AuthPanel({ user, onAuthChange }) {
-  const [mode, setMode] = useState("login");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [status, setStatus] = useState("idle");
-  const [errorMessage, setErrorMessage] = useState("");
+function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
+  const [mode, setMode] = useState<AuthMode>("login");
+  const [username, setUsername] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [status, setStatus] = useState<SubmissionStatus | "success">("idle");
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const errorId = "auth-panel-error";
   const helperId = "auth-panel-helper";
-  const usernameId = "auth-username";
-  const passwordId = "auth-password";
   const submitLabel =
     mode === "register" ? uiText.actions.createAccount : uiText.actions.logIn;
   const statusMessage =
@@ -507,7 +567,7 @@ function AuthPanel({ user, onAuthChange }) {
           : uiText.auth.loginSuccess
         : "";
 
-  async function handleSubmit(event) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("submitting");
     setErrorMessage("");
@@ -530,14 +590,14 @@ function AuthPanel({ user, onAuthChange }) {
         throw new Error(message || "Authentication failed");
       }
 
-      const payload = await response.json();
+      const payload = (await response.json()) as AuthResponse;
       onAuthChange(payload.user);
       setStatus("success");
       setErrorMessage("");
       setPassword("");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(error instanceof Error ? error.message : "Authentication failed");
     }
   }
 
@@ -560,7 +620,7 @@ function AuthPanel({ user, onAuthChange }) {
       setPassword("");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(error instanceof Error ? error.message : "Logout failed");
     }
   }
 
@@ -585,30 +645,32 @@ function AuthPanel({ user, onAuthChange }) {
           <fieldset className="auth-toggle-group">
             <legend className="sr-only">Authentication mode</legend>
             <div className="auth-toggle" role="tablist" aria-label="Authentication mode">
-            <button
-              type="button"
-              className={mode === "login" ? "secondary-button is-active" : "secondary-button"}
-              aria-pressed={mode === "login"}
-              onClick={() => {
-                setMode("login");
-                setStatus("idle");
-                setErrorMessage("");
-              }}
-            >
-              {uiText.actions.logIn}
-            </button>
-            <button
-              type="button"
-              className={mode === "register" ? "secondary-button is-active" : "secondary-button"}
-              aria-pressed={mode === "register"}
-              onClick={() => {
-                setMode("register");
-                setStatus("idle");
-                setErrorMessage("");
-              }}
-            >
-              {uiText.actions.createAccount}
-            </button>
+              <button
+                type="button"
+                className={mode === "login" ? "secondary-button is-active" : "secondary-button"}
+                aria-pressed={mode === "login"}
+                onClick={() => {
+                  setMode("login");
+                  setStatus("idle");
+                  setErrorMessage("");
+                }}
+              >
+                {uiText.actions.logIn}
+              </button>
+              <button
+                type="button"
+                className={
+                  mode === "register" ? "secondary-button is-active" : "secondary-button"
+                }
+                aria-pressed={mode === "register"}
+                onClick={() => {
+                  setMode("register");
+                  setStatus("idle");
+                  setErrorMessage("");
+                }}
+              >
+                {uiText.actions.createAccount}
+              </button>
             </div>
           </fieldset>
           <p id={helperId} className="assistive-copy">
@@ -618,7 +680,6 @@ function AuthPanel({ user, onAuthChange }) {
           <label className="auth-field">
             <span>{uiText.auth.username}</span>
             <input
-              id={usernameId}
               type="text"
               autoComplete="username"
               value={username}
@@ -633,7 +694,6 @@ function AuthPanel({ user, onAuthChange }) {
           <label className="auth-field">
             <span>{uiText.auth.password}</span>
             <input
-              id={passwordId}
               type="password"
               autoComplete={mode === "register" ? "new-password" : "current-password"}
               value={password}
@@ -670,13 +730,13 @@ function AuthPanel({ user, onAuthChange }) {
 }
 
 export default function PlayPage() {
-  const [maze, setMaze] = useState(null);
-  const [status, setStatus] = useState("loading");
-  const [leaderboardEntries, setLeaderboardEntries] = useState([]);
-  const [leaderboardStatus, setLeaderboardStatus] = useState("idle");
-  const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0);
-  const [user, setUser] = useState(null);
-  const [authStatus, setAuthStatus] = useState("loading");
+  const [maze, setMaze] = useState<DailyMaze | null>(null);
+  const [status, setStatus] = useState<AsyncStatus>("loading");
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardStatus, setLeaderboardStatus] = useState<AsyncStatus>("idle");
+  const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState<number>(0);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
 
   useEffect(() => {
     let isMounted = true;
@@ -689,7 +749,7 @@ export default function PlayPage() {
           throw new Error(`Request failed with status ${response.status}`);
         }
 
-        const payload = await response.json();
+        const payload = (await response.json()) as DailyMaze;
 
         if (!isMounted) {
           return;
@@ -708,7 +768,7 @@ export default function PlayPage() {
       }
     }
 
-    loadMaze();
+    void loadMaze();
 
     return () => {
       isMounted = false;
@@ -736,7 +796,7 @@ export default function PlayPage() {
           throw new Error(`Current user request failed with status ${response.status}`);
         }
 
-        const payload = await response.json();
+        const payload = (await response.json()) as AuthResponse;
 
         if (!isMounted) {
           return;
@@ -756,7 +816,7 @@ export default function PlayPage() {
       }
     }
 
-    loadCurrentUser();
+    void loadCurrentUser();
 
     return () => {
       isMounted = false;
@@ -768,20 +828,21 @@ export default function PlayPage() {
       return;
     }
 
+    const mazeDate = maze.date;
     let isMounted = true;
     setLeaderboardStatus("loading");
 
     async function loadLeaderboard() {
       try {
         const response = await fetch(
-          `${leaderboardEndpoint}?date=${encodeURIComponent(maze.date)}`
+          `${leaderboardEndpoint}?date=${encodeURIComponent(mazeDate)}`
         );
 
         if (!response.ok) {
           throw new Error(`Leaderboard request failed with status ${response.status}`);
         }
 
-        const payload = await response.json();
+        const payload = (await response.json()) as LeaderboardResponse;
 
         if (!isMounted) {
           return;
@@ -800,7 +861,7 @@ export default function PlayPage() {
       }
     }
 
-    loadLeaderboard();
+    void loadLeaderboard();
 
     return () => {
       isMounted = false;

@@ -1,4 +1,31 @@
-export const DIRECTION_ORDER = [
+export interface MazePoint {
+  x: number;
+  y: number;
+}
+
+export interface MazeSize {
+  width: number;
+  height: number;
+}
+
+export interface DailyMaze {
+  date: string;
+  title: string;
+  seed: string;
+  size: MazeSize;
+  start: MazePoint;
+  exit: MazePoint;
+  grid: string[];
+}
+
+export interface Direction {
+  name: "North" | "East" | "South" | "West";
+  marker: "^" | ">" | "v" | "<";
+  vector: MazePoint;
+  angle: number;
+}
+
+export const DIRECTION_ORDER: Direction[] = [
   { name: "North", marker: "^", vector: { x: 0, y: -1 }, angle: -Math.PI / 2 },
   { name: "East", marker: ">", vector: { x: 1, y: 0 }, angle: 0 },
   { name: "South", marker: "v", vector: { x: 0, y: 1 }, angle: Math.PI / 2 },
@@ -8,7 +35,11 @@ export const DIRECTION_ORDER = [
 export const MOVE_DURATION_MS = 180;
 export const TURN_DURATION_MS = 150;
 
-export function renderGridRows(maze, playerPosition, directionIndex) {
+export function renderGridRows(
+  maze: DailyMaze,
+  playerPosition: MazePoint,
+  directionIndex: number
+): string[] {
   const playerMarker = DIRECTION_ORDER[directionIndex].marker;
 
   return maze.grid.map((row, y) => {
@@ -30,11 +61,15 @@ export function renderGridRows(maze, playerPosition, directionIndex) {
   });
 }
 
-export function isExitReached(playerPosition, maze) {
+export function isExitReached(playerPosition: MazePoint, maze: DailyMaze): boolean {
   return playerPosition.x === maze.exit.x && playerPosition.y === maze.exit.y;
 }
 
-export function attemptMove(playerPosition, direction, maze) {
+export function attemptMove(
+  playerPosition: MazePoint,
+  direction: MazePoint,
+  maze: DailyMaze
+): MazePoint {
   const nextPosition = {
     x: playerPosition.x + direction.x,
     y: playerPosition.y + direction.y
@@ -50,7 +85,7 @@ export function attemptMove(playerPosition, direction, maze) {
   return nextPosition;
 }
 
-export function normalizeAngle(angle) {
+export function normalizeAngle(angle: number): number {
   let value = angle;
 
   while (value > Math.PI) {
@@ -64,7 +99,7 @@ export function normalizeAngle(angle) {
   return value;
 }
 
-export function formatElapsedTime(elapsedMs) {
+export function formatElapsedTime(elapsedMs: number): string {
   const totalMilliseconds = Math.max(0, elapsedMs);
   const minutes = Math.floor(totalMilliseconds / 60000);
   const seconds = Math.floor((totalMilliseconds % 60000) / 1000);

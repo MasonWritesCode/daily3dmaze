@@ -6,9 +6,7 @@ export default function HomePage() {
       <div className="content-card">
         <p className="eyebrow">daily3dmaze</p>
         <h1>Daily first-person maze challenge.</h1>
-        <p className="body-copy">
-          Hello World
-        </p>
+        <p className="body-copy">Hello World</p>
         <div className="actions">
           <Link href="/play" className="primary-link">
             Open /play
