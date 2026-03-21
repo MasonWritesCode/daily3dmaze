@@ -24,6 +24,79 @@ import {
   renderGridRows
 } from "../../lib/game/maze";
 
+const uiText = {
+  play: {
+    eyebrow: "Play",
+    title: "Daily maze metadata",
+    intro:
+      "This page now fetches the first real piece of game data from the Go API. It includes a simple first-person raycast panel and keeps the top-down maze visible for debugging.",
+    loadingMaze: "Loading daily maze...",
+    loadingLeaderboard: "Loading leaderboard...",
+    leaderboardError: "Unable to load the leaderboard right now.",
+    mazeError:
+      "Unable to load the daily maze metadata. Make sure the API is running on http://localhost:8080."
+  },
+  labels: {
+    date: "Date",
+    title: "Title",
+    seed: "Seed",
+    size: "Size",
+    start: "Start",
+    exit: "Exit",
+    moves: "Moves",
+    time: "Time",
+    facing: "Facing",
+    controls: "Controls"
+  },
+  actions: {
+    resetRun: "Reset run",
+    backHome: "Back home",
+    logIn: "Log in",
+    createAccount: "Create account",
+    logOut: "Log out"
+  },
+  auth: {
+    heading: "Identity",
+    username: "Username",
+    password: "Password",
+    signedInAs: "Signed in as",
+    signingIn: "Signing in...",
+    creatingAccount: "Creating account...",
+    loginSuccess: "Signed in successfully.",
+    registerSuccess: "Account created and signed in."
+  },
+  leaderboard: {
+    heading: "Leaderboard",
+    empty: "No submitted runs for this day yet.",
+    ariaLabel: "Daily leaderboard",
+    rank: "Rank",
+    player: "Player",
+    elapsed: "Time",
+    moves: "Moves"
+  },
+  gameplay: {
+    controls: "Up/Down or W/S move, Left/Right or A/D turn",
+    introStatus: "Navigate from S to E. The top-down player marker shows facing.",
+    submittingRun: "Submitting run to the API...",
+    submissionError: "The run finished locally, but submission to the API failed.",
+    debugViewLabel: "Daily maze debug view",
+    summaryHeading: "Maze summary"
+  }
+};
+
+function MetadataList({ items }) {
+  return (
+    <dl className="metadata-list">
+      {items.map((item) => (
+        <div key={item.label} className="metadata-row">
+          <dt>{item.label}</dt>
+          <dd>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 function MazeDetails({ maze, onRunSubmitted }) {
   const [playerPosition, setPlayerPosition] = useState(maze.start);
   const [directionIndex, setDirectionIndex] = useState(0);
@@ -297,66 +370,74 @@ function MazeDetails({ maze, onRunSubmitted }) {
     submittedRunRef.current = null;
   }
 
+  const elapsedTime = finishTime
+    ? formatElapsedTime(finishTime - runStartTime)
+    : formatElapsedTime(elapsedMs);
+  const metadataItems = [
+    { label: uiText.labels.date, value: maze.date },
+    { label: uiText.labels.title, value: maze.title },
+    { label: uiText.labels.seed, value: <code>{maze.seed}</code> },
+    {
+      label: uiText.labels.size,
+      value: `${maze.size.width} x ${maze.size.height}`
+    },
+    {
+      label: uiText.labels.start,
+      value: `(${maze.start.x}, ${maze.start.y})`
+    },
+    {
+      label: uiText.labels.exit,
+      value: `(${maze.exit.x}, ${maze.exit.y})`
+    },
+    { label: uiText.labels.moves, value: moveCount },
+    { label: uiText.labels.time, value: elapsedTime },
+    {
+      label: uiText.labels.facing,
+      value: DIRECTION_ORDER[directionIndex].name
+    },
+    { label: uiText.labels.controls, value: uiText.gameplay.controls }
+  ];
+
   return (
-    <div className="maze-summary">
+    <section className="maze-summary" aria-labelledby="maze-summary-title">
+      <h2 id="maze-summary-title" className="section-title">
+        {uiText.gameplay.summaryHeading}
+      </h2>
       <FirstPersonView
         maze={maze}
         playerPosition={renderPosition}
         playerAngle={renderAngle}
         facingName={DIRECTION_ORDER[directionIndex].name}
       />
-      <p className="body-copy">
-        <strong>Date:</strong> {maze.date}
-      </p>
-      <p className="body-copy">
-        <strong>Title:</strong> {maze.title}
-      </p>
-      <p className="body-copy">
-        <strong>Seed:</strong> <code>{maze.seed}</code>
-      </p>
-      <p className="body-copy">
-        <strong>Size:</strong> {maze.size.width} x {maze.size.height}
-      </p>
-      <p className="body-copy">
-        <strong>Start:</strong> ({maze.start.x}, {maze.start.y})
-      </p>
-      <p className="body-copy">
-        <strong>Exit:</strong> ({maze.exit.x}, {maze.exit.y})
-      </p>
-      <p className="body-copy">
-        <strong>Moves:</strong> {moveCount}
-      </p>
-      <p className="body-copy">
-        <strong>Time:</strong>{" "}
-        {finishTime
-          ? formatElapsedTime(finishTime - runStartTime)
-          : formatElapsedTime(elapsedMs)}
-      </p>
-      <p className="body-copy">
-        <strong>Facing:</strong> {DIRECTION_ORDER[directionIndex].name}
-      </p>
-      <p className="body-copy">
-        <strong>Controls:</strong> Up/Down or W/S move, Left/Right or A/D turn
-      </p>
-      <p className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}>
+      <MetadataList items={metadataItems} />
+      <p
+        className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}
+        aria-live="polite"
+      >
         {hasFinished
-          ? `Maze complete in ${formatElapsedTime(finishTime - runStartTime)}.`
-          : "Navigate from S to E. The top-down player marker shows facing."}
+          ? `Maze complete in ${elapsedTime}.`
+          : uiText.gameplay.introStatus}
       </p>
       {submissionStatus === "submitting" && (
-        <p className="body-copy status-copy">Submitting run to the API...</p>
+        <p className="body-copy status-copy" aria-live="polite">
+          {uiText.gameplay.submittingRun}
+        </p>
       )}
       {submissionStatus === "submitted" && submissionSummary && (
-        <p className="body-copy status-copy success-copy">
+        <p className="body-copy status-copy success-copy" aria-live="polite">
           Run accepted by the API at <code>{submissionSummary.acceptedAt}</code>.
         </p>
       )}
       {submissionStatus === "error" && (
-        <p className="body-copy status-copy error-copy">
-          The run finished locally, but submission to the API failed.
+        <p className="body-copy status-copy error-copy" aria-live="polite">
+          {uiText.gameplay.submissionError}
         </p>
       )}
-      <div className="maze-grid-preview" aria-label="Daily maze debug view">
+      <div
+        className="maze-grid-preview"
+        role="img"
+        aria-label={uiText.gameplay.debugViewLabel}
+      >
         {gridRows.map((row, index) => (
           <code key={`${index}-${row}`} className="maze-grid-row">
             {row}
@@ -365,24 +446,30 @@ function MazeDetails({ maze, onRunSubmitted }) {
       </div>
       <div className="actions">
         <button type="button" className="secondary-button" onClick={handleReset}>
-          Reset run
+          {uiText.actions.resetRun}
         </button>
       </div>
-    </div>
+    </section>
   );
 }
 
 function Leaderboard({ entries }) {
   return (
-    <div className="maze-summary">
-      <p className="body-copy">
-        <strong>Leaderboard</strong>
-      </p>
+    <section className="maze-summary" aria-labelledby="leaderboard-title">
+      <h2 id="leaderboard-title" className="section-title">
+        {uiText.leaderboard.heading}
+      </h2>
       {entries.length === 0 && (
-        <p className="body-copy">No submitted runs for this day yet.</p>
+        <p className="body-copy">{uiText.leaderboard.empty}</p>
       )}
       {entries.length > 0 && (
-        <div className="leaderboard-list" aria-label="Daily leaderboard">
+        <div className="leaderboard-list" aria-label={uiText.leaderboard.ariaLabel}>
+          <div className="leaderboard-row leaderboard-row-header" aria-hidden="true">
+            <span>{uiText.leaderboard.rank}</span>
+            <span>{uiText.leaderboard.player}</span>
+            <span>{uiText.leaderboard.elapsed}</span>
+            <span>{uiText.leaderboard.moves}</span>
+          </div>
           {entries.map((entry) => (
             <div key={`${entry.rank}-${entry.acceptedAt}`} className="leaderboard-row">
               <span>#{entry.rank}</span>
@@ -393,7 +480,7 @@ function Leaderboard({ entries }) {
           ))}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -403,6 +490,22 @@ function AuthPanel({ user, onAuthChange }) {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const errorId = "auth-panel-error";
+  const helperId = "auth-panel-helper";
+  const usernameId = "auth-username";
+  const passwordId = "auth-password";
+  const submitLabel =
+    mode === "register" ? uiText.actions.createAccount : uiText.actions.logIn;
+  const statusMessage =
+    status === "submitting"
+      ? mode === "register"
+        ? uiText.auth.creatingAccount
+        : uiText.auth.signingIn
+      : status === "success"
+        ? mode === "register"
+          ? uiText.auth.registerSuccess
+          : uiText.auth.loginSuccess
+        : "";
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -462,50 +565,60 @@ function AuthPanel({ user, onAuthChange }) {
   }
 
   return (
-    <div className="maze-summary">
-      <p className="body-copy">
-        <strong>Identity</strong>
-      </p>
+    <section className="maze-summary" aria-labelledby="identity-title">
+      <h2 id="identity-title" className="section-title">
+        {uiText.auth.heading}
+      </h2>
       {user ? (
         <>
           <p className="body-copy">
-            Signed in as <code>{user.username}</code>
+            {uiText.auth.signedInAs} <code>{user.username}</code>
           </p>
           <div className="actions">
             <button type="button" className="secondary-button" onClick={handleLogout}>
-              Log out
+              {uiText.actions.logOut}
             </button>
           </div>
         </>
       ) : (
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-toggle">
+        <form className="auth-form" onSubmit={handleSubmit} aria-describedby={helperId}>
+          <fieldset className="auth-toggle-group">
+            <legend className="sr-only">Authentication mode</legend>
+            <div className="auth-toggle" role="tablist" aria-label="Authentication mode">
             <button
               type="button"
               className={mode === "login" ? "secondary-button is-active" : "secondary-button"}
+              aria-pressed={mode === "login"}
               onClick={() => {
                 setMode("login");
                 setStatus("idle");
                 setErrorMessage("");
               }}
             >
-              Log in
+              {uiText.actions.logIn}
             </button>
             <button
               type="button"
               className={mode === "register" ? "secondary-button is-active" : "secondary-button"}
+              aria-pressed={mode === "register"}
               onClick={() => {
                 setMode("register");
                 setStatus("idle");
                 setErrorMessage("");
               }}
             >
-              Create account
+              {uiText.actions.createAccount}
             </button>
-          </div>
+            </div>
+          </fieldset>
+          <p id={helperId} className="assistive-copy">
+            Usernames support letters, numbers, underscores, and hyphens. Passwords
+            must be at least 10 characters long.
+          </p>
           <label className="auth-field">
-            <span>Username</span>
+            <span>{uiText.auth.username}</span>
             <input
+              id={usernameId}
               type="text"
               autoComplete="username"
               value={username}
@@ -513,44 +626,46 @@ function AuthPanel({ user, onAuthChange }) {
               required
               minLength={3}
               maxLength={32}
+              aria-invalid={status === "error"}
+              aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
             />
           </label>
           <label className="auth-field">
-            <span>Password</span>
+            <span>{uiText.auth.password}</span>
             <input
+              id={passwordId}
               type="password"
               autoComplete={mode === "register" ? "new-password" : "current-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
               minLength={10}
+              aria-invalid={status === "error"}
+              aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
             />
           </label>
           <div className="actions">
             <button type="submit" className="primary-button" disabled={status === "submitting"}>
-              {mode === "register" ? "Create account" : "Log in"}
+              {submitLabel}
             </button>
           </div>
-          {status === "submitting" && (
-            <p className="body-copy status-copy" aria-live="polite">
-              {mode === "register" ? "Creating account..." : "Signing in..."}
-            </p>
-          )}
-          {status === "success" && (
+          {(status === "submitting" || status === "success") && (
             <p className="body-copy status-copy success-copy" aria-live="polite">
-              {mode === "register"
-                ? "Account created and signed in."
-                : "Signed in successfully."}
+              {statusMessage}
             </p>
           )}
           {status === "error" && errorMessage && (
-            <p className="body-copy status-copy error-copy" aria-live="polite">
+            <p
+              id={errorId}
+              className="body-copy status-copy error-copy"
+              aria-live="assertive"
+            >
               {errorMessage}
             </p>
           )}
         </form>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -695,16 +810,14 @@ export default function PlayPage() {
   return (
     <main className="page-shell">
       <div className="content-card">
-        <p className="eyebrow">Play</p>
-        <h1>Daily maze metadata</h1>
-        <p className="body-copy">
-          This page now fetches the first real piece of game data from the Go
-          API. It includes a simple first-person raycast panel and keeps the
-          top-down maze visible for debugging.
-        </p>
+        <p className="eyebrow">{uiText.play.eyebrow}</p>
+        <h1>{uiText.play.title}</h1>
+        <p className="body-copy">{uiText.play.intro}</p>
 
         {status === "loading" && (
-          <p className="body-copy status-copy">Loading daily maze...</p>
+          <p className="body-copy status-copy" aria-live="polite">
+            {uiText.play.loadingMaze}
+          </p>
         )}
 
         {status === "success" && maze && (
@@ -714,6 +827,12 @@ export default function PlayPage() {
               setLeaderboardRefreshKey((currentKey) => currentKey + 1)
             }
           />
+        )}
+
+        {status === "success" && maze && leaderboardStatus === "loading" && (
+          <p className="body-copy status-copy" aria-live="polite">
+            {uiText.play.loadingLeaderboard}
+          </p>
         )}
 
         {status === "success" && maze && leaderboardStatus !== "error" && (
@@ -732,21 +851,20 @@ export default function PlayPage() {
         )}
 
         {status === "success" && maze && leaderboardStatus === "error" && (
-          <p className="body-copy status-copy error-copy">
-            Unable to load the leaderboard right now.
+          <p className="body-copy status-copy error-copy" aria-live="polite">
+            {uiText.play.leaderboardError}
           </p>
         )}
 
         {status === "error" && (
-          <p className="body-copy status-copy error-copy">
-            Unable to load the daily maze metadata. Make sure the API is
-            running on <code>http://localhost:8080</code>.
+          <p className="body-copy status-copy error-copy" aria-live="assertive">
+            {uiText.play.mazeError}
           </p>
         )}
 
         <div className="actions">
           <Link href="/" className="secondary-link">
-            Back home
+            {uiText.actions.backHome}
           </Link>
         </div>
       </div>
