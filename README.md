@@ -28,6 +28,9 @@ Planned local ports:
 - `5432`: Postgres
 - `6379`: Redis
 
+Local backend configuration:
+- `DATABASE_URL` should point at the local Postgres instance
+
 Current helper commands:
 - `make infra-up`
 - `make infra-down`

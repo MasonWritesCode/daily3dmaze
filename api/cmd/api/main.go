@@ -1,13 +1,17 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"hash/fnv"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type dailyMazeResponse struct {
@@ -46,16 +50,42 @@ type runSubmissionResponse struct {
 	AcceptedAt    string `json:"acceptedAt"`
 }
 
+type leaderboardEntry struct {
+	Rank          int    `json:"rank"`
+	Date          string `json:"date"`
+	Seed          string `json:"seed"`
+	MoveCount     int    `json:"moveCount"`
+	ElapsedTimeMs int    `json:"elapsedTimeMs"`
+	AcceptedAt    string `json:"acceptedAt"`
+}
+
+type leaderboardResponse struct {
+	Date    string             `json:"date"`
+	Entries []leaderboardEntry `json:"entries"`
+}
+
+type app struct {
+	db *sql.DB
+}
+
 func main() {
 	port := os.Getenv("API_PORT")
 	if port == "" {
 		port = "8080"
 	}
 
+	db, err := openDatabase()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/daily-maze", dailyMazeHandler)
-	mux.HandleFunc("/api/runs", runSubmissionHandler)
+	mux.HandleFunc("/api/runs", application.runSubmissionHandler)
+	mux.HandleFunc("/api/leaderboard", application.leaderboardHandler)
 
 	addr := ":" + port
 	log.Printf("api listening on %s", addr)
@@ -103,7 +133,7 @@ func dailyMazeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
+func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -135,18 +165,57 @@ func runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	acceptedAt := time.Now().UTC()
+	if err := a.insertRun(request, acceptedAt); err != nil {
+		http.Error(w, "failed to persist run", http.StatusInternalServerError)
+		return
+	}
+
 	response := runSubmissionResponse{
 		Status:        "accepted",
 		Date:          request.Date,
 		Seed:          request.Seed,
 		MoveCount:     request.MoveCount,
 		ElapsedTimeMs: request.ElapsedTimeMs,
-		AcceptedAt:    time.Now().UTC().Format(time.RFC3339),
+		AcceptedAt:    acceptedAt.Format(time.RFC3339),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	date := r.URL.Query().Get("date")
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02")
+	}
+
+	entries, err := a.listLeaderboard(date)
+	if err != nil {
+		http.Error(w, "failed to load leaderboard", http.StatusInternalServerError)
+		return
+	}
+
+	response := leaderboardResponse{
+		Date:    date,
+		Entries: entries,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
@@ -301,6 +370,105 @@ func hashSeed(seed string) uint32 {
 	hash := fnv.New32a()
 	_, _ = hash.Write([]byte(seed))
 	return hash.Sum32()
+}
+
+func openDatabase() (*sql.DB, error) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		databaseURL = "postgres://postgres:postgres@localhost:5432/daily3dmaze?sslmode=disable"
+	}
+
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
+	db.SetConnMaxLifetime(30 * time.Minute)
+
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+
+	if err := ensureRunsTable(db); err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func ensureRunsTable(db *sql.DB) error {
+	const query = `
+		CREATE TABLE IF NOT EXISTS runs (
+			id BIGSERIAL PRIMARY KEY,
+			run_date DATE NOT NULL,
+			seed TEXT NOT NULL,
+			move_count INTEGER NOT NULL,
+			elapsed_time_ms INTEGER NOT NULL,
+			accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE INDEX IF NOT EXISTS runs_run_date_elapsed_idx
+			ON runs (run_date, elapsed_time_ms, move_count, accepted_at);
+	`
+
+	_, err := db.Exec(query)
+	return err
+}
+
+func (a app) insertRun(request runSubmissionRequest, acceptedAt time.Time) error {
+	if a.db == nil {
+		return errors.New("database unavailable")
+	}
+
+	const query = `
+		INSERT INTO runs (run_date, seed, move_count, elapsed_time_ms, accepted_at)
+		VALUES ($1, $2, $3, $4, $5)
+	`
+
+	_, err := a.db.Exec(query, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, acceptedAt)
+	return err
+}
+
+func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
+	if a.db == nil {
+		return nil, errors.New("database unavailable")
+	}
+
+	const query = `
+		SELECT run_date::text, seed, move_count, elapsed_time_ms, accepted_at
+		FROM runs
+		WHERE run_date = $1::date
+		ORDER BY elapsed_time_ms ASC, move_count ASC, accepted_at ASC
+		LIMIT 10
+	`
+
+	rows, err := a.db.Query(query, date)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	entries := make([]leaderboardEntry, 0, 10)
+	for rows.Next() {
+		var entry leaderboardEntry
+		var acceptedAt time.Time
+
+		if err := rows.Scan(&entry.Date, &entry.Seed, &entry.MoveCount, &entry.ElapsedTimeMs, &acceptedAt); err != nil {
+			return nil, err
+		}
+
+		entry.Rank = len(entries) + 1
+		entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
+		entries = append(entries, entry)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return entries, nil
 }
 
 func withCORS(next http.Handler) http.Handler {

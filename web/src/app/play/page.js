@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import FirstPersonView from "../../components/game/FirstPersonView";
-import { dailyMazeEndpoint, runsEndpoint } from "../../lib/config";
+import {
+  dailyMazeEndpoint,
+  leaderboardEndpoint,
+  runsEndpoint
+} from "../../lib/config";
 import {
   DIRECTION_ORDER,
   MOVE_DURATION_MS,
@@ -16,7 +20,7 @@ import {
   renderGridRows
 } from "../../lib/game/maze";
 
-function MazeDetails({ maze }) {
+function MazeDetails({ maze, onRunSubmitted }) {
   const [playerPosition, setPlayerPosition] = useState(maze.start);
   const [directionIndex, setDirectionIndex] = useState(0);
   const [renderPosition, setRenderPosition] = useState(maze.start);
@@ -100,6 +104,7 @@ function MazeDetails({ maze }) {
         const payload = await response.json();
         setSubmissionSummary(payload);
         setSubmissionStatus("submitted");
+        onRunSubmitted();
       } catch (error) {
         console.error("Failed to submit completed run", error);
         setSubmissionStatus("error");
@@ -343,9 +348,36 @@ function MazeDetails({ maze }) {
   );
 }
 
+function Leaderboard({ entries }) {
+  return (
+    <div className="maze-summary">
+      <p className="body-copy">
+        <strong>Leaderboard</strong>
+      </p>
+      {entries.length === 0 && (
+        <p className="body-copy">No submitted runs for this day yet.</p>
+      )}
+      {entries.length > 0 && (
+        <div className="leaderboard-list" aria-label="Daily leaderboard">
+          {entries.map((entry) => (
+            <div key={`${entry.rank}-${entry.acceptedAt}`} className="leaderboard-row">
+              <span>#{entry.rank}</span>
+              <span>{formatElapsedTime(entry.elapsedTimeMs)}</span>
+              <span>{entry.moveCount} moves</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PlayPage() {
   const [maze, setMaze] = useState(null);
   const [status, setStatus] = useState("loading");
+  const [leaderboardEntries, setLeaderboardEntries] = useState([]);
+  const [leaderboardStatus, setLeaderboardStatus] = useState("idle");
+  const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -384,6 +416,50 @@ export default function PlayPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!maze) {
+      return;
+    }
+
+    let isMounted = true;
+    setLeaderboardStatus("loading");
+
+    async function loadLeaderboard() {
+      try {
+        const response = await fetch(
+          `${leaderboardEndpoint}?date=${encodeURIComponent(maze.date)}`
+        );
+
+        if (!response.ok) {
+          throw new Error(`Leaderboard request failed with status ${response.status}`);
+        }
+
+        const payload = await response.json();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setLeaderboardEntries(payload.entries || []);
+        setLeaderboardStatus("success");
+      } catch (error) {
+        console.error("Failed to load leaderboard", error);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setLeaderboardStatus("error");
+      }
+    }
+
+    loadLeaderboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [leaderboardRefreshKey, maze]);
+
   return (
     <main className="page-shell">
       <div className="content-card">
@@ -399,7 +475,24 @@ export default function PlayPage() {
           <p className="body-copy status-copy">Loading daily maze...</p>
         )}
 
-        {status === "success" && maze && <MazeDetails maze={maze} />}
+        {status === "success" && maze && (
+          <MazeDetails
+            maze={maze}
+            onRunSubmitted={() =>
+              setLeaderboardRefreshKey((currentKey) => currentKey + 1)
+            }
+          />
+        )}
+
+        {status === "success" && maze && leaderboardStatus !== "error" && (
+          <Leaderboard entries={leaderboardEntries} />
+        )}
+
+        {status === "success" && maze && leaderboardStatus === "error" && (
+          <p className="body-copy status-copy error-copy">
+            Unable to load the leaderboard right now.
+          </p>
+        )}
 
         {status === "error" && (
           <p className="body-copy status-copy error-copy">
