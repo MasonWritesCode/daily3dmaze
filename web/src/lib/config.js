@@ -4,3 +4,7 @@ export const apiBaseUrl =
 export const dailyMazeEndpoint = `${apiBaseUrl}/api/daily-maze`;
 export const runsEndpoint = `${apiBaseUrl}/api/runs`;
 export const leaderboardEndpoint = `${apiBaseUrl}/api/leaderboard`;
+export const registerEndpoint = `${apiBaseUrl}/api/auth/register`;
+export const loginEndpoint = `${apiBaseUrl}/api/auth/login`;
+export const logoutEndpoint = `${apiBaseUrl}/api/auth/logout`;
+export const meEndpoint = `${apiBaseUrl}/api/me`;

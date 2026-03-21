@@ -54,6 +54,7 @@ type runSubmissionResponse struct {
 
 type leaderboardEntry struct {
 	Rank          int    `json:"rank"`
+	Username      string `json:"username"`
 	Date          string `json:"date"`
 	Seed          string `json:"seed"`
 	MoveCount     int    `json:"moveCount"`
@@ -93,6 +94,10 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/daily-maze", dailyMazeHandler)
+	mux.HandleFunc("/api/auth/register", application.registerHandler)
+	mux.HandleFunc("/api/auth/login", application.loginHandler)
+	mux.HandleFunc("/api/auth/logout", application.logoutHandler)
+	mux.HandleFunc("/api/me", application.meHandler)
 	mux.HandleFunc("/api/runs", application.runSubmissionHandler)
 	mux.HandleFunc("/api/leaderboard", application.leaderboardHandler)
 
@@ -165,7 +170,12 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	acceptedAt := time.Now().UTC()
-	if err := a.insertRun(request, acceptedAt); err != nil {
+	var userID *int64
+	if user, err := a.currentUserFromRequest(r); err == nil {
+		userID = &user.ID
+	}
+
+	if err := a.insertRun(request, userID, acceptedAt); err != nil {
 		http.Error(w, "failed to persist run", http.StatusInternalServerError)
 		return
 	}
@@ -395,43 +405,24 @@ func openDatabase() (*sql.DB, error) {
 		return nil, err
 	}
 
-	if err := ensureRunsTable(db); err != nil {
+	if err := runMigrations(db); err != nil {
 		return nil, err
 	}
 
 	return db, nil
 }
 
-func ensureRunsTable(db *sql.DB) error {
-	const query = `
-		CREATE TABLE IF NOT EXISTS runs (
-			id BIGSERIAL PRIMARY KEY,
-			run_date DATE NOT NULL,
-			seed TEXT NOT NULL,
-			move_count INTEGER NOT NULL,
-			elapsed_time_ms INTEGER NOT NULL,
-			accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-
-		CREATE INDEX IF NOT EXISTS runs_run_date_elapsed_idx
-			ON runs (run_date, elapsed_time_ms, move_count, accepted_at);
-	`
-
-	_, err := db.Exec(query)
-	return err
-}
-
-func (a app) insertRun(request runSubmissionRequest, acceptedAt time.Time) error {
+func (a app) insertRun(request runSubmissionRequest, userID *int64, acceptedAt time.Time) error {
 	if a.db == nil {
 		return errors.New("database unavailable")
 	}
 
 	const query = `
-		INSERT INTO runs (run_date, seed, move_count, elapsed_time_ms, accepted_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO runs (user_id, run_date, seed, move_count, elapsed_time_ms, accepted_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
-	_, err := a.db.Exec(query, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, acceptedAt)
+	_, err := a.db.Exec(query, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, acceptedAt)
 	return err
 }
 
@@ -441,8 +432,9 @@ func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
 	}
 
 	const query = `
-		SELECT run_date::text, seed, move_count, elapsed_time_ms, accepted_at
+		SELECT run_date::text, COALESCE(users.username, ''), seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
+		LEFT JOIN users ON users.id = runs.user_id
 		WHERE run_date = $1::date
 		ORDER BY elapsed_time_ms ASC, move_count ASC, accepted_at ASC
 		LIMIT 10
@@ -459,7 +451,7 @@ func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
 		var entry leaderboardEntry
 		var acceptedAt time.Time
 
-		if err := rows.Scan(&entry.Date, &entry.Seed, &entry.MoveCount, &entry.ElapsedTimeMs, &acceptedAt); err != nil {
+		if err := rows.Scan(&entry.Date, &entry.Username, &entry.Seed, &entry.MoveCount, &entry.ElapsedTimeMs, &acceptedAt); err != nil {
 			return nil, err
 		}
 
@@ -545,6 +537,7 @@ func rankLeaderboardEntries(entries []leaderboardEntry) []leaderboardEntry {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 

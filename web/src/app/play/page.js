@@ -7,6 +7,10 @@ import FirstPersonView from "../../components/game/FirstPersonView";
 import {
   dailyMazeEndpoint,
   leaderboardEndpoint,
+  loginEndpoint,
+  logoutEndpoint,
+  meEndpoint,
+  registerEndpoint,
   runsEndpoint
 } from "../../lib/config";
 import {
@@ -86,6 +90,7 @@ function MazeDetails({ maze, onRunSubmitted }) {
       try {
         const response = await fetch(runsEndpoint, {
           method: "POST",
+          credentials: "include",
           headers: {
             "Content-Type": "application/json"
           },
@@ -123,6 +128,21 @@ function MazeDetails({ maze, onRunSubmitted }) {
   }, []);
 
   useEffect(() => {
+    function isTypingTarget(target) {
+      if (!(target instanceof HTMLElement)) {
+        return false;
+      }
+
+      const tagName = target.tagName;
+      return (
+        target.isContentEditable ||
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT" ||
+        tagName === "BUTTON"
+      );
+    }
+
     function beginRunIfNeeded() {
       if (runStartTime) {
         return runStartTime;
@@ -196,6 +216,10 @@ function MazeDetails({ maze, onRunSubmitted }) {
     }
 
     function handleKeyDown(event) {
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+
       if (hasFinished || actionLockRef.current) {
         return;
       }
@@ -362,11 +386,169 @@ function Leaderboard({ entries }) {
           {entries.map((entry) => (
             <div key={`${entry.rank}-${entry.acceptedAt}`} className="leaderboard-row">
               <span>#{entry.rank}</span>
+              <span>{entry.username || "Anonymous"}</span>
               <span>{formatElapsedTime(entry.elapsedTimeMs)}</span>
               <span>{entry.moveCount} moves</span>
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function AuthPanel({ user, onAuthChange }) {
+  const [mode, setMode] = useState("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setStatus("submitting");
+    setErrorMessage("");
+
+    try {
+      const response = await fetch(
+        mode === "register" ? registerEndpoint : loginEndpoint,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ username, password })
+        }
+      );
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || "Authentication failed");
+      }
+
+      const payload = await response.json();
+      onAuthChange(payload.user);
+      setStatus("success");
+      setErrorMessage("");
+      setPassword("");
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(error.message);
+    }
+  }
+
+  async function handleLogout() {
+    setStatus("submitting");
+    setErrorMessage("");
+
+    try {
+      const response = await fetch(logoutEndpoint, {
+        method: "POST",
+        credentials: "include"
+      });
+
+      if (!response.ok) {
+        throw new Error("Logout failed");
+      }
+
+      onAuthChange(null);
+      setStatus("idle");
+      setPassword("");
+    } catch (error) {
+      setStatus("error");
+      setErrorMessage(error.message);
+    }
+  }
+
+  return (
+    <div className="maze-summary">
+      <p className="body-copy">
+        <strong>Identity</strong>
+      </p>
+      {user ? (
+        <>
+          <p className="body-copy">
+            Signed in as <code>{user.username}</code>
+          </p>
+          <div className="actions">
+            <button type="button" className="secondary-button" onClick={handleLogout}>
+              Log out
+            </button>
+          </div>
+        </>
+      ) : (
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <div className="auth-toggle">
+            <button
+              type="button"
+              className={mode === "login" ? "secondary-button is-active" : "secondary-button"}
+              onClick={() => {
+                setMode("login");
+                setStatus("idle");
+                setErrorMessage("");
+              }}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              className={mode === "register" ? "secondary-button is-active" : "secondary-button"}
+              onClick={() => {
+                setMode("register");
+                setStatus("idle");
+                setErrorMessage("");
+              }}
+            >
+              Create account
+            </button>
+          </div>
+          <label className="auth-field">
+            <span>Username</span>
+            <input
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+              minLength={3}
+              maxLength={32}
+            />
+          </label>
+          <label className="auth-field">
+            <span>Password</span>
+            <input
+              type="password"
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              minLength={10}
+            />
+          </label>
+          <div className="actions">
+            <button type="submit" className="primary-button" disabled={status === "submitting"}>
+              {mode === "register" ? "Create account" : "Log in"}
+            </button>
+          </div>
+          {status === "submitting" && (
+            <p className="body-copy status-copy" aria-live="polite">
+              {mode === "register" ? "Creating account..." : "Signing in..."}
+            </p>
+          )}
+          {status === "success" && (
+            <p className="body-copy status-copy success-copy" aria-live="polite">
+              {mode === "register"
+                ? "Account created and signed in."
+                : "Signed in successfully."}
+            </p>
+          )}
+          {status === "error" && errorMessage && (
+            <p className="body-copy status-copy error-copy" aria-live="polite">
+              {errorMessage}
+            </p>
+          )}
+        </form>
       )}
     </div>
   );
@@ -378,6 +560,8 @@ export default function PlayPage() {
   const [leaderboardEntries, setLeaderboardEntries] = useState([]);
   const [leaderboardStatus, setLeaderboardStatus] = useState("idle");
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0);
+  const [user, setUser] = useState(null);
+  const [authStatus, setAuthStatus] = useState("loading");
 
   useEffect(() => {
     let isMounted = true;
@@ -410,6 +594,54 @@ export default function PlayPage() {
     }
 
     loadMaze();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCurrentUser() {
+      try {
+        const response = await fetch(meEndpoint, {
+          credentials: "include"
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            if (isMounted) {
+              setUser(null);
+              setAuthStatus("unauthenticated");
+            }
+            return;
+          }
+
+          throw new Error(`Current user request failed with status ${response.status}`);
+        }
+
+        const payload = await response.json();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUser(payload.user);
+        setAuthStatus("authenticated");
+      } catch (error) {
+        console.error("Failed to load current user", error);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUser(null);
+        setAuthStatus("unauthenticated");
+      }
+    }
+
+    loadCurrentUser();
 
     return () => {
       isMounted = false;
@@ -486,6 +718,17 @@ export default function PlayPage() {
 
         {status === "success" && maze && leaderboardStatus !== "error" && (
           <Leaderboard entries={leaderboardEntries} />
+        )}
+
+        {authStatus !== "loading" && (
+          <AuthPanel
+            user={user}
+            onAuthChange={(nextUser) => {
+              setUser(nextUser);
+              setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
+              setLeaderboardRefreshKey((currentKey) => currentKey + 1);
+            }}
+          />
         )}
 
         {status === "success" && maze && leaderboardStatus === "error" && (
