@@ -13,6 +13,8 @@ const DIRECTION_ORDER = [
 ];
 const MOVE_DURATION_MS = 180;
 const TURN_DURATION_MS = 150;
+const FLOOR_TEXTURE_SCALE = 0.9;
+const CEILING_TEXTURE_SCALE = 1.1;
 const TEXTURE_PATHS = {
   wall: "/assets/3d-maze/wall.png",
   floor: "/assets/3d-maze/floor.png",
@@ -314,8 +316,15 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
         let worldY = originY + rowDistance * leftRayY;
 
         for (let x = 0; x < width; x += 1) {
-          const textureX = Math.floor((worldX - Math.floor(worldX)) * texture.width);
-          const textureY = Math.floor((worldY - Math.floor(worldY)) * texture.height);
+          const textureScale = isFloor ? FLOOR_TEXTURE_SCALE : CEILING_TEXTURE_SCALE;
+          const scaledWorldX = worldX * textureScale;
+          const scaledWorldY = worldY * textureScale;
+          const textureX = Math.floor(
+            (scaledWorldX - Math.floor(scaledWorldX)) * texture.width
+          );
+          const textureY = Math.floor(
+            (scaledWorldY - Math.floor(scaledWorldY)) * texture.height
+          );
           const sampled = sampleTexture(texture, textureX, textureY);
           const distanceShade = Math.max(0.28, 1 - rowDistance / maxDistance);
           const index = (y * width + x) * 4;
