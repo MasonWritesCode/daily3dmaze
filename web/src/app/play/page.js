@@ -169,6 +169,50 @@ function createTextureSurface(image) {
   };
 }
 
+function hasStableCanvasReadback(image) {
+  if (!image) {
+    return false;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return false;
+  }
+
+  const samplePoints = [
+    [0, 0],
+    [Math.max(0, image.width - 1), 0],
+    [0, Math.max(0, image.height - 1)],
+    [Math.max(0, image.width - 1), Math.max(0, image.height - 1)],
+    [Math.floor(image.width / 2), Math.floor(image.height / 2)],
+    [Math.floor(image.width / 3), Math.floor(image.height / 3)],
+    [Math.floor((image.width * 2) / 3), Math.floor((image.height * 2) / 3)]
+  ];
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0);
+  const first = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0);
+  const second = context.getImageData(0, 0, canvas.width, canvas.height).data;
+
+  return samplePoints.every(([x, y]) => {
+    const index = (y * canvas.width + x) * 4;
+
+    return (
+      first[index] === second[index] &&
+      first[index + 1] === second[index + 1] &&
+      first[index + 2] === second[index + 2] &&
+      first[index + 3] === second[index + 3]
+    );
+  });
+}
+
 function sampleTexture(texture, x, y) {
   const wrappedX = ((x % texture.width) + texture.width) % texture.width;
   const wrappedY = ((y % texture.height) + texture.height) % texture.height;
@@ -187,6 +231,7 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
   const textures = useMazeTextures();
   const textureSurfaceRef = useRef({
     source: null,
+    supportsSurfaceTextures: false,
     wall: null,
     floor: null,
     ceiling: null
@@ -215,11 +260,18 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
     context.imageSmoothingEnabled = false;
 
     if (textureSurfaceRef.current.source !== textures) {
+      const supportsSurfaceTextures =
+        hasStableCanvasReadback(textures.floor) &&
+        hasStableCanvasReadback(textures.ceiling);
+
       textureSurfaceRef.current = {
         source: textures,
+        supportsSurfaceTextures,
         wall: createTextureSurface(textures.wall),
-        floor: createTextureSurface(textures.floor),
-        ceiling: createTextureSurface(textures.ceiling)
+        floor: supportsSurfaceTextures ? createTextureSurface(textures.floor) : null,
+        ceiling: supportsSurfaceTextures
+          ? createTextureSurface(textures.ceiling)
+          : null
       };
     }
 
@@ -357,7 +409,12 @@ function FirstPersonView({ maze, playerPosition, playerAngle, facingName }) {
     <div className="raycast-panel">
       <div className="raycast-header">
         <p className="body-copy panel-title">First-person debug view</p>
-        <p className="body-copy panel-subtitle">Facing {facingName}</p>
+        <p className="body-copy panel-subtitle">
+          Facing {facingName}
+          {textureSurfaceRef.current.supportsSurfaceTextures
+            ? ""
+            : " · privacy-safe fallback"}
+        </p>
       </div>
       <canvas
         ref={canvasRef}
