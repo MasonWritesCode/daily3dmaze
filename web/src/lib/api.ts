@@ -70,6 +70,29 @@ export interface PlayerProfile {
   recentRuns: ProfileRun[];
 }
 
+export interface HistoryBestRun {
+  username: string;
+  moveCount: number;
+  elapsedTimeMs: number;
+  acceptedAt: string;
+}
+
+export interface HistoryEntry {
+  date: string;
+  title: string;
+  seed: string;
+  size: {
+    width: number;
+    height: number;
+  };
+  submissionCount: number;
+  bestRun: HistoryBestRun | null;
+}
+
+export interface HistoryResponse {
+  entries: HistoryEntry[];
+}
+
 async function readTextError(response: Response, fallback: string): Promise<Error> {
   const message = (await response.text()).trim();
   return new Error(message || fallback);
@@ -190,4 +213,19 @@ export async function fetchPlayerProfile(username: string): Promise<PlayerProfil
   }
 
   return (await response.json()) as PlayerProfile;
+}
+
+export async function fetchHistory(limit = 14): Promise<HistoryResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/history?limit=${encodeURIComponent(String(limit))}`
+  );
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `History request failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as HistoryResponse;
 }

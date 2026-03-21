@@ -11,6 +11,9 @@ export default function HomePage() {
           <Link href="/play" className="primary-link">
             Open /play
           </Link>
+          <Link href="/history" className="secondary-link">
+            Browse history
+          </Link>
         </div>
       </div>
     </main>
