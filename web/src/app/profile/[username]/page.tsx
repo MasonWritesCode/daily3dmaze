@@ -93,11 +93,31 @@ export default function ProfilePage() {
                   <dd>{profile.stats.totalRuns}</dd>
                 </div>
                 <div className="metadata-row">
+                  <dt>Days played</dt>
+                  <dd>{profile.stats.daysPlayed}</dd>
+                </div>
+                <div className="metadata-row">
                   <dt>Best time</dt>
                   <dd>
                     {profile.stats.bestElapsedTimeMs === null
                       ? "No completed runs yet"
                       : formatElapsedTime(profile.stats.bestElapsedTimeMs)}
+                  </dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Average time</dt>
+                  <dd>
+                    {profile.stats.averageElapsedTimeMs === null
+                      ? "No completed runs yet"
+                      : formatElapsedTime(profile.stats.averageElapsedTimeMs)}
+                  </dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Last played</dt>
+                  <dd>
+                    {profile.stats.lastPlayedAt === null
+                      ? "No completed runs yet"
+                      : new Date(profile.stats.lastPlayedAt).toLocaleString()}
                   </dd>
                 </div>
               </dl>

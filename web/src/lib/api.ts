@@ -60,7 +60,10 @@ export interface PlayerProfile {
   };
   stats: {
     totalRuns: number;
+    daysPlayed: number;
     bestElapsedTimeMs: number | null;
+    averageElapsedTimeMs: number | null;
+    lastPlayedAt: string | null;
   };
   recentRuns: ProfileRun[];
 }

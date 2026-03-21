@@ -24,8 +24,11 @@ type profileResponse struct {
 		CreatedAt string `json:"createdAt"`
 	} `json:"user"`
 	Stats struct {
-		TotalRuns         int  `json:"totalRuns"`
-		BestElapsedTimeMs *int `json:"bestElapsedTimeMs"`
+		TotalRuns            int     `json:"totalRuns"`
+		DaysPlayed           int     `json:"daysPlayed"`
+		BestElapsedTimeMs    *int    `json:"bestElapsedTimeMs"`
+		AverageElapsedTimeMs *int    `json:"averageElapsedTimeMs"`
+		LastPlayedAt         *string `json:"lastPlayedAt"`
 	} `json:"stats"`
 	RecentRuns []profileRun `json:"recentRuns"`
 }
@@ -82,7 +85,15 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 	}
 
 	const userQuery = `
-		SELECT users.id, users.username, users.created_at, COUNT(runs.id), MIN(runs.elapsed_time_ms)
+		SELECT
+			users.id,
+			users.username,
+			users.created_at,
+			COUNT(runs.id),
+			COUNT(DISTINCT runs.run_date),
+			MIN(runs.elapsed_time_ms),
+			AVG(runs.elapsed_time_ms),
+			MAX(runs.accepted_at)
 		FROM users
 		LEFT JOIN runs ON runs.user_id = users.id
 		WHERE users.username = $1
@@ -90,10 +101,13 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 	`
 
 	var (
-		profile        profileResponse
-		createdAt      time.Time
-		totalRuns      int
-		bestElapsedRaw sql.NullInt64
+		profile           profileResponse
+		createdAt         time.Time
+		totalRuns         int
+		daysPlayed        int
+		bestElapsedRaw    sql.NullInt64
+		averageElapsedRaw sql.NullFloat64
+		lastPlayedRaw     sql.NullTime
 	)
 
 	if err := a.db.QueryRow(userQuery, username).Scan(
@@ -101,16 +115,28 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 		&profile.User.Username,
 		&createdAt,
 		&totalRuns,
+		&daysPlayed,
 		&bestElapsedRaw,
+		&averageElapsedRaw,
+		&lastPlayedRaw,
 	); err != nil {
 		return profileResponse{}, err
 	}
 
 	profile.User.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 	profile.Stats.TotalRuns = totalRuns
+	profile.Stats.DaysPlayed = daysPlayed
 	if bestElapsedRaw.Valid {
 		bestElapsedTimeMs := int(bestElapsedRaw.Int64)
 		profile.Stats.BestElapsedTimeMs = &bestElapsedTimeMs
+	}
+	if averageElapsedRaw.Valid {
+		averageElapsedTimeMs := int(averageElapsedRaw.Float64 + 0.5)
+		profile.Stats.AverageElapsedTimeMs = &averageElapsedTimeMs
+	}
+	if lastPlayedRaw.Valid {
+		lastPlayedAt := lastPlayedRaw.Time.UTC().Format(time.RFC3339)
+		profile.Stats.LastPlayedAt = &lastPlayedAt
 	}
 
 	const recentRunsQuery = `
