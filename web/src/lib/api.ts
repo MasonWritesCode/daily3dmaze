@@ -1,4 +1,5 @@
 import {
+  apiBaseUrl,
   dailyMazeEndpoint,
   leaderboardEndpoint,
   loginEndpoint,
@@ -43,6 +44,25 @@ export interface AuthUser {
 
 export interface AuthResponse {
   user: AuthUser;
+}
+
+export interface ProfileRun {
+  date: string;
+  seed: string;
+  moveCount: number;
+  elapsedTimeMs: number;
+  acceptedAt: string;
+}
+
+export interface PlayerProfile {
+  user: AuthUser & {
+    createdAt: string;
+  };
+  stats: {
+    totalRuns: number;
+    bestElapsedTimeMs: number | null;
+  };
+  recentRuns: ProfileRun[];
 }
 
 async function readTextError(response: Response, fallback: string): Promise<Error> {
@@ -150,4 +170,19 @@ export async function logout(): Promise<void> {
   if (!response.ok) {
     throw await readTextError(response, "Logout failed");
   }
+}
+
+export async function fetchPlayerProfile(username: string): Promise<PlayerProfile> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/profile?username=${encodeURIComponent(username)}`
+  );
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Profile request failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as PlayerProfile;
 }

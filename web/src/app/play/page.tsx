@@ -491,7 +491,15 @@ function Leaderboard({ entries }: LeaderboardProps) {
           {entries.map((entry) => (
             <div key={`${entry.rank}-${entry.acceptedAt}`} className="leaderboard-row">
               <span>#{entry.rank}</span>
-              <span>{entry.username || "Anonymous"}</span>
+              <span>
+                {entry.username ? (
+                  <Link href={`/profile/${entry.username}`} className="inline-link">
+                    {entry.username}
+                  </Link>
+                ) : (
+                  "Anonymous"
+                )}
+              </span>
               <span>{formatElapsedTime(entry.elapsedTimeMs)}</span>
               <span>{entry.moveCount} moves</span>
             </div>
@@ -563,7 +571,10 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
       {user ? (
         <>
           <p className="body-copy">
-            {uiText.auth.signedInAs} <code>{user.username}</code>
+            {uiText.auth.signedInAs}{" "}
+            <Link href={`/profile/${user.username}`} className="inline-link">
+              <code>{user.username}</code>
+            </Link>
           </p>
           <div className="actions">
             <button type="button" className="secondary-button" onClick={handleLogout}>
