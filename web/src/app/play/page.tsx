@@ -6,14 +6,16 @@ import { useEffect, useRef, useState } from "react";
 
 import FirstPersonView from "../../components/game/FirstPersonView";
 import {
-  dailyMazeEndpoint,
-  leaderboardEndpoint,
-  loginEndpoint,
-  logoutEndpoint,
-  meEndpoint,
-  registerEndpoint,
-  runsEndpoint
-} from "../../lib/config";
+  authenticate,
+  fetchCurrentUser,
+  fetchDailyMaze,
+  fetchLeaderboard,
+  logout,
+  submitRun,
+  type AuthUser,
+  type LeaderboardEntry,
+  type RunSubmissionResponse
+} from "../../lib/api";
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import {
   DIRECTION_ORDER,
@@ -30,39 +32,6 @@ type AsyncStatus = "idle" | "loading" | "success" | "error";
 type SubmissionStatus = "idle" | "submitting" | "submitted" | "error";
 type AuthMode = "login" | "register";
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
-
-interface LeaderboardEntry {
-  rank: number;
-  username: string;
-  date: string;
-  seed: string;
-  moveCount: number;
-  elapsedTimeMs: number;
-  acceptedAt: string;
-}
-
-interface LeaderboardResponse {
-  date: string;
-  entries: LeaderboardEntry[];
-}
-
-interface RunSubmissionResponse {
-  status: string;
-  date: string;
-  seed: string;
-  moveCount: number;
-  elapsedTimeMs: number;
-  acceptedAt: string;
-}
-
-interface AuthUser {
-  id: number;
-  username: string;
-}
-
-interface AuthResponse {
-  user: AuthUser;
-}
 
 interface MetadataItem {
   label: string;
@@ -223,27 +192,14 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
     submittedRunRef.current = runFingerprint;
     setSubmissionStatus("submitting");
 
-    async function submitRun() {
+    async function submitCompletedRun() {
       try {
-        const response = await fetch(runsEndpoint, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            date: maze.date,
-            seed: maze.seed,
-            moveCount,
-            elapsedTimeMs
-          })
+        const payload = await submitRun({
+          date: maze.date,
+          seed: maze.seed,
+          moveCount,
+          elapsedTimeMs
         });
-
-        if (!response.ok) {
-          throw new Error(`Run submission failed with status ${response.status}`);
-        }
-
-        const payload = (await response.json()) as RunSubmissionResponse;
         setSubmissionSummary(payload);
         setSubmissionStatus("submitted");
         onRunSubmitted();
@@ -253,7 +209,7 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
       }
     }
 
-    void submitRun();
+    void submitCompletedRun();
   }, [finishTime, hasFinished, maze.date, maze.seed, moveCount, onRunSubmitted, runStartTime]);
 
   useEffect(() => {
@@ -573,25 +529,8 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
     setErrorMessage("");
 
     try {
-      const response = await fetch(
-        mode === "register" ? registerEndpoint : loginEndpoint,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ username, password })
-        }
-      );
-
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "Authentication failed");
-      }
-
-      const payload = (await response.json()) as AuthResponse;
-      onAuthChange(payload.user);
+      const authenticatedUser = await authenticate(mode, { username, password });
+      onAuthChange(authenticatedUser);
       setStatus("success");
       setErrorMessage("");
       setPassword("");
@@ -606,15 +545,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
     setErrorMessage("");
 
     try {
-      const response = await fetch(logoutEndpoint, {
-        method: "POST",
-        credentials: "include"
-      });
-
-      if (!response.ok) {
-        throw new Error("Logout failed");
-      }
-
+      await logout();
       onAuthChange(null);
       setStatus("idle");
       setPassword("");
@@ -743,13 +674,7 @@ export default function PlayPage() {
 
     async function loadMaze() {
       try {
-        const response = await fetch(dailyMazeEndpoint);
-
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
-
-        const payload = (await response.json()) as DailyMaze;
+        const payload = await fetchDailyMaze();
 
         if (!isMounted) {
           return;
@@ -780,30 +705,14 @@ export default function PlayPage() {
 
     async function loadCurrentUser() {
       try {
-        const response = await fetch(meEndpoint, {
-          credentials: "include"
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            if (isMounted) {
-              setUser(null);
-              setAuthStatus("unauthenticated");
-            }
-            return;
-          }
-
-          throw new Error(`Current user request failed with status ${response.status}`);
-        }
-
-        const payload = (await response.json()) as AuthResponse;
+        const currentUser = await fetchCurrentUser();
 
         if (!isMounted) {
           return;
         }
 
-        setUser(payload.user);
-        setAuthStatus("authenticated");
+        setUser(currentUser);
+        setAuthStatus(currentUser ? "authenticated" : "unauthenticated");
       } catch (error) {
         console.error("Failed to load current user", error);
 
@@ -834,15 +743,7 @@ export default function PlayPage() {
 
     async function loadLeaderboard() {
       try {
-        const response = await fetch(
-          `${leaderboardEndpoint}?date=${encodeURIComponent(mazeDate)}`
-        );
-
-        if (!response.ok) {
-          throw new Error(`Leaderboard request failed with status ${response.status}`);
-        }
-
-        const payload = (await response.json()) as LeaderboardResponse;
+        const payload = await fetchLeaderboard(mazeDate);
 
         if (!isMounted) {
           return;
