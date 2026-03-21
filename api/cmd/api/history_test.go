@@ -160,3 +160,63 @@ func TestHistoryHandlerEncodesResponse(t *testing.T) {
 		t.Fatalf("expected 2 history entries, got %d", len(payload.Entries))
 	}
 }
+
+func TestHistoryDayHandlerReturnsChallengeAndLeaderboard(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	acceptedAt := time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT run_date::text, COALESCE(users.username, ''), seed, move_count, elapsed_time_ms, accepted_at
+		FROM runs
+		LEFT JOIN users ON users.id = runs.user_id
+		WHERE run_date = $1::date
+		ORDER BY elapsed_time_ms ASC, move_count ASC, accepted_at ASC
+		LIMIT 10
+	`)).
+		WithArgs("2026-03-21").
+		WillReturnRows(
+			sqlmock.NewRows([]string{"run_date", "username", "seed", "move_count", "elapsed_time_ms", "accepted_at"}).
+				AddRow("2026-03-21", "mason_dev", "daily3dmaze:2026-03-21", 42, 12345, acceptedAt),
+		)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/history/day?date=2026-03-21", nil)
+	recorder := httptest.NewRecorder()
+
+	application.historyDayHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.StatusCode)
+	}
+
+	var payload historyDayResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if payload.Challenge.Date != "2026-03-21" {
+		t.Fatalf("expected challenge date 2026-03-21, got %q", payload.Challenge.Date)
+	}
+
+	if len(payload.Leaderboard.Entries) != 1 {
+		t.Fatalf("expected 1 leaderboard entry, got %d", len(payload.Leaderboard.Entries))
+	}
+
+	if payload.Leaderboard.Entries[0].Rank != 1 {
+		t.Fatalf("expected ranked leaderboard entry, got %#v", payload.Leaderboard.Entries[0])
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}

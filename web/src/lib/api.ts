@@ -93,6 +93,11 @@ export interface HistoryResponse {
   entries: HistoryEntry[];
 }
 
+export interface HistoryDayResponse {
+  challenge: DailyMaze;
+  leaderboard: LeaderboardResponse;
+}
+
 async function readTextError(response: Response, fallback: string): Promise<Error> {
   const message = (await response.text()).trim();
   return new Error(message || fallback);
@@ -228,4 +233,19 @@ export async function fetchHistory(limit = 14): Promise<HistoryResponse> {
   }
 
   return (await response.json()) as HistoryResponse;
+}
+
+export async function fetchHistoryDay(date: string): Promise<HistoryDayResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/history/day?date=${encodeURIComponent(date)}`
+  );
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `History day request failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as HistoryDayResponse;
 }

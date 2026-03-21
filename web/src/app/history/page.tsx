@@ -75,8 +75,16 @@ export default function HistoryPage() {
                 <article key={entry.date} className="history-card">
                   <div className="history-card-header">
                     <div>
-                      <p className="body-copy history-date">{entry.date}</p>
-                      <p className="body-copy history-title">{entry.title}</p>
+                      <p className="body-copy history-date">
+                        <Link href={`/history/${entry.date}`} className="inline-link">
+                          {entry.date}
+                        </Link>
+                      </p>
+                      <p className="body-copy history-title">
+                        <Link href={`/history/${entry.date}`} className="inline-link">
+                          {entry.title}
+                        </Link>
+                      </p>
                     </div>
                     <span className="history-chip">
                       {entry.submissionCount} run{entry.submissionCount === 1 ? "" : "s"}

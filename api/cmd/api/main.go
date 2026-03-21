@@ -109,6 +109,7 @@ func main() {
 	mux.HandleFunc("/api/me", application.meHandler)
 	mux.HandleFunc("/api/profile", application.profileHandler)
 	mux.HandleFunc("/api/history", application.historyHandler)
+	mux.HandleFunc("/api/history/day", application.historyDayHandler)
 	mux.HandleFunc("/api/runs", application.runSubmissionHandler)
 	mux.HandleFunc("/api/leaderboard", application.leaderboardHandler)
 

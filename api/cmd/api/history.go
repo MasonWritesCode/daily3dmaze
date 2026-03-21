@@ -33,6 +33,11 @@ type historyResponse struct {
 	Entries []historyEntry `json:"entries"`
 }
 
+type historyDayResponse struct {
+	Challenge   dailyMazeResponse   `json:"challenge"`
+	Leaderboard leaderboardResponse `json:"leaderboard"`
+}
+
 func (a app) historyHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -58,6 +63,49 @@ func (a app) historyHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(historyResponse{Entries: entries}); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func (a app) historyDayHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	date := r.URL.Query().Get("date")
+	if err := validateLeaderboardDate(date); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	challengeDate, err := time.Parse(dateLayoutISO, date)
+	if err != nil {
+		http.Error(w, "date must use YYYY-MM-DD format", http.StatusBadRequest)
+		return
+	}
+
+	entries, err := a.listLeaderboard(date)
+	if err != nil {
+		http.Error(w, "failed to load archive leaderboard", http.StatusInternalServerError)
+		return
+	}
+
+	response := historyDayResponse{
+		Challenge: generateDailyMaze(challengeDate.UTC()),
+		Leaderboard: leaderboardResponse{
+			Date:    date,
+			Entries: entries,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
