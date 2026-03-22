@@ -16,6 +16,7 @@ import {
   submitRun,
   type AuthUser,
   type LeaderboardEntry,
+  type ReplayTraceEvent,
   type RunSubmissionResponse
 } from "../../lib/api";
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
@@ -200,6 +201,7 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
   const animationRef = useRef<number | null>(null);
   const actionLockRef = useRef<boolean>(false);
   const submittedRunRef = useRef<string | null>(null);
+  const replayTraceRef = useRef<ReplayTraceEvent[]>([]);
   const gridRows = renderGridRows(maze, playerPosition, directionIndex);
 
   useEffect(() => {
@@ -216,6 +218,7 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
     setSubmissionSummary(null);
     actionLockRef.current = false;
     submittedRunRef.current = null;
+    replayTraceRef.current = [];
   }, [maze, startingDirectionIndex]);
 
   useEffect(() => {
@@ -253,7 +256,8 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
           date: maze.date,
           seed: maze.seed,
           moveCount,
-          elapsedTimeMs
+          elapsedTimeMs,
+          replayTrace: replayTraceRef.current
         });
         setSubmissionSummary(payload);
         setSubmissionStatus("submitted");
@@ -300,6 +304,19 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
       setRunStartTime(startedAt);
       setElapsedMs(0);
       return startedAt;
+    }
+
+    function recordReplayAction(
+      action: ReplayTraceEvent["action"],
+      startedAtForRun: number
+    ) {
+      replayTraceRef.current = [
+        ...replayTraceRef.current,
+        {
+          action,
+          elapsedTimeMs: Math.max(0, Date.now() - startedAtForRun)
+        }
+      ];
     }
 
     function animateMovement(nextPosition: MazePoint, startedAtForRun: number) {
@@ -374,7 +391,8 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
 
       if (event.key === "ArrowLeft" || event.key === "a") {
         event.preventDefault();
-        beginRunIfNeeded();
+        const startedAt = beginRunIfNeeded();
+        recordReplayAction("turn_left", startedAt);
         const nextDirectionIndex =
           (directionIndex + DIRECTION_ORDER.length - 1) % DIRECTION_ORDER.length;
         animateTurn(nextDirectionIndex);
@@ -383,7 +401,8 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
 
       if (event.key === "ArrowRight" || event.key === "d") {
         event.preventDefault();
-        beginRunIfNeeded();
+        const startedAt = beginRunIfNeeded();
+        recordReplayAction("turn_right", startedAt);
         const nextDirectionIndex = (directionIndex + 1) % DIRECTION_ORDER.length;
         animateTurn(nextDirectionIndex);
         return;
@@ -415,6 +434,13 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
       }
 
       const startedAt = beginRunIfNeeded();
+      recordReplayAction(
+        movementDirection.x === DIRECTION_ORDER[directionIndex].vector.x &&
+          movementDirection.y === DIRECTION_ORDER[directionIndex].vector.y
+          ? "move_forward"
+          : "move_backward",
+        startedAt
+      );
       animateMovement(nextPosition, startedAt);
     }
 
@@ -443,6 +469,7 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
     setSubmissionSummary(null);
     actionLockRef.current = false;
     submittedRunRef.current = null;
+    replayTraceRef.current = [];
   }
 
   const elapsedTime = finishTime && runStartTime

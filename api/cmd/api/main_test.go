@@ -16,6 +16,10 @@ func TestValidateRunSubmission(t *testing.T) {
 		Seed:          "daily3dmaze:2026-03-21",
 		MoveCount:     42,
 		ElapsedTimeMs: 12345,
+		ReplayTrace: []replayTraceEvent{
+			{ElapsedTimeMs: 0, Action: "move_forward"},
+			{ElapsedTimeMs: 120, Action: "turn_right"},
+		},
 	}
 
 	if err := validateRunSubmission(valid); err != nil {
@@ -68,6 +72,43 @@ func TestValidateRunSubmission(t *testing.T) {
 				Seed:          "daily3dmaze:2026-03-21",
 				MoveCount:     42,
 				ElapsedTimeMs: maxElapsedTimeMs + 1,
+				ReplayTrace: []replayTraceEvent{
+					{ElapsedTimeMs: 0, Action: "move_forward"},
+				},
+			},
+		},
+		{
+			name: "missing replay trace",
+			request: runSubmissionRequest{
+				Date:          "2026-03-21",
+				Seed:          "daily3dmaze:2026-03-21",
+				MoveCount:     42,
+				ElapsedTimeMs: 12345,
+			},
+		},
+		{
+			name: "replay trace decreases in time",
+			request: runSubmissionRequest{
+				Date:          "2026-03-21",
+				Seed:          "daily3dmaze:2026-03-21",
+				MoveCount:     42,
+				ElapsedTimeMs: 12345,
+				ReplayTrace: []replayTraceEvent{
+					{ElapsedTimeMs: 100, Action: "move_forward"},
+					{ElapsedTimeMs: 90, Action: "turn_left"},
+				},
+			},
+		},
+		{
+			name: "replay trace has unknown action",
+			request: runSubmissionRequest{
+				Date:          "2026-03-21",
+				Seed:          "daily3dmaze:2026-03-21",
+				MoveCount:     42,
+				ElapsedTimeMs: 12345,
+				ReplayTrace: []replayTraceEvent{
+					{ElapsedTimeMs: 100, Action: "teleport"},
+				},
 			},
 		},
 	}

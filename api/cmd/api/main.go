@@ -40,10 +40,16 @@ type mazePoint struct {
 }
 
 type runSubmissionRequest struct {
-	Date          string `json:"date"`
-	Seed          string `json:"seed"`
-	MoveCount     int    `json:"moveCount"`
+	Date          string             `json:"date"`
+	Seed          string             `json:"seed"`
+	MoveCount     int                `json:"moveCount"`
+	ElapsedTimeMs int                `json:"elapsedTimeMs"`
+	ReplayTrace   []replayTraceEvent `json:"replayTrace"`
+}
+
+type replayTraceEvent struct {
 	ElapsedTimeMs int    `json:"elapsedTimeMs"`
+	Action        string `json:"action"`
 }
 
 type runSubmissionResponse struct {
@@ -76,7 +82,8 @@ type app struct {
 }
 
 const (
-	maxJSONBodyBytes = 4 * 1024
+	maxJSONBodyBytes = 64 * 1024
+	maxReplayEvents  = 512
 	maxMoveCount     = 100000
 	maxElapsedTimeMs = 24 * 60 * 60 * 1000
 	dateLayoutISO    = "2006-01-02"
@@ -446,11 +453,16 @@ func (a app) insertRun(request runSubmissionRequest, userID *int64, acceptedAt t
 	}
 
 	const query = `
-		INSERT INTO runs (user_id, run_date, seed, move_count, elapsed_time_ms, accepted_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO runs (user_id, run_date, seed, move_count, elapsed_time_ms, replay_trace_json, accepted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 
-	_, err := a.db.Exec(query, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, acceptedAt)
+	replayTraceJSON, err := json.Marshal(request.ReplayTrace)
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.Exec(query, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, replayTraceJSON, acceptedAt)
 	return err
 }
 
@@ -538,6 +550,37 @@ func validateRunSubmission(request runSubmissionRequest) error {
 
 	if request.ElapsedTimeMs > maxElapsedTimeMs {
 		return errors.New("elapsedTimeMs is unreasonably large")
+	}
+
+	if len(request.ReplayTrace) == 0 {
+		return errors.New("replayTrace is required")
+	}
+
+	if len(request.ReplayTrace) > maxReplayEvents {
+		return errors.New("replayTrace contains too many events")
+	}
+
+	lastElapsedTime := -1
+	for _, event := range request.ReplayTrace {
+		if event.ElapsedTimeMs < 0 {
+			return errors.New("replayTrace event times must be non-negative")
+		}
+
+		if event.ElapsedTimeMs < lastElapsedTime {
+			return errors.New("replayTrace event times must be non-decreasing")
+		}
+
+		if event.ElapsedTimeMs > request.ElapsedTimeMs {
+			return errors.New("replayTrace event times must not exceed elapsedTimeMs")
+		}
+
+		switch event.Action {
+		case "move_forward", "move_backward", "turn_left", "turn_right":
+		default:
+			return errors.New("replayTrace contains an unknown action")
+		}
+
+		lastElapsedTime = event.ElapsedTimeMs
 	}
 
 	return nil

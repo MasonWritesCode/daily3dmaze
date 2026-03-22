@@ -1,0 +1,2 @@
+ALTER TABLE runs
+	ADD COLUMN IF NOT EXISTS replay_trace_json JSONB;

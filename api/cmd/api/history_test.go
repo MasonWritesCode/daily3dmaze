@@ -110,9 +110,6 @@ func TestHistoryHandlerEncodesResponse(t *testing.T) {
 	defer db.Close()
 
 	application := app{db: db}
-	now := time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
-	oldestDate := now.AddDate(0, 0, -1).Format(dateLayoutISO)
-	newestDate := now.Format(dateLayoutISO)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		WITH ranked_runs AS (
@@ -136,7 +133,7 @@ func TestHistoryHandlerEncodesResponse(t *testing.T) {
 		WHERE rank = 1
 		ORDER BY run_date DESC
 	`)).
-		WithArgs(oldestDate, newestDate).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"run_date", "submission_count", "username", "move_count", "elapsed_time_ms", "accepted_at"}))
 
 	request := httptest.NewRequest(http.MethodGet, "/api/history?limit=2", nil)

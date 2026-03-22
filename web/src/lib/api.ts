@@ -30,11 +30,17 @@ export interface RunSubmissionPayload {
   seed: string;
   moveCount: number;
   elapsedTimeMs: number;
+  replayTrace: ReplayTraceEvent[];
 }
 
 export interface RunSubmissionResponse extends RunSubmissionPayload {
   status: string;
   acceptedAt: string;
+}
+
+export interface ReplayTraceEvent {
+  elapsedTimeMs: number;
+  action: "move_forward" | "move_backward" | "turn_left" | "turn_right";
 }
 
 export interface AuthUser {
