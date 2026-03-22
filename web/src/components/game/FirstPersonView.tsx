@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
-import { normalizeAngle } from "../../lib/game/maze";
+import { getStartingBillboardPoint, normalizeAngle } from "../../lib/game/maze";
 
 const FLOOR_TEXTURE_SCALE = 0.9;
 const CEILING_TEXTURE_SCALE = 1.1;
@@ -227,6 +227,7 @@ export default function FirstPersonView({
     const height = canvas.height;
     const originX = playerPosition.x + 0.5;
     const originY = playerPosition.y + 0.5;
+    const startingBillboardPoint = getStartingBillboardPoint(maze);
     const fieldOfView = Math.PI / 3;
     const maxDistance = 24;
     const horizon = height / 2;
@@ -386,8 +387,8 @@ export default function FirstPersonView({
       textures.start
         ? {
             image: textures.start,
-            worldX: maze.start.x + 0.5,
-            worldY: maze.start.y + 0.5,
+            worldX: startingBillboardPoint.x + 0.5,
+            worldY: startingBillboardPoint.y + 0.5,
             scale: 0.42,
             alpha: 0.5,
             angle: 0,

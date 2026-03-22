@@ -74,6 +74,22 @@ export function getStartingDirectionIndex(maze: DailyMaze): number {
   return openDirections[0]?.index ?? 0;
 }
 
+export function getStartingBillboardPoint(maze: DailyMaze): MazePoint {
+  const startingDirection = DIRECTION_ORDER[getStartingDirectionIndex(maze)];
+  const candidatePoint = {
+    x: maze.start.x + startingDirection.vector.x,
+    y: maze.start.y + startingDirection.vector.y
+  };
+
+  const row = maze.grid[candidatePoint.y];
+  const cell = row?.[candidatePoint.x];
+  if (cell && cell !== "#") {
+    return candidatePoint;
+  }
+
+  return maze.start;
+}
+
 export function renderGridRows(
   maze: DailyMaze,
   playerPosition: MazePoint,
