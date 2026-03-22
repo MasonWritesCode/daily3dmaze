@@ -125,6 +125,42 @@ func TestValidateRunSubmission(t *testing.T) {
 	}
 }
 
+func TestScoreReplayTrace(t *testing.T) {
+	t.Parallel()
+
+	lowRisk := runSubmissionRequest{
+		Date:          "2026-03-21",
+		Seed:          "daily3dmaze:2026-03-21",
+		MoveCount:     2,
+		ElapsedTimeMs: 1500,
+		ReplayTrace: []replayTraceEvent{
+			{ElapsedTimeMs: 400, Action: "move_forward"},
+			{ElapsedTimeMs: 1400, Action: "turn_right"},
+		},
+	}
+
+	if score := scoreReplayTrace(lowRisk); score != 0 {
+		t.Fatalf("expected low-risk score 0, got %d", score)
+	}
+
+	highRisk := runSubmissionRequest{
+		Date:          "2026-03-21",
+		Seed:          "daily3dmaze:2026-03-21",
+		MoveCount:     1,
+		ElapsedTimeMs: 200,
+		ReplayTrace: []replayTraceEvent{
+			{ElapsedTimeMs: 0, Action: "turn_left"},
+			{ElapsedTimeMs: 10, Action: "turn_left"},
+			{ElapsedTimeMs: 20, Action: "turn_left"},
+			{ElapsedTimeMs: 30, Action: "turn_left"},
+		},
+	}
+
+	if score := scoreReplayTrace(highRisk); score <= 50 {
+		t.Fatalf("expected suspicious score above 50, got %d", score)
+	}
+}
+
 func TestValidateLeaderboardDate(t *testing.T) {
 	t.Parallel()
 
