@@ -139,8 +139,12 @@ func TestScoreReplayTrace(t *testing.T) {
 		},
 	}
 
-	if score := scoreReplayTrace(lowRisk); score != 0 {
+	score, reasons := scoreReplayTrace(lowRisk)
+	if score != 0 {
 		t.Fatalf("expected low-risk score 0, got %d", score)
+	}
+	if len(reasons) != 0 {
+		t.Fatalf("expected no low-risk reasons, got %v", reasons)
 	}
 
 	highRisk := runSubmissionRequest{
@@ -156,8 +160,19 @@ func TestScoreReplayTrace(t *testing.T) {
 		},
 	}
 
-	if score := scoreReplayTrace(highRisk); score <= 50 {
+	score, reasons = scoreReplayTrace(highRisk)
+	if score <= 50 {
 		t.Fatalf("expected suspicious score above 50, got %d", score)
+	}
+	expectedReasons := []string{
+		"replay_length_mismatch",
+		"very_high_action_density",
+		"rapid_repeated_turns",
+	}
+	for _, expectedReason := range expectedReasons {
+		if !containsString(reasons, expectedReason) {
+			t.Fatalf("expected suspicion reasons to contain %q, got %v", expectedReason, reasons)
+		}
 	}
 }
 
@@ -279,4 +294,14 @@ func TestAuthRateLimiterExpiresOldAttempts(t *testing.T) {
 	if !limiter.allow("login", "127.0.0.1") {
 		t.Fatal("expected request after the window to be allowed")
 	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+
+	return false
 }

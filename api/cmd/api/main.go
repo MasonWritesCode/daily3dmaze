@@ -53,13 +53,14 @@ type replayTraceEvent struct {
 }
 
 type runSubmissionResponse struct {
-	Status         string `json:"status"`
-	Date           string `json:"date"`
-	Seed           string `json:"seed"`
-	MoveCount      int    `json:"moveCount"`
-	ElapsedTimeMs  int    `json:"elapsedTimeMs"`
-	AcceptedAt     string `json:"acceptedAt"`
-	SuspicionScore int    `json:"suspicionScore"`
+	Status           string   `json:"status"`
+	Date             string   `json:"date"`
+	Seed             string   `json:"seed"`
+	MoveCount        int      `json:"moveCount"`
+	ElapsedTimeMs    int      `json:"elapsedTimeMs"`
+	AcceptedAt       string   `json:"acceptedAt"`
+	SuspicionScore   int      `json:"suspicionScore"`
+	SuspicionReasons []string `json:"suspicionReasons"`
 }
 
 type leaderboardEntry struct {
@@ -78,13 +79,14 @@ type leaderboardResponse struct {
 }
 
 type recentRunReviewEntry struct {
-	Date           string `json:"date"`
-	Seed           string `json:"seed"`
-	Username       string `json:"username"`
-	MoveCount      int    `json:"moveCount"`
-	ElapsedTimeMs  int    `json:"elapsedTimeMs"`
-	SuspicionScore int    `json:"suspicionScore"`
-	AcceptedAt     string `json:"acceptedAt"`
+	Date             string   `json:"date"`
+	Seed             string   `json:"seed"`
+	Username         string   `json:"username"`
+	MoveCount        int      `json:"moveCount"`
+	ElapsedTimeMs    int      `json:"elapsedTimeMs"`
+	SuspicionScore   int      `json:"suspicionScore"`
+	SuspicionReasons []string `json:"suspicionReasons"`
+	AcceptedAt       string   `json:"acceptedAt"`
 }
 
 type recentRunReviewsResponse struct {
@@ -220,7 +222,7 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	suspicionScore := scoreReplayTrace(request)
+	suspicionScore, suspicionReasons := scoreReplayTrace(request)
 
 	acceptedAt := time.Now().UTC()
 	var userID *int64
@@ -228,19 +230,20 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		userID = &user.ID
 	}
 
-	if err := a.insertRun(request, userID, suspicionScore, acceptedAt); err != nil {
+	if err := a.insertRun(request, userID, suspicionScore, suspicionReasons, acceptedAt); err != nil {
 		http.Error(w, "failed to persist run", http.StatusInternalServerError)
 		return
 	}
 
 	response := runSubmissionResponse{
-		Status:         "accepted",
-		Date:           request.Date,
-		Seed:           request.Seed,
-		MoveCount:      request.MoveCount,
-		ElapsedTimeMs:  request.ElapsedTimeMs,
-		AcceptedAt:     acceptedAt.Format(time.RFC3339),
-		SuspicionScore: suspicionScore,
+		Status:           "accepted",
+		Date:             request.Date,
+		Seed:             request.Seed,
+		MoveCount:        request.MoveCount,
+		ElapsedTimeMs:    request.ElapsedTimeMs,
+		AcceptedAt:       acceptedAt.Format(time.RFC3339),
+		SuspicionScore:   suspicionScore,
+		SuspicionReasons: suspicionReasons,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -466,22 +469,26 @@ func openDatabase() (*sql.DB, error) {
 	return db, nil
 }
 
-func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionScore int, acceptedAt time.Time) error {
+func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionScore int, suspicionReasons []string, acceptedAt time.Time) error {
 	if a.db == nil {
 		return errors.New("database unavailable")
 	}
 
 	const query = `
-		INSERT INTO runs (user_id, run_date, seed, move_count, elapsed_time_ms, replay_trace_json, suspicion_score, accepted_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO runs (user_id, run_date, seed, move_count, elapsed_time_ms, replay_trace_json, suspicion_score, suspicion_reasons_json, accepted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	replayTraceJSON, err := json.Marshal(request.ReplayTrace)
 	if err != nil {
 		return err
 	}
+	suspicionReasonsJSON, err := json.Marshal(suspicionReasons)
+	if err != nil {
+		return err
+	}
 
-	_, err = a.db.Exec(query, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, replayTraceJSON, suspicionScore, acceptedAt)
+	_, err = a.db.Exec(query, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, replayTraceJSON, suspicionScore, suspicionReasonsJSON, acceptedAt)
 	return err
 }
 
@@ -521,6 +528,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			runs.move_count,
 			runs.elapsed_time_ms,
 			runs.suspicion_score,
+			runs.suspicion_reasons_json,
 			runs.accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
@@ -538,6 +546,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 	for rows.Next() {
 		var entry recentRunReviewEntry
 		var acceptedAt time.Time
+		var suspicionReasonsJSON []byte
 		if err := rows.Scan(
 			&entry.Date,
 			&entry.Seed,
@@ -545,11 +554,15 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			&entry.MoveCount,
 			&entry.ElapsedTimeMs,
 			&entry.SuspicionScore,
+			&suspicionReasonsJSON,
 			&acceptedAt,
 		); err != nil {
 			return nil, err
 		}
 
+		if err := json.Unmarshal(suspicionReasonsJSON, &entry.SuspicionReasons); err != nil {
+			return nil, err
+		}
 		entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
 		entries = append(entries, entry)
 	}
@@ -681,11 +694,13 @@ func validateRunSubmission(request runSubmissionRequest) error {
 	return nil
 }
 
-func scoreReplayTrace(request runSubmissionRequest) int {
+func scoreReplayTrace(request runSubmissionRequest) (int, []string) {
 	score := 0
+	reasons := make([]string, 0, 4)
 
 	if len(request.ReplayTrace) != request.MoveCount {
 		score += 20
+		reasons = append(reasons, "replay_length_mismatch")
 	}
 
 	lastEvent := request.ReplayTrace[len(request.ReplayTrace)-1]
@@ -695,14 +710,17 @@ func scoreReplayTrace(request runSubmissionRequest) int {
 	}
 	if drift > 250 {
 		score += 15
+		reasons = append(reasons, "timestamp_drift")
 	}
 
 	if request.ElapsedTimeMs > 0 {
 		actionsPerSecond := float64(len(request.ReplayTrace)) / (float64(request.ElapsedTimeMs) / 1000)
 		if actionsPerSecond > 12 {
 			score += 35
+			reasons = append(reasons, "very_high_action_density")
 		} else if actionsPerSecond > 8 {
 			score += 15
+			reasons = append(reasons, "high_action_density")
 		}
 	}
 
@@ -718,13 +736,14 @@ func scoreReplayTrace(request runSubmissionRequest) int {
 	}
 	if repeatedTurns > 0 {
 		score += minInt(20, repeatedTurns*5)
+		reasons = append(reasons, "rapid_repeated_turns")
 	}
 
 	if score > 100 {
-		return 100
+		return 100, reasons
 	}
 
-	return score
+	return score, reasons
 }
 
 func minInt(left, right int) int {
