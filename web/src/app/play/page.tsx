@@ -25,6 +25,7 @@ import {
   TURN_DURATION_MS,
   attemptMove,
   formatElapsedTime,
+  getStartingDirectionIndex,
   isExitReached,
   normalizeAngle,
   renderGridRows
@@ -181,10 +182,13 @@ function ArchiveNavigator({ archiveDate }: ArchiveNavigatorProps) {
 }
 
 function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
+  const startingDirectionIndex = getStartingDirectionIndex(maze);
   const [playerPosition, setPlayerPosition] = useState<MazePoint>(maze.start);
-  const [directionIndex, setDirectionIndex] = useState<number>(0);
+  const [directionIndex, setDirectionIndex] = useState<number>(startingDirectionIndex);
   const [renderPosition, setRenderPosition] = useState<MazePoint>(maze.start);
-  const [renderAngle, setRenderAngle] = useState<number>(DIRECTION_ORDER[0].angle);
+  const [renderAngle, setRenderAngle] = useState<number>(
+    DIRECTION_ORDER[startingDirectionIndex].angle
+  );
   const [moveCount, setMoveCount] = useState<number>(0);
   const [hasFinished, setHasFinished] = useState<boolean>(false);
   const [runStartTime, setRunStartTime] = useState<number | null>(null);
@@ -200,9 +204,9 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
 
   useEffect(() => {
     setPlayerPosition(maze.start);
-    setDirectionIndex(0);
+    setDirectionIndex(startingDirectionIndex);
     setRenderPosition(maze.start);
-    setRenderAngle(DIRECTION_ORDER[0].angle);
+    setRenderAngle(DIRECTION_ORDER[startingDirectionIndex].angle);
     setMoveCount(0);
     setHasFinished(false);
     setRunStartTime(null);
@@ -212,7 +216,7 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
     setSubmissionSummary(null);
     actionLockRef.current = false;
     submittedRunRef.current = null;
-  }, [maze]);
+  }, [maze, startingDirectionIndex]);
 
   useEffect(() => {
     if (!runStartTime || hasFinished) {
@@ -427,9 +431,9 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
     }
 
     setPlayerPosition(maze.start);
-    setDirectionIndex(0);
+    setDirectionIndex(startingDirectionIndex);
     setRenderPosition(maze.start);
-    setRenderAngle(DIRECTION_ORDER[0].angle);
+    setRenderAngle(DIRECTION_ORDER[startingDirectionIndex].angle);
     setMoveCount(0);
     setHasFinished(false);
     setRunStartTime(null);

@@ -35,6 +35,45 @@ export const DIRECTION_ORDER: Direction[] = [
 export const MOVE_DURATION_MS = 180;
 export const TURN_DURATION_MS = 150;
 
+export function getStartingDirectionIndex(maze: DailyMaze): number {
+  const exitDelta = {
+    x: maze.exit.x - maze.start.x,
+    y: maze.exit.y - maze.start.y
+  };
+
+  const openDirections = DIRECTION_ORDER.map((direction, index) => ({
+    direction,
+    index,
+    nextPosition: {
+      x: maze.start.x + direction.vector.x,
+      y: maze.start.y + direction.vector.y
+    }
+  })).filter(({ nextPosition }) => {
+    const row = maze.grid[nextPosition.y];
+    const cell = row?.[nextPosition.x];
+    return Boolean(cell && cell !== "#");
+  });
+
+  if (openDirections.length === 0) {
+    return 0;
+  }
+
+  openDirections.sort((left, right) => {
+    const leftScore =
+      left.direction.vector.x * exitDelta.x + left.direction.vector.y * exitDelta.y;
+    const rightScore =
+      right.direction.vector.x * exitDelta.x + right.direction.vector.y * exitDelta.y;
+
+    if (leftScore !== rightScore) {
+      return rightScore - leftScore;
+    }
+
+    return left.index - right.index;
+  });
+
+  return openDirections[0]?.index ?? 0;
+}
+
 export function renderGridRows(
   maze: DailyMaze,
   playerPosition: MazePoint,
