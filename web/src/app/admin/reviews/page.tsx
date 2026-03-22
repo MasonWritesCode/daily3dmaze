@@ -1,0 +1,230 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+
+import {
+  fetchCurrentUser,
+  fetchRunReviews,
+  type AuthUser,
+  type RunReviewEntry
+} from "../../../lib/api";
+import { formatElapsedTime } from "../../../lib/game/maze";
+
+type PageStatus = "loading" | "ready" | "error";
+
+function formatAcceptedAt(value: string): string {
+  const date = new Date(value);
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(date);
+}
+
+function getSuspicionTone(score: number): string {
+  if (score >= 50) {
+    return "high";
+  }
+
+  if (score >= 20) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+export default function AdminReviewsPage() {
+  const [status, setStatus] = useState<PageStatus>("loading");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [entries, setEntries] = useState<RunReviewEntry[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPage() {
+      setStatus("loading");
+      setErrorMessage(null);
+
+      try {
+        const currentUser = await fetchCurrentUser();
+        if (cancelled) {
+          return;
+        }
+
+        setUser(currentUser);
+
+        if (!currentUser) {
+          setStatus("ready");
+          return;
+        }
+
+        const payload = await fetchRunReviews();
+        if (cancelled) {
+          return;
+        }
+
+        setEntries(payload.entries);
+        setStatus("ready");
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setStatus("error");
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to load run reviews."
+        );
+      }
+    }
+
+    void loadPage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const sortedEntries = useMemo(() => {
+    return [...entries].sort((left, right) => {
+      if (right.suspicionScore !== left.suspicionScore) {
+        return right.suspicionScore - left.suspicionScore;
+      }
+
+      return right.acceptedAt.localeCompare(left.acceptedAt);
+    });
+  }, [entries]);
+
+  return (
+    <main className="page-shell">
+      <div className="content-card content-card-wide">
+        <p className="eyebrow">Internal tooling</p>
+        <h1>Suspicious run reviews</h1>
+        <p className="body-copy">
+          Review recent submissions with their replay heuristic score and the exact
+          rules that fired. This page is read-only on purpose so we can inspect the
+          signal quality before adding moderation actions.
+        </p>
+        <div className="actions">
+          <Link href="/play" className="primary-link">
+            Back to play
+          </Link>
+          <Link href="/history" className="secondary-link">
+            Browse archive
+          </Link>
+        </div>
+
+        {status === "loading" && (
+          <p className="status-copy" aria-live="polite">
+            Loading recent run reviews...
+          </p>
+        )}
+
+        {status === "error" && errorMessage && (
+          <p className="status-copy error-copy" role="alert">
+            {errorMessage}
+          </p>
+        )}
+
+        {status === "ready" && !user && (
+          <section className="maze-summary" aria-labelledby="reviews-auth-title">
+            <h2 id="reviews-auth-title" className="section-title">
+              Sign in required
+            </h2>
+            <p className="body-copy">
+              Internal review pages require an authenticated session. Sign in from the
+              play page, then come back here.
+            </p>
+            <div className="actions">
+              <Link href="/play" className="primary-link">
+                Go sign in
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {status === "ready" && user && (
+          <section className="maze-summary" aria-labelledby="review-table-title">
+            <div className="review-header">
+              <div>
+                <h2 id="review-table-title" className="section-title">
+                  Recent submissions
+                </h2>
+                <p className="assistive-copy">
+                  Signed in as <strong>{user.username}</strong>.
+                </p>
+              </div>
+              <p className="assistive-copy">
+                Highest suspicion scores are shown first.
+              </p>
+            </div>
+
+            {sortedEntries.length === 0 ? (
+              <p className="body-copy">No run reviews are available yet.</p>
+            ) : (
+              <div className="review-list" role="list" aria-label="Recent run reviews">
+                <div className="review-row review-row-header" role="listitem" aria-hidden="true">
+                  <span>Score</span>
+                  <span>Player</span>
+                  <span>Challenge</span>
+                  <span>Time</span>
+                  <span>Moves</span>
+                  <span>Reasons</span>
+                  <span>Accepted</span>
+                </div>
+                {sortedEntries.map((entry) => {
+                  const tone = getSuspicionTone(entry.suspicionScore);
+                  const playerLabel = entry.username || "Anonymous";
+
+                  return (
+                    <article
+                      key={`${entry.acceptedAt}:${entry.seed}:${playerLabel}`}
+                      className="review-row"
+                      role="listitem"
+                    >
+                      <div>
+                        <span className="sr-only">Suspicion score </span>
+                        <span className={`score-badge score-badge-${tone}`}>
+                          {entry.suspicionScore}
+                        </span>
+                      </div>
+                      <div>
+                        {entry.username ? (
+                          <Link href={`/profile/${entry.username}`} className="inline-link">
+                            {entry.username}
+                          </Link>
+                        ) : (
+                          playerLabel
+                        )}
+                      </div>
+                      <div className="review-challenge">
+                        <Link href={`/history/${entry.date}`} className="inline-link">
+                          {entry.date}
+                        </Link>
+                        <span>{entry.seed}</span>
+                      </div>
+                      <div>{formatElapsedTime(entry.elapsedTimeMs)}</div>
+                      <div>{entry.moveCount}</div>
+                      <div className="reason-list" aria-label="Suspicion reasons">
+                        {entry.suspicionReasons.length > 0 ? (
+                          entry.suspicionReasons.map((reason) => (
+                            <span key={reason} className="reason-chip">
+                              {reason}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="assistive-copy">None</span>
+                        )}
+                      </div>
+                      <div>{formatAcceptedAt(entry.acceptedAt)}</div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+    </main>
+  );
+}

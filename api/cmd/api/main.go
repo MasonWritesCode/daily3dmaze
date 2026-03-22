@@ -503,6 +503,11 @@ func (a app) recentRunReviewsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, err := a.currentUserFromRequest(r); err != nil {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+
 	entries, err := a.listRecentRunReviews()
 	if err != nil {
 		http.Error(w, "failed to load run reviews", http.StatusInternalServerError)

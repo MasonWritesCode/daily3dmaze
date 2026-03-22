@@ -258,6 +258,23 @@ func TestDailyMazeHandlerSupportsExplicitDate(t *testing.T) {
 	}
 }
 
+func TestRecentRunReviewsHandlerRequiresAuthentication(t *testing.T) {
+	t.Parallel()
+
+	application := app{}
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/run-reviews", nil)
+	recorder := httptest.NewRecorder()
+
+	application.recentRunReviewsHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, response.StatusCode)
+	}
+}
+
 func TestRateLimitKeyFromRequestPrefersForwardedHeaders(t *testing.T) {
 	t.Parallel()
 

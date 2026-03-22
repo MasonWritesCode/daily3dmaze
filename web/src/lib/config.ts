@@ -8,3 +8,4 @@ export const registerEndpoint = `${apiBaseUrl}/api/auth/register`;
 export const loginEndpoint = `${apiBaseUrl}/api/auth/login`;
 export const logoutEndpoint = `${apiBaseUrl}/api/auth/logout`;
 export const meEndpoint = `${apiBaseUrl}/api/me`;
+export const adminRunReviewsEndpoint = `${apiBaseUrl}/api/admin/run-reviews`;

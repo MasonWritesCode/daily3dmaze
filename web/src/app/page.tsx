@@ -14,6 +14,9 @@ export default function HomePage() {
           <Link href="/history" className="secondary-link">
             Browse history
           </Link>
+          <Link href="/admin/reviews" className="secondary-link">
+            Internal reviews
+          </Link>
         </div>
       </div>
     </main>

@@ -1,4 +1,5 @@
 import {
+  adminRunReviewsEndpoint,
   apiBaseUrl,
   dailyMazeEndpoint,
   leaderboardEndpoint,
@@ -36,6 +37,8 @@ export interface RunSubmissionPayload {
 export interface RunSubmissionResponse extends RunSubmissionPayload {
   status: string;
   acceptedAt: string;
+  suspicionScore: number;
+  suspicionReasons: string[];
 }
 
 export interface ReplayTraceEvent {
@@ -102,6 +105,21 @@ export interface HistoryResponse {
 export interface HistoryDayResponse {
   challenge: DailyMaze;
   leaderboard: LeaderboardResponse;
+}
+
+export interface RunReviewEntry {
+  date: string;
+  seed: string;
+  username: string;
+  moveCount: number;
+  elapsedTimeMs: number;
+  suspicionScore: number;
+  suspicionReasons: string[];
+  acceptedAt: string;
+}
+
+export interface RunReviewsResponse {
+  entries: RunReviewEntry[];
 }
 
 async function readTextError(response: Response, fallback: string): Promise<Error> {
@@ -257,4 +275,19 @@ export async function fetchHistoryDay(date: string): Promise<HistoryDayResponse>
   }
 
   return (await response.json()) as HistoryDayResponse;
+}
+
+export async function fetchRunReviews(): Promise<RunReviewsResponse> {
+  const response = await fetch(adminRunReviewsEndpoint, {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Run reviews request failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as RunReviewsResponse;
 }
