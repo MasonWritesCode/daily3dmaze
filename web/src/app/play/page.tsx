@@ -58,6 +58,10 @@ interface AuthPanelProps {
   onAuthChange: (nextUser: AuthUser | null) => void;
 }
 
+interface ArchiveNavigatorProps {
+  archiveDate: string;
+}
+
 const uiText = {
   play: {
     eyebrow: "Play",
@@ -128,6 +132,51 @@ function MetadataList({ items }: MetadataListProps) {
         </div>
       ))}
     </dl>
+  );
+}
+
+function shiftArchiveDate(date: string, days: number): string {
+  const parts = date.split("-").map(Number);
+  const shiftedDate = new Date(Date.UTC(parts[0] ?? 0, (parts[1] ?? 1) - 1, parts[2] ?? 1));
+  shiftedDate.setUTCDate(shiftedDate.getUTCDate() + days);
+  return shiftedDate.toISOString().slice(0, 10);
+}
+
+function ArchiveNavigator({ archiveDate }: ArchiveNavigatorProps) {
+  const previousDate = shiftArchiveDate(archiveDate, -1);
+  const nextDate = shiftArchiveDate(archiveDate, 1);
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const canAdvance = nextDate <= todayDate;
+  const isToday = archiveDate === todayDate;
+
+  return (
+    <section className="maze-summary archive-nav" aria-labelledby="archive-nav-title">
+      <h2 id="archive-nav-title" className="section-title">
+        Archive navigator
+      </h2>
+      <p className="body-copy">
+        Move through archived daily challenges without leaving the maze viewer.
+      </p>
+      <div className="actions">
+        <Link href={`/play?date=${previousDate}`} className="secondary-link">
+          Previous day
+        </Link>
+        {canAdvance ? (
+          <Link href={`/play?date=${nextDate}`} className="secondary-link">
+            Next day
+          </Link>
+        ) : (
+          <span className="secondary-link is-disabled" aria-disabled="true">
+            Next day
+          </span>
+        )}
+        {!isToday && (
+          <Link href="/play" className="primary-link">
+            Jump to today
+          </Link>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -795,6 +844,7 @@ function PlayPageContent() {
             Viewing archived challenge <code>{archiveDate}</code>.
           </p>
         )}
+        {archiveDate && <ArchiveNavigator archiveDate={archiveDate} />}
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">

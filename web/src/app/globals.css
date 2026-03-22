@@ -352,6 +352,11 @@ h1 {
   border: 1px solid var(--panel-border);
 }
 
+.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
