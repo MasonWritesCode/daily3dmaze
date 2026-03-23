@@ -201,7 +201,7 @@ export default function AdminUsersPage() {
         <p className="body-copy">{uiText.intro}</p>
         <div className="actions">
           <Link href="/admin/reviews" className="primary-link">
-            {uiText.actions.backToReviews}
+            Review queue
           </Link>
           <Link href="/play" className="secondary-link">
             {uiText.actions.backToPlay}

@@ -90,18 +90,24 @@ export function getStartingDirectionIndex(maze: DailyMaze): number {
 
 export function getStartingBillboardPoint(maze: DailyMaze): MazePoint {
   const startingDirection = DIRECTION_ORDER[getStartingDirectionIndex(maze)];
-  const candidatePoint = {
-    x: maze.start.x + startingDirection.vector.x,
-    y: maze.start.y + startingDirection.vector.y
-  };
+  let fallbackPoint = maze.start;
 
-  const row = maze.grid[candidatePoint.y];
-  const cell = row?.[candidatePoint.x];
-  if (cell && cell !== "#") {
-    return candidatePoint;
+  for (let step = 1; step <= 3; step += 1) {
+    const candidatePoint = {
+      x: maze.start.x + startingDirection.vector.x * step,
+      y: maze.start.y + startingDirection.vector.y * step
+    };
+
+    const row = maze.grid[candidatePoint.y];
+    const cell = row?.[candidatePoint.x];
+    if (!cell || cell === "#") {
+      break;
+    }
+
+    fallbackPoint = candidatePoint;
   }
 
-  return maze.start;
+  return fallbackPoint;
 }
 
 export function renderGridRows(

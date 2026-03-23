@@ -40,6 +40,9 @@ type AsyncStatus = "idle" | "loading" | "success" | "error";
 type SubmissionStatus = "idle" | "submitting" | "submitted" | "error";
 type AuthMode = "login" | "register";
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+type SceneAnimationMode = "intro" | "outro";
+
+const SCENE_ANIMATION_DURATION_MS = 1250;
 
 interface MetadataItem {
   label: string;
@@ -204,7 +207,11 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus>("idle");
   const [submissionSummary, setSubmissionSummary] =
     useState<RunSubmissionResponse | null>(null);
+  const [introSequence, setIntroSequence] = useState<number>(0);
+  const [sceneAnimationMode, setSceneAnimationMode] =
+    useState<SceneAnimationMode>("intro");
   const animationRef = useRef<number | null>(null);
+  const completionTimeoutRef = useRef<number | null>(null);
   const actionLockRef = useRef<boolean>(false);
   const submittedRunRef = useRef<string | null>(null);
   const replayTraceRef = useRef<ReplayTraceEvent[]>([]);
@@ -222,6 +229,8 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     setElapsedMs(0);
     setSubmissionStatus("idle");
     setSubmissionSummary(null);
+    setSceneAnimationMode("intro");
+    setIntroSequence((current) => current + 1);
     actionLockRef.current = false;
     submittedRunRef.current = null;
     replayTraceRef.current = [];
@@ -281,6 +290,10 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     return () => {
       if (animationRef.current !== null) {
         window.cancelAnimationFrame(animationRef.current);
+      }
+
+      if (completionTimeoutRef.current !== null) {
+        window.clearTimeout(completionTimeoutRef.current);
       }
     };
   }, []);
@@ -358,6 +371,25 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       }
 
       animationRef.current = window.requestAnimationFrame(step);
+    }
+
+    function triggerFinishSequence(startedAtForRun: number) {
+      const completedAt = Date.now();
+      actionLockRef.current = true;
+      setMoveCount((currentCount) => currentCount + 1);
+      setElapsedMs(completedAt - startedAtForRun);
+      setSceneAnimationMode("outro");
+      setIntroSequence((current) => current + 1);
+
+      if (completionTimeoutRef.current !== null) {
+        window.clearTimeout(completionTimeoutRef.current);
+      }
+
+      completionTimeoutRef.current = window.setTimeout(() => {
+        setHasFinished(true);
+        setFinishTime(completedAt);
+        actionLockRef.current = false;
+      }, SCENE_ANIMATION_DURATION_MS);
     }
 
     function animateTurn(nextDirectionIndex: number) {
@@ -447,6 +479,12 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
           : "move_backward",
         startedAt
       );
+
+      if (isExitReached(nextPosition, maze)) {
+        triggerFinishSequence(startedAt);
+        return;
+      }
+
       animateMovement(nextPosition, startedAt);
     }
 
@@ -473,6 +511,8 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     setElapsedMs(0);
     setSubmissionStatus("idle");
     setSubmissionSummary(null);
+    setSceneAnimationMode("intro");
+    setIntroSequence((current) => current + 1);
     actionLockRef.current = false;
     submittedRunRef.current = null;
     replayTraceRef.current = [];
@@ -526,6 +566,8 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
         playerPosition={renderPosition}
         playerAngle={renderAngle}
         facingName={DIRECTION_ORDER[directionIndex].name}
+        introSequence={introSequence}
+        animationMode={sceneAnimationMode}
       />
       <p
         className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}

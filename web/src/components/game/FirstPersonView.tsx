@@ -5,8 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import { getStartingBillboardPoint, normalizeAngle } from "../../lib/game/maze";
 
-const FLOOR_TEXTURE_SCALE = 0.9;
-const CEILING_TEXTURE_SCALE = 1.1;
+const FLOOR_TEXTURE_SCALE = 0.84;
+const CEILING_TEXTURE_SCALE = 1.02;
+const FIELD_OF_VIEW = Math.PI * 0.285;
+const INTRO_RISE_DURATION_MS = 1250;
 const TEXTURE_PATHS = {
   wall: "/assets/3d-maze/wall.png",
   floor: "/assets/3d-maze/floor.png",
@@ -50,6 +52,8 @@ interface FirstPersonViewProps {
   playerPosition: MazePoint;
   playerAngle: number;
   facingName: string;
+  introSequence: number;
+  animationMode: "intro" | "outro";
 }
 
 function useMazeTextures(): TextureMap {
@@ -198,10 +202,13 @@ export default function FirstPersonView({
   maze,
   playerPosition,
   playerAngle,
-  facingName
+  facingName,
+  introSequence,
+  animationMode
 }: FirstPersonViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textures = useMazeTextures();
+  const [introProgress, setIntroProgress] = useState<number>(0);
   const textureSurfaceRef = useRef<TextureSurfaceState>({
     source: null,
     supportsSurfaceTextures: false,
@@ -209,6 +216,28 @@ export default function FirstPersonView({
     floor: null,
     ceiling: null
   });
+
+  useEffect(() => {
+    let frameId = 0;
+    const startedAt = performance.now();
+    setIntroProgress(animationMode === "intro" ? 0 : 1);
+
+    function tick(now: number) {
+      const progress = Math.min(1, (now - startedAt) / INTRO_RISE_DURATION_MS);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setIntroProgress(animationMode === "intro" ? eased : 1 - eased);
+
+      if (progress < 1) {
+        frameId = window.requestAnimationFrame(tick);
+      }
+    }
+
+    frameId = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [animationMode, introSequence, maze.date, maze.seed]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -228,9 +257,9 @@ export default function FirstPersonView({
     const originX = playerPosition.x + 0.5;
     const originY = playerPosition.y + 0.5;
     const startingBillboardPoint = getStartingBillboardPoint(maze);
-    const fieldOfView = Math.PI / 3;
+    const fieldOfView = FIELD_OF_VIEW;
     const maxDistance = 24;
-    const horizon = height / 2;
+    const horizon = height * 0.5;
     const depthBuffer = new Array<number>(width).fill(maxDistance);
     context.imageSmoothingEnabled = false;
 
@@ -358,7 +387,9 @@ export default function FirstPersonView({
       );
       depthBuffer[column] = correctedDistance;
       const wallHeight = Math.min(height, height / correctedDistance);
-      const wallTop = (height - wallHeight) / 2;
+      const wallBottom = (height + wallHeight) / 2;
+      const animatedWallHeight = Math.max(1, wallHeight * introProgress);
+      const wallTop = wallBottom - animatedWallHeight;
       const shade = Math.max(50, Math.min(200, 215 - correctedDistance * 18));
 
       if (textureSurfaces.wall && textures.wall) {
@@ -374,12 +405,12 @@ export default function FirstPersonView({
           column,
           wallTop,
           1,
-          wallHeight
+          animatedWallHeight
         );
         context.restore();
       } else {
         context.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 24})`;
-        context.fillRect(column, wallTop, 1, wallHeight);
+        context.fillRect(column, wallTop, 1, animatedWallHeight);
       }
     }
 
@@ -389,8 +420,8 @@ export default function FirstPersonView({
             image: textures.start,
             worldX: startingBillboardPoint.x + 0.5,
             worldY: startingBillboardPoint.y + 0.5,
-            scale: 0.42,
-            alpha: 0.5,
+            scale: 0.52,
+            alpha: 0.42,
             angle: 0,
             distance: 0
           }
@@ -400,8 +431,8 @@ export default function FirstPersonView({
             image: textures.exit,
             worldX: maze.exit.x + 0.5,
             worldY: maze.exit.y + 0.5,
-            scale: 1.1,
-            alpha: 1,
+            scale: 0.94,
+            alpha: 0.78,
             angle: 0,
             distance: 0
           }
@@ -435,10 +466,16 @@ export default function FirstPersonView({
       const projectedHeight = (height / correctedDistance) * sprite.scale;
       const projectedWidth =
         (projectedHeight * sprite.image.width) / sprite.image.height;
-      const top = (height - projectedHeight) / 2;
-      const left = projectedCenter - projectedWidth / 2;
+      const projectedBottom = (height + projectedHeight) / 2;
+      const animatedSpriteHeight = Math.max(1, projectedHeight * introProgress);
+      const animatedSpriteWidth = Math.max(1, projectedWidth * introProgress);
+      const hiddenBottom = height + projectedHeight * 0.2;
+      const animatedBottom =
+        hiddenBottom - (hiddenBottom - projectedBottom) * introProgress;
+      const top = animatedBottom - animatedSpriteHeight;
+      const left = projectedCenter - animatedSpriteWidth / 2;
 
-      for (let stripe = 0; stripe < projectedWidth; stripe += 1) {
+      for (let stripe = 0; stripe < animatedSpriteWidth; stripe += 1) {
         const screenX = Math.floor(left + stripe);
 
         if (screenX < 0 || screenX >= width) {
@@ -449,9 +486,9 @@ export default function FirstPersonView({
           continue;
         }
 
-        const textureX = Math.floor((stripe / projectedWidth) * sprite.image.width);
+        const textureX = Math.floor((stripe / animatedSpriteWidth) * sprite.image.width);
         context.save();
-        context.globalAlpha = sprite.alpha;
+        context.globalAlpha = sprite.alpha * Math.max(0.2, introProgress);
         context.drawImage(
           sprite.image,
           textureX,
@@ -461,7 +498,7 @@ export default function FirstPersonView({
           screenX,
           top,
           1,
-          projectedHeight
+          animatedSpriteHeight
         );
         context.restore();
       }
@@ -472,7 +509,7 @@ export default function FirstPersonView({
     context.moveTo(0, height / 2);
     context.lineTo(width, height / 2);
     context.stroke();
-  }, [maze, playerAngle, playerPosition, textures]);
+  }, [introProgress, maze, playerAngle, playerPosition, textures]);
 
   return (
     <div className="raycast-panel">
