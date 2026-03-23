@@ -51,7 +51,7 @@ func evaluateReplayTrace(request runSubmissionRequest) ReplayValidationResult {
 		Reasons: make([]ReplaySuspicionReason, 0, 4),
 	}
 
-	if len(request.ReplayTrace) != request.MoveCount {
+	if countReplayMovementActions(request.ReplayTrace) != request.MoveCount {
 		result.Score += 20
 		result.Reasons = append(result.Reasons, ReasonReplayLengthMismatch)
 	}
@@ -127,6 +127,17 @@ func minInt(left, right int) int {
 	}
 
 	return right
+}
+
+func countReplayMovementActions(replayTrace []replayTraceEvent) int {
+	count := 0
+	for _, event := range replayTrace {
+		if event.Action == "move_forward" || event.Action == "move_backward" {
+			count++
+		}
+	}
+
+	return count
 }
 
 func simulateReplayTrace(challenge dailyMazeResponse, replayTrace []replayTraceEvent) ReplaySimulationResult {

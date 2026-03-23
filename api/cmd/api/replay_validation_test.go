@@ -22,7 +22,7 @@ func TestEvaluateReplayTrace(t *testing.T) {
 			request: runSubmissionRequest{
 				Date:          "2026-03-21",
 				Seed:          "daily3dmaze:2026-03-21",
-				MoveCount:     len(validTrace),
+				MoveCount:     countReplayMovementActions(validTrace),
 				ElapsedTimeMs: validTrace[len(validTrace)-1].ElapsedTimeMs,
 				ReplayTrace:   validTrace,
 			},
@@ -56,7 +56,7 @@ func TestEvaluateReplayTrace(t *testing.T) {
 			request: runSubmissionRequest{
 				Date:          "2026-03-21",
 				Seed:          "daily3dmaze:2026-03-21",
-				MoveCount:     len(validTrace),
+				MoveCount:     countReplayMovementActions(validTrace),
 				ElapsedTimeMs: validTrace[len(validTrace)-1].ElapsedTimeMs + 600,
 				ReplayTrace:   validTrace,
 			},
