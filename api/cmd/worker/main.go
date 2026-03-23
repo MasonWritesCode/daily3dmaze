@@ -13,11 +13,21 @@ import (
 )
 
 type storedRun struct {
-	ID      int64
-	Request replay.RunSubmission
+	ID                   int64
+	Request              replay.RunSubmission
+	VerificationStarted  sql.NullTime
+	VerificationAttempts int
+	VerificationError    sql.NullString
 }
 
-const verificationRetryDelay = 30 * time.Second
+var workerNow = time.Now
+
+const (
+	verificationRetryDelayBase  = 30 * time.Second
+	verificationRetryDelayMax   = 10 * time.Minute
+	verificationInFlightTimeout = 30 * time.Second
+	verificationClaimBatchSize  = 25
+)
 
 func main() {
 	db, err := openWorkerDatabase()
@@ -111,7 +121,7 @@ func processNextPendingRun(db *sql.DB) (bool, error) {
 		suspicionReasonsJSON,
 		string(validation.VerificationStatus),
 		verificationNotesJSON,
-		time.Now().UTC(),
+		workerNow().UTC(),
 	); err != nil {
 		return false, err
 	}
@@ -128,31 +138,62 @@ func claimNextPendingRun(db *sql.DB) (storedRun, error) {
 	defer tx.Rollback()
 
 	const query = `
-		SELECT id, run_date::text, seed, move_count, elapsed_time_ms, replay_trace_json
+		SELECT id, run_date::text, seed, move_count, elapsed_time_ms, replay_trace_json, verification_started_at, verification_attempts, verification_error
 		FROM runs
 		WHERE verification_status = 'pending'
-			AND (
-				verification_started_at IS NULL
-				OR verification_started_at < NOW() - INTERVAL '30 seconds'
-			)
 		ORDER BY accepted_at ASC
-		LIMIT 1
+		LIMIT 25
 		FOR UPDATE SKIP LOCKED
 	`
 
+	rows, err := tx.Query(query)
+	if err != nil {
+		return storedRun{}, err
+	}
+	defer rows.Close()
+
+	now := workerNow().UTC()
 	var (
 		run             storedRun
 		replayTraceJSON []byte
+		found           bool
 	)
-	if err := tx.QueryRow(query).Scan(
-		&run.ID,
-		&run.Request.Date,
-		&run.Request.Seed,
-		&run.Request.MoveCount,
-		&run.Request.ElapsedTimeMs,
-		&replayTraceJSON,
-	); err != nil {
+	for rows.Next() {
+		var candidate storedRun
+		var candidateReplayTraceJSON []byte
+		if err := rows.Scan(
+			&candidate.ID,
+			&candidate.Request.Date,
+			&candidate.Request.Seed,
+			&candidate.Request.MoveCount,
+			&candidate.Request.ElapsedTimeMs,
+			&candidateReplayTraceJSON,
+			&candidate.VerificationStarted,
+			&candidate.VerificationAttempts,
+			&candidate.VerificationError,
+		); err != nil {
+			return storedRun{}, err
+		}
+
+		if !isRunReadyForRetry(now, candidate.VerificationStarted, candidate.VerificationAttempts, candidate.VerificationError) {
+			continue
+		}
+
+		run = candidate
+		replayTraceJSON = candidateReplayTraceJSON
+		found = true
+		break
+	}
+
+	if err := rows.Err(); err != nil {
 		return storedRun{}, err
+	}
+
+	if !found {
+		if err := tx.Commit(); err != nil {
+			return storedRun{}, err
+		}
+		return storedRun{}, sql.ErrNoRows
 	}
 
 	const claimUpdateQuery = `
@@ -163,7 +204,7 @@ func claimNextPendingRun(db *sql.DB) (storedRun, error) {
 			verification_error = NULL
 		WHERE id = $1
 	`
-	if _, err := tx.Exec(claimUpdateQuery, run.ID, time.Now().UTC()); err != nil {
+	if _, err := tx.Exec(claimUpdateQuery, run.ID, now); err != nil {
 		return storedRun{}, err
 	}
 
@@ -179,6 +220,48 @@ func claimNextPendingRun(db *sql.DB) (storedRun, error) {
 	}
 
 	return run, nil
+}
+
+func isRunReadyForRetry(
+	now time.Time,
+	verificationStarted sql.NullTime,
+	verificationAttempts int,
+	verificationError sql.NullString,
+) bool {
+	if verificationError.Valid && verificationError.String != "" {
+		if !verificationStarted.Valid {
+			return true
+		}
+
+		return !verificationStarted.Time.UTC().Add(calculateRetryDelay(verificationAttempts)).After(now)
+	}
+
+	if !verificationStarted.Valid {
+		return true
+	}
+
+	return !verificationStarted.Time.UTC().Add(verificationInFlightTimeout).After(now)
+}
+
+func calculateRetryDelay(verificationAttempts int) time.Duration {
+	if verificationAttempts <= 0 {
+		return 0
+	}
+
+	delay := verificationRetryDelayBase
+	for range verificationAttempts - 1 {
+		if delay >= verificationRetryDelayMax {
+			return verificationRetryDelayMax
+		}
+
+		delay *= 2
+	}
+
+	if delay > verificationRetryDelayMax {
+		return verificationRetryDelayMax
+	}
+
+	return delay
 }
 
 type verificationFailureWriter interface {
