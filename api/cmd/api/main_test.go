@@ -125,57 +125,6 @@ func TestValidateRunSubmission(t *testing.T) {
 	}
 }
 
-func TestScoreReplayTrace(t *testing.T) {
-	t.Parallel()
-
-	lowRisk := runSubmissionRequest{
-		Date:          "2026-03-21",
-		Seed:          "daily3dmaze:2026-03-21",
-		MoveCount:     2,
-		ElapsedTimeMs: 1500,
-		ReplayTrace: []replayTraceEvent{
-			{ElapsedTimeMs: 400, Action: "move_forward"},
-			{ElapsedTimeMs: 1400, Action: "turn_right"},
-		},
-	}
-
-	score, reasons := scoreReplayTrace(lowRisk)
-	if score != 0 {
-		t.Fatalf("expected low-risk score 0, got %d", score)
-	}
-	if len(reasons) != 0 {
-		t.Fatalf("expected no low-risk reasons, got %v", reasons)
-	}
-
-	highRisk := runSubmissionRequest{
-		Date:          "2026-03-21",
-		Seed:          "daily3dmaze:2026-03-21",
-		MoveCount:     1,
-		ElapsedTimeMs: 200,
-		ReplayTrace: []replayTraceEvent{
-			{ElapsedTimeMs: 0, Action: "turn_left"},
-			{ElapsedTimeMs: 10, Action: "turn_left"},
-			{ElapsedTimeMs: 20, Action: "turn_left"},
-			{ElapsedTimeMs: 30, Action: "turn_left"},
-		},
-	}
-
-	score, reasons = scoreReplayTrace(highRisk)
-	if score <= 50 {
-		t.Fatalf("expected suspicious score above 50, got %d", score)
-	}
-	expectedReasons := []string{
-		"replay_length_mismatch",
-		"very_high_action_density",
-		"rapid_repeated_turns",
-	}
-	for _, expectedReason := range expectedReasons {
-		if !containsString(reasons, expectedReason) {
-			t.Fatalf("expected suspicion reasons to contain %q, got %v", expectedReason, reasons)
-		}
-	}
-}
-
 func TestValidateLeaderboardDate(t *testing.T) {
 	t.Parallel()
 
@@ -311,14 +260,4 @@ func TestAuthRateLimiterExpiresOldAttempts(t *testing.T) {
 	if !limiter.allow("login", "127.0.0.1") {
 		t.Fatal("expected request after the window to be allowed")
 	}
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-
-	return false
 }

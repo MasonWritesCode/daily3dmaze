@@ -96,6 +96,7 @@ type recentRunReviewsResponse struct {
 type app struct {
 	db          *sql.DB
 	authLimiter *authRateLimiter
+	now         func() time.Time
 }
 
 const (
@@ -123,6 +124,7 @@ func main() {
 	application := app{
 		db:          db,
 		authLimiter: newAuthRateLimiter(authRateLimit, authWindow),
+		now:         time.Now,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
@@ -222,7 +224,9 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	suspicionScore, suspicionReasons := scoreReplayTrace(request)
+	replayValidation := evaluateReplayTrace(request)
+	suspicionScore := replayValidation.Score
+	suspicionReasons := replayValidation.ReasonStrings()
 
 	acceptedAt := time.Now().UTC()
 	var userID *int64
@@ -699,66 +703,6 @@ func validateRunSubmission(request runSubmissionRequest) error {
 	return nil
 }
 
-func scoreReplayTrace(request runSubmissionRequest) (int, []string) {
-	score := 0
-	reasons := make([]string, 0, 4)
-
-	if len(request.ReplayTrace) != request.MoveCount {
-		score += 20
-		reasons = append(reasons, "replay_length_mismatch")
-	}
-
-	lastEvent := request.ReplayTrace[len(request.ReplayTrace)-1]
-	drift := request.ElapsedTimeMs - lastEvent.ElapsedTimeMs
-	if drift < 0 {
-		drift = -drift
-	}
-	if drift > 250 {
-		score += 15
-		reasons = append(reasons, "timestamp_drift")
-	}
-
-	if request.ElapsedTimeMs > 0 {
-		actionsPerSecond := float64(len(request.ReplayTrace)) / (float64(request.ElapsedTimeMs) / 1000)
-		if actionsPerSecond > 12 {
-			score += 35
-			reasons = append(reasons, "very_high_action_density")
-		} else if actionsPerSecond > 8 {
-			score += 15
-			reasons = append(reasons, "high_action_density")
-		}
-	}
-
-	repeatedTurns := 0
-	for index := 1; index < len(request.ReplayTrace); index += 1 {
-		current := request.ReplayTrace[index]
-		previous := request.ReplayTrace[index-1]
-		if (current.Action == "turn_left" || current.Action == "turn_right") &&
-			current.Action == previous.Action &&
-			current.ElapsedTimeMs-previous.ElapsedTimeMs < 50 {
-			repeatedTurns += 1
-		}
-	}
-	if repeatedTurns > 0 {
-		score += minInt(20, repeatedTurns*5)
-		reasons = append(reasons, "rapid_repeated_turns")
-	}
-
-	if score > 100 {
-		return 100, reasons
-	}
-
-	return score, reasons
-}
-
-func minInt(left, right int) int {
-	if left < right {
-		return left
-	}
-
-	return right
-}
-
 func validateLeaderboardDate(date string) error {
 	if _, err := time.Parse(dateLayoutISO, date); err != nil {
 		return errors.New("date must use YYYY-MM-DD format")
@@ -776,6 +720,14 @@ func rankLeaderboardEntries(entries []leaderboardEntry) []leaderboardEntry {
 	}
 
 	return ranked
+}
+
+func (a app) currentTime() time.Time {
+	if a.now != nil {
+		return a.now().UTC()
+	}
+
+	return time.Now().UTC()
 }
 
 func withCORS(next http.Handler) http.Handler {

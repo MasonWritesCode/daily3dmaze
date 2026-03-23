@@ -168,7 +168,7 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 		return profileResponse{}, err
 	}
 
-	profile.Stats.CurrentStreakDays, profile.Stats.BestStreakDays = calculateStreaks(runDates, time.Now().UTC())
+	profile.Stats.CurrentStreakDays, profile.Stats.BestStreakDays = calculateStreaks(runDates, a.currentTime())
 
 	const recentRunsQuery = `
 		SELECT run_date::text, seed, move_count, elapsed_time_ms, accepted_at

@@ -33,7 +33,12 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 	}
 	defer db.Close()
 
-	application := app{db: db}
+	application := app{
+		db: db,
+		now: func() time.Time {
+			return time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
+		},
+	}
 	createdAt := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
 	acceptedAt := time.Date(2026, 3, 21, 13, 0, 0, 0, time.UTC)
 
