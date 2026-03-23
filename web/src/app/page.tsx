@@ -1,6 +1,47 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
+import {
+  fetchCurrentUser,
+  roleAllows,
+  ROLE_MODERATOR,
+  type AuthUser
+} from "../lib/api";
 
 export default function HomePage() {
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCurrentUser() {
+      try {
+        const currentUser = await fetchCurrentUser();
+        if (!isMounted) {
+          return;
+        }
+
+        setUser(currentUser);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setUser(null);
+      }
+    }
+
+    void loadCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const canAccessReviews = roleAllows(user?.role, ROLE_MODERATOR);
+
   return (
     <main className="page-shell">
       <div className="content-card">
@@ -14,9 +55,11 @@ export default function HomePage() {
           <Link href="/history" className="secondary-link">
             Browse history
           </Link>
-          <Link href="/admin/reviews" className="secondary-link">
-            Internal reviews
-          </Link>
+          {canAccessReviews && (
+            <Link href="/admin/reviews" className="secondary-link">
+              Internal reviews
+            </Link>
+          )}
         </div>
       </div>
     </main>

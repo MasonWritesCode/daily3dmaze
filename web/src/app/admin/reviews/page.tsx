@@ -7,6 +7,9 @@ import {
   fetchCurrentUser,
   recomputeRunReviews,
   fetchRunReviews,
+  roleAllows,
+  ROLE_ADMIN,
+  ROLE_MODERATOR,
   type AuthUser,
   type RunReviewEntry,
   type RunReviewSummary
@@ -123,6 +126,11 @@ export default function AdminReviewsPage() {
         setUser(currentUser);
 
         if (!currentUser) {
+          setStatus("ready");
+          return;
+        }
+
+        if (!roleAllows(currentUser.role, ROLE_MODERATOR)) {
           setStatus("ready");
           return;
         }
@@ -299,7 +307,19 @@ export default function AdminReviewsPage() {
           </section>
         )}
 
-        {status === "ready" && user && (
+        {status === "ready" && user && !roleAllows(user.role, ROLE_MODERATOR) && (
+          <section className="maze-summary" aria-labelledby="reviews-forbidden-title">
+            <h2 id="reviews-forbidden-title" className="section-title">
+              Moderator access required
+            </h2>
+            <p className="body-copy">
+              Your current role is <code>{user.role}</code>. Only moderator and admin
+              accounts can access internal run reviews.
+            </p>
+          </section>
+        )}
+
+        {status === "ready" && user && roleAllows(user.role, ROLE_MODERATOR) && (
           <section className="maze-summary" aria-labelledby="review-table-title">
             <div className="review-header">
               <div>
@@ -314,16 +334,18 @@ export default function AdminReviewsPage() {
                 <p className="assistive-copy">
                   Highest verification risk and suspicion scores are shown first.
                 </p>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={handleRecompute}
-                  disabled={recomputeStatus === "submitting"}
-                >
-                  {recomputeStatus === "submitting"
-                    ? "Recomputing..."
-                    : "Recompute verification"}
-                </button>
+                {roleAllows(user.role, ROLE_ADMIN) && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleRecompute}
+                    disabled={recomputeStatus === "submitting"}
+                  >
+                    {recomputeStatus === "submitting"
+                      ? "Recomputing..."
+                      : "Recompute verification"}
+                  </button>
+                )}
               </div>
             </div>
             {recomputeMessage && (

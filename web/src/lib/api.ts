@@ -50,6 +50,25 @@ export interface AuthUser {
   role: string;
 }
 
+export const ROLE_USER = "user";
+export const ROLE_MODERATOR = "moderator";
+export const ROLE_ADMIN = "admin";
+
+export function roleAllows(
+  role: string | null | undefined,
+  ...allowedRoles: string[]
+): boolean {
+  if (!role) {
+    return false;
+  }
+
+  if (role === ROLE_ADMIN) {
+    return true;
+  }
+
+  return allowedRoles.includes(role);
+}
+
 export interface AuthResponse {
   user: AuthUser;
 }

@@ -8,6 +8,8 @@ import {
   fetchDailyMaze,
   fetchRunReviewDetail,
   requeueRunReview,
+  roleAllows,
+  ROLE_MODERATOR,
   updateRunReview,
   type AuthUser,
   type RunReviewDetailResponse
@@ -106,6 +108,11 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
 
         setUser(currentUser);
         if (!currentUser) {
+          setStatus("ready");
+          return;
+        }
+
+        if (!roleAllows(currentUser.role, ROLE_MODERATOR)) {
           setStatus("ready");
           return;
         }
@@ -293,7 +300,19 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
           </section>
         )}
 
-        {status === "ready" && user && detail && (
+        {status === "ready" && user && !roleAllows(user.role, ROLE_MODERATOR) && (
+          <section className="maze-summary" aria-labelledby="review-detail-forbidden-title">
+            <h2 id="review-detail-forbidden-title" className="section-title">
+              Moderator access required
+            </h2>
+            <p className="body-copy">
+              Your current role is <code>{user.role}</code>. Only moderator and admin
+              accounts can inspect individual run reviews.
+            </p>
+          </section>
+        )}
+
+        {status === "ready" && user && roleAllows(user.role, ROLE_MODERATOR) && detail && (
           <>
             <section className="maze-summary" aria-labelledby="review-detail-summary-title">
               <div className="review-header">
