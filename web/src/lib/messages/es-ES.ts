@@ -357,14 +357,15 @@ export const esESMessages = {
       ...enUSMessages.play.gameplay,
       controls: "W/S o Arriba/Abajo mueven · A/D o Izquierda/Derecha giran · Desliza en la vista en dispositivos táctiles",
       introStatus: "Encuentra la salida y termina la partida.",
-      submittingRun: "Enviando partida a la API...",
-      submissionError: "La partida terminó localmente, pero falló el envío a la API.",
+      winTitle: "Reto completado",
+      submittingRun: "Guardando tu resultado...",
+      submissionError: "No se pudo guardar tu resultado en línea.",
       debugViewLabel: "Vista de depuración del laberinto diario",
       currentRunStatus: "Estado actual de la partida",
       statusBar: "Barra de estado de la aplicación",
       completionMessage: "Laberinto completado en {elapsed}.",
       submissionAccepted:
-        "La API aceptó la partida a las {acceptedAt} y la dejó en cola para verificación como {status}."
+        "Resultado guardado a las {acceptedAt}. Estado de verificación: {status}."
     },
     verification: {
       pending: "pendiente",

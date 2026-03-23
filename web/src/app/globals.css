@@ -132,6 +132,22 @@ code {
   gap: 8px;
 }
 
+.play-win-state {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  background: #efefef;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.play-win-verification {
+  display: grid;
+  gap: 6px;
+}
+
 .home-card {
   display: block;
 }
@@ -243,13 +259,10 @@ h1 {
 }
 
 .maze-summary .section-title {
-  display: flex;
-  align-items: center;
-  width: 100%;
+  display: block;
   min-height: 34px;
   margin: -18px -18px 18px;
   padding: 6px 10px;
-  box-sizing: border-box;
   border-bottom: 2px solid var(--panel-dark);
   background: linear-gradient(90deg, #000080, #2d6fd2);
   color: var(--panel-light);

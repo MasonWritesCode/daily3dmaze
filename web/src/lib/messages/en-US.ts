@@ -523,15 +523,16 @@ export const enUSMessages = {
     gameplay: {
       controls: "W/S or Up/Down move · A/D or Left/Right turn · Swipe in the view on touch devices",
       introStatus: "Find the exit and finish the run.",
-      submittingRun: "Submitting run to the API...",
-      submissionError: "The run finished locally, but submission to the API failed.",
+      winTitle: "Challenge complete",
+      submittingRun: "Saving your result...",
+      submissionError: "Your result could not be saved online.",
       debugViewLabel: "Daily maze debug view",
       summaryHeading: "Challenge window",
       currentRunStatus: "Current run status",
       statusBar: "Application status bar",
       completionMessage: "Maze complete in {elapsed}.",
       submissionAccepted:
-        "Run accepted by the API at {acceptedAt} and queued for verification as {status}."
+        "Result saved at {acceptedAt}. Verification status: {status}."
     },
     verification: {
       pending: "pending",

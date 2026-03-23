@@ -213,7 +213,7 @@ function ArchiveNavigator({ archiveDate }: ArchiveNavigatorProps) {
 }
 
 function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
-  const { messages } = useLocale();
+  const { formatDateTime, messages } = useLocale();
   const uiText = messages.play;
   const startingDirectionIndex = getStartingDirectionIndex(maze);
   const [playerPosition, setPlayerPosition] = useState<MazePoint>(maze.start);
@@ -673,7 +673,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
         <div className="play-focus-sidebar">
           <dl className="gameplay-hud" aria-label={uiText.gameplay.currentRunStatus}>
             <div className="gameplay-hud-item gameplay-hud-item-primary">
-              <dt>{uiText.labels.time}</dt>
+              <dt>{hasFinished ? uiText.gameplay.winTitle : uiText.labels.time}</dt>
               <dd>{elapsedTime}</dd>
             </div>
             <div className="gameplay-hud-item">
@@ -708,31 +708,37 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
           )}
           </div>
           <div className="play-status-stack" aria-live="polite">
-            <p className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}>
-              {hasFinished
-                ? uiText.gameplay.completionMessage.replace("{elapsed}", elapsedTime)
-                : uiText.gameplay.introStatus}
-            </p>
-            {submissionStatus === "submitting" && (
-              <p className="body-copy status-copy">{uiText.gameplay.submittingRun}</p>
-            )}
-            {submissionStatus === "submitted" && submissionSummary && (
-              <p className="body-copy status-copy success-copy">
-                {uiText.gameplay.submissionAccepted
-                  .replace("{acceptedAt}", submissionSummary.acceptedAt)
-                  .replace(
-                    "{status}",
-                    getLocalizedVerificationLabel(
-                      submissionSummary.verificationStatus,
-                      uiText.verification
-                    )
-                  )}
-              </p>
-            )}
-            {submissionStatus === "error" && (
-              <p className="body-copy status-copy error-copy">
-                {uiText.gameplay.submissionError}
-              </p>
+            {hasFinished ? (
+              <section className="play-win-state" aria-label={uiText.gameplay.winTitle}>
+                <p className="body-copy status-copy success-copy">
+                  {uiText.gameplay.completionMessage.replace("{elapsed}", elapsedTime)}
+                </p>
+                {submissionStatus === "submitting" && (
+                  <p className="body-copy status-copy">{uiText.gameplay.submittingRun}</p>
+                )}
+                {submissionStatus === "submitted" && submissionSummary && (
+                  <div className="play-win-verification">
+                    <p className="body-copy status-copy success-copy">
+                      {uiText.gameplay.submissionAccepted
+                        .replace("{acceptedAt}", formatDateTime(submissionSummary.acceptedAt))
+                        .replace(
+                          "{status}",
+                          getLocalizedVerificationLabel(
+                            submissionSummary.verificationStatus,
+                            uiText.verification
+                          )
+                        )}
+                    </p>
+                  </div>
+                )}
+                {submissionStatus === "error" && (
+                  <p className="body-copy status-copy error-copy">
+                    {uiText.gameplay.submissionError}
+                  </p>
+                )}
+              </section>
+            ) : (
+              <p className="body-copy status-copy">{uiText.gameplay.introStatus}</p>
             )}
           </div>
         </div>
