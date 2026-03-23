@@ -16,6 +16,11 @@ import { formatElapsedTime } from "../../../lib/game/maze";
 type PageStatus = "loading" | "ready" | "error";
 type RecomputeStatus = "idle" | "submitting" | "success" | "error";
 type VerificationFilter = "all" | "pending" | "verified" | "suspicious" | "invalid";
+type ReviewStatusFilter =
+  | "all"
+  | "unreviewed"
+  | "reviewed_clean"
+  | "confirmed_suspicious";
 type SortMode = "risk" | "newest" | "oldest-pending";
 
 function formatAcceptedAt(value: string): string {
@@ -62,6 +67,30 @@ function getVerificationTone(status: string): string {
   return "low";
 }
 
+function formatReviewStatus(status: string): string {
+  if (status === "reviewed_clean") {
+    return "Reviewed clean";
+  }
+
+  if (status === "confirmed_suspicious") {
+    return "Confirmed suspicious";
+  }
+
+  return "Unreviewed";
+}
+
+function getReviewTone(status: string): string {
+  if (status === "confirmed_suspicious") {
+    return "high";
+  }
+
+  if (status === "reviewed_clean") {
+    return "low";
+  }
+
+  return "pending";
+}
+
 export default function AdminReviewsPage() {
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -72,6 +101,8 @@ export default function AdminReviewsPage() {
   const [recomputeMessage, setRecomputeMessage] = useState<string>("");
   const [verificationFilter, setVerificationFilter] =
     useState<VerificationFilter>("all");
+  const [reviewStatusFilter, setReviewStatusFilter] =
+    useState<ReviewStatusFilter>("all");
   const [showOnlyStalePending, setShowOnlyStalePending] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortMode, setSortMode] = useState<SortMode>("risk");
@@ -131,6 +162,10 @@ export default function AdminReviewsPage() {
         return false;
       }
 
+      if (reviewStatusFilter !== "all" && entry.reviewStatus !== reviewStatusFilter) {
+        return false;
+      }
+
       if (showOnlyStalePending && !entry.isStalePending) {
         return false;
       }
@@ -143,14 +178,16 @@ export default function AdminReviewsPage() {
         entry.username || "anonymous",
         entry.date,
         entry.seed,
-        entry.verificationStatus
+        entry.verificationStatus,
+        entry.reviewStatus,
+        entry.reviewNotes
       ]
         .join(" ")
         .toLowerCase();
 
       return haystack.includes(normalizedQuery);
     });
-  }, [entries, searchQuery, showOnlyStalePending, verificationFilter]);
+  }, [entries, reviewStatusFilter, searchQuery, showOnlyStalePending, verificationFilter]);
 
   const sortedEntries = useMemo(() => {
     const statusWeight = (status: string) =>
@@ -358,6 +395,22 @@ export default function AdminReviewsPage() {
                   />
                 </label>
 
+                <label className="auth-field" htmlFor="review-status-filter">
+                  <span>Moderator status</span>
+                  <select
+                    id="review-status-filter"
+                    value={reviewStatusFilter}
+                    onChange={(event) =>
+                      setReviewStatusFilter(event.target.value as ReviewStatusFilter)
+                    }
+                  >
+                    <option value="all">All review states</option>
+                    <option value="unreviewed">Unreviewed</option>
+                    <option value="reviewed_clean">Reviewed clean</option>
+                    <option value="confirmed_suspicious">Confirmed suspicious</option>
+                  </select>
+                </label>
+
                 <label className="auth-field" htmlFor="review-sort">
                   <span>Sort by</span>
                   <select
@@ -396,6 +449,7 @@ export default function AdminReviewsPage() {
                   <span>Challenge</span>
                   <span>Time</span>
                   <span>Moves</span>
+                  <span>Review</span>
                   <span>Reasons</span>
                   <span>Accepted</span>
                 </div>
@@ -454,6 +508,14 @@ export default function AdminReviewsPage() {
                       </div>
                       <div>{formatElapsedTime(entry.elapsedTimeMs)}</div>
                       <div>{entry.moveCount}</div>
+                      <div className="review-challenge">
+                        <span className={`score-badge score-badge-${getReviewTone(entry.reviewStatus)}`}>
+                          {formatReviewStatus(entry.reviewStatus)}
+                        </span>
+                        <span>
+                          Reviewed: {formatOptionalTimestamp(entry.reviewedAt)}
+                        </span>
+                      </div>
                       <div className="reason-list" aria-label="Suspicion reasons">
                         {entry.suspicionReasons.length > 0 ? (
                           entry.suspicionReasons.map((reason) => (
