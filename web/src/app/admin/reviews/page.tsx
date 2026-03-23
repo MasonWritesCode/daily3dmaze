@@ -271,10 +271,10 @@ export default function AdminReviewsPage() {
         </p>
         <div className="actions">
           <Link href="/play" className="primary-link">
-            Back to play
+            Return to challenge
           </Link>
           <Link href="/history" className="secondary-link">
-            Browse archive
+            Challenge archive
           </Link>
         </div>
 
@@ -301,7 +301,7 @@ export default function AdminReviewsPage() {
             </p>
             <div className="actions">
               <Link href="/play" className="primary-link">
-                Go sign in
+                Go to sign-in
               </Link>
             </div>
           </section>

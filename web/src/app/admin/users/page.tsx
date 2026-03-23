@@ -34,7 +34,7 @@ const uiText = {
   listLabel: "Managed users",
   actions: {
     backToReviews: "Back to reviews",
-    backToPlay: "Back to play",
+    backToPlay: "Return to challenge",
     saveRole: "Save role",
     ban: "Ban",
     unban: "Unban"

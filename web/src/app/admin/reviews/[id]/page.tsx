@@ -274,7 +274,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
             Back to reviews
           </Link>
           <Link href="/play" className="secondary-link">
-            Back to play
+            Return to challenge
           </Link>
         </div>
 

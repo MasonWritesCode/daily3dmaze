@@ -21,7 +21,7 @@ const uiText = {
   recentRunsTitle: "Recent runs",
   noRuns: "No attributed runs yet.",
   actions: {
-    backToPlay: "Back to /play"
+    backToPlay: "Return to challenge"
   },
   labels: {
     username: "Username",
@@ -192,7 +192,7 @@ export default function ProfilePage() {
 
         <div className="actions">
           <Link href="/play" className="secondary-link">
-            {uiText.actions.backToPlay}
+            Return to challenge
           </Link>
         </div>
       </div>

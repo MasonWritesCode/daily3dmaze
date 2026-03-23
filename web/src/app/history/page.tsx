@@ -24,8 +24,8 @@ const uiText = {
     bestRun: "Best run"
   },
   actions: {
-    openPlay: "Open /play",
-    backHome: "Back home"
+    openPlay: "Play today’s challenge",
+    backHome: "Return to desktop"
   },
   bestRunNoSubmissions: "No submissions yet"
 } as const;

@@ -36,7 +36,7 @@ const uiText = {
   actions: {
     play: "Play this challenge",
     backToHistory: "Back to history",
-    openPlay: "Open /play"
+    openPlay: "Play today’s challenge"
   }
 } as const;
 

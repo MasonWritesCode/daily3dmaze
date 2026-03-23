@@ -94,7 +94,7 @@ const uiText = {
   },
   actions: {
     resetRun: "Reset run",
-    backHome: "Back home",
+    backHome: "Return to desktop",
     logIn: "Log in",
     createAccount: "Create account",
     logOut: "Log out"
@@ -973,7 +973,7 @@ function PlayPageContent() {
 
         <div className="actions">
           <Link href="/history" className="secondary-link">
-            Browse history
+            Challenge archive
           </Link>
           <Link href="/" className="secondary-link">
             {uiText.actions.backHome}
