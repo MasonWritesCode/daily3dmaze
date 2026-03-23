@@ -23,7 +23,7 @@ import {
   type DailyMaze,
   type ReplayFrame
 } from "../../../../lib/game/maze";
-import { formatCount, formatDateTime } from "../../../../lib/i18n";
+import { useLocale } from "../../../../lib/locale";
 
 type PageStatus = "loading" | "ready" | "error";
 type RequeueStatus = "idle" | "submitting" | "success" | "error";
@@ -33,18 +33,6 @@ interface ReviewDetailPageProps {
   params: Promise<{
     id: string;
   }>;
-}
-
-function formatAcceptedAt(value: string): string {
-  return formatDateTime(value);
-}
-
-function formatOptionalTimestamp(value: string | null): string {
-  if (!value) {
-    return "Not recorded";
-  }
-
-  return formatAcceptedAt(value);
 }
 
 function getSuspicionTone(score: number): string {
@@ -76,6 +64,7 @@ function getVerificationTone(status: string): string {
 }
 
 export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
+  const { formatCount, formatDateTime } = useLocale();
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [detail, setDetail] = useState<RunReviewDetailResponse | null>(null);
@@ -248,7 +237,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
       await refreshDetail(routeParams.id);
       setReviewFormStatus("success");
       setReviewFormMessage(
-        `Review saved as ${result.reviewStatus}${result.reviewedAt ? ` at ${formatAcceptedAt(result.reviewedAt)}` : ""}.`
+        `Review saved as ${result.reviewStatus}${result.reviewedAt ? ` at ${formatDateTime(result.reviewedAt)}` : ""}.`
       );
     } catch (error) {
       setReviewFormStatus("error");
@@ -398,15 +387,21 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                 </div>
                 <div className="metadata-row">
                   <dt>Accepted</dt>
-                  <dd>{formatAcceptedAt(detail.entry.acceptedAt)}</dd>
+                  <dd>{formatDateTime(detail.entry.acceptedAt)}</dd>
                 </div>
                 <div className="metadata-row">
                   <dt>Verification started</dt>
-                  <dd>{formatOptionalTimestamp(detail.entry.verificationStartedAt)}</dd>
+                  <dd>
+                    {detail.entry.verificationStartedAt
+                      ? formatDateTime(detail.entry.verificationStartedAt)
+                      : "Not recorded"}
+                  </dd>
                 </div>
                 <div className="metadata-row">
                   <dt>Verified at</dt>
-                  <dd>{formatOptionalTimestamp(detail.entry.verifiedAt)}</dd>
+                  <dd>
+                    {detail.entry.verifiedAt ? formatDateTime(detail.entry.verifiedAt) : "Not recorded"}
+                  </dd>
                 </div>
                 <div className="metadata-row">
                   <dt>Attempts</dt>
@@ -450,7 +445,9 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                 </div>
                 <div className="metadata-row">
                   <dt>Reviewed at</dt>
-                  <dd>{formatOptionalTimestamp(detail.entry.reviewedAt)}</dd>
+                  <dd>
+                    {detail.entry.reviewedAt ? formatDateTime(detail.entry.reviewedAt) : "Not recorded"}
+                  </dd>
                 </div>
                 <div className="metadata-row">
                   <dt>Reviewed by</dt>

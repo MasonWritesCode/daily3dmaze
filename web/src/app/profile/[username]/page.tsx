@@ -9,7 +9,7 @@ import {
   type PlayerProfile
 } from "../../../lib/api";
 import { formatElapsedTime } from "../../../lib/game/maze";
-import { formatCount, formatDate, formatDateTime, formatDayCount } from "../../../lib/i18n";
+import { useLocale } from "../../../lib/locale";
 
 type PageStatus = "loading" | "success" | "error";
 
@@ -40,6 +40,7 @@ const uiText = {
 } as const;
 
 export default function ProfilePage() {
+  const { formatCount, formatDate, formatDateTime, formatDayCount } = useLocale();
   const params = useParams<{ username: string }>();
   const username = typeof params.username === "string" ? params.username.toLowerCase() : "";
   const [profile, setProfile] = useState<PlayerProfile | null>(null);

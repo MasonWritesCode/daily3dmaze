@@ -15,7 +15,7 @@ import {
   type RunReviewSummary
 } from "../../../lib/api";
 import { formatElapsedTime } from "../../../lib/game/maze";
-import { formatCount, formatDateTime } from "../../../lib/i18n";
+import { useLocale } from "../../../lib/locale";
 
 type PageStatus = "loading" | "ready" | "error";
 type RecomputeStatus = "idle" | "submitting" | "success" | "error";
@@ -26,18 +26,6 @@ type ReviewStatusFilter =
   | "reviewed_clean"
   | "confirmed_suspicious";
 type SortMode = "risk" | "newest" | "oldest-pending";
-
-function formatAcceptedAt(value: string): string {
-  return formatDateTime(value);
-}
-
-function formatOptionalTimestamp(value: string | null): string {
-  if (!value) {
-    return "Not recorded";
-  }
-
-  return formatAcceptedAt(value);
-}
 
 function getSuspicionTone(score: number): string {
   if (score >= 50) {
@@ -92,6 +80,7 @@ function getReviewTone(status: string): string {
 }
 
 export default function AdminReviewsPage() {
+  const { formatCount, formatDateTime } = useLocale();
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [entries, setEntries] = useState<RunReviewEntry[]>([]);
@@ -507,7 +496,7 @@ export default function AdminReviewsPage() {
                           {entry.verificationStatus}
                         </span>
                         <div className="review-detail-stack">
-                            <span className="assistive-copy">
+                          <span className="assistive-copy">
                             Attempts: {formatCount(entry.verificationAttempts)}
                           </span>
                           {entry.isStalePending && (
@@ -548,7 +537,7 @@ export default function AdminReviewsPage() {
                           {formatReviewStatus(entry.reviewStatus)}
                         </span>
                         <span>
-                          Reviewed: {formatOptionalTimestamp(entry.reviewedAt)}
+                          Reviewed: {entry.reviewedAt ? formatDateTime(entry.reviewedAt) : "Not recorded"}
                         </span>
                         <span>
                           Reviewer: {entry.reviewedByUsername ?? "Not recorded"}
@@ -566,14 +555,19 @@ export default function AdminReviewsPage() {
                         )}
                       </div>
                       <div className="review-challenge">
-                        <span>{formatAcceptedAt(entry.acceptedAt)}</span>
+                        <span>{formatDateTime(entry.acceptedAt)}</span>
                         <span>
-                          Started: {formatOptionalTimestamp(entry.verificationStartedAt)}
+                          Started:{" "}
+                          {entry.verificationStartedAt
+                            ? formatDateTime(entry.verificationStartedAt)
+                            : "Not recorded"}
                         </span>
-                        <span>Finished: {formatOptionalTimestamp(entry.verifiedAt)}</span>
-                      <Link href={`/admin/reviews/${entry.publicId}`} className="inline-link">
-                        Inspect run
-                      </Link>
+                        <span>
+                          Finished: {entry.verifiedAt ? formatDateTime(entry.verifiedAt) : "Not recorded"}
+                        </span>
+                        <Link href={`/admin/reviews/${entry.publicId}`} className="inline-link">
+                          Inspect run
+                        </Link>
                       </div>
                     </article>
                   );

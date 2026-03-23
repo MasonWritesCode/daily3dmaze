@@ -1,30 +1,43 @@
-function getLocale(): string | undefined {
-  if (typeof navigator !== "undefined" && navigator.language) {
-    return navigator.language;
-  }
-
-  return undefined;
+export interface LocaleFormatters {
+  formatDate: (value: string | Date) => string;
+  formatDateTime: (value: string | Date) => string;
+  formatCount: (value: number) => string;
+  formatDayCount: (value: number) => string;
 }
 
-export function formatDate(value: string | Date): string {
-  return new Intl.DateTimeFormat(getLocale(), {
+export function createFormatters(locale?: string): LocaleFormatters {
+  const resolvedLocale = locale || undefined;
+  const dateFormatter = new Intl.DateTimeFormat(resolvedLocale, {
     dateStyle: "medium"
-  }).format(new Date(value));
-}
-
-export function formatDateTime(value: string | Date): string {
-  return new Intl.DateTimeFormat(getLocale(), {
+  });
+  const dateTimeFormatter = new Intl.DateTimeFormat(resolvedLocale, {
     dateStyle: "medium",
     timeStyle: "short"
-  }).format(new Date(value));
-}
+  });
+  const numberFormatter = new Intl.NumberFormat(resolvedLocale);
+  const pluralRules = new Intl.PluralRules(resolvedLocale);
 
-export function formatCount(value: number): string {
-  return new Intl.NumberFormat(getLocale()).format(value);
-}
+  function formatCount(value: number): string {
+    return numberFormatter.format(value);
+  }
 
-export function formatDayCount(value: number): string {
-  const pluralRules = new Intl.PluralRules(getLocale());
-  const unit = pluralRules.select(value) === "one" ? "day" : "days";
-  return `${formatCount(value)} ${unit}`;
+  function formatDate(value: string | Date): string {
+    return dateFormatter.format(new Date(value));
+  }
+
+  function formatDateTime(value: string | Date): string {
+    return dateTimeFormatter.format(new Date(value));
+  }
+
+  function formatDayCount(value: number): string {
+    const unit = pluralRules.select(value) === "one" ? "day" : "days";
+    return `${formatCount(value)} ${unit}`;
+  }
+
+  return {
+    formatDate,
+    formatDateTime,
+    formatCount,
+    formatDayCount
+  };
 }

@@ -15,7 +15,7 @@ import {
   type AdminUserEntry,
   type AuthUser
 } from "../../../lib/api";
-import { formatCount, formatDateTime } from "../../../lib/i18n";
+import { useLocale } from "../../../lib/locale";
 
 type PageStatus = "loading" | "ready" | "error";
 type RowStatus = "idle" | "submitting" | "success" | "error";
@@ -53,15 +53,8 @@ const uiText = {
   }
 } as const;
 
-function formatTimestamp(value: string | null): string {
-  if (!value) {
-    return "Not recorded";
-  }
-
-  return formatDateTime(value);
-}
-
 export default function AdminUsersPage() {
+  const { formatCount, formatDateTime } = useLocale();
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [entries, setEntries] = useState<AdminUserEntry[]>([]);
@@ -326,11 +319,11 @@ export default function AdminUsersPage() {
                     </span>
                     {entry.isBanned && (
                       <span className="assistive-copy">
-                        Since {formatTimestamp(entry.bannedAt)}
+                        Since {entry.bannedAt ? formatDateTime(entry.bannedAt) : "Not recorded"}
                       </span>
                     )}
                   </span>
-                  <span className="admin-user-created-cell">{formatTimestamp(entry.createdAt)}</span>
+                  <span className="admin-user-created-cell">{formatDateTime(entry.createdAt)}</span>
                   <span className="review-detail-stack admin-user-actions-cell">
                     <div className="actions admin-user-actions">
                       <button
