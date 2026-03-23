@@ -52,6 +52,7 @@ interface MetadataListProps {
 
 interface MazeDetailsProps {
   maze: DailyMaze;
+  isAdmin: boolean;
   onRunSubmitted: () => void;
 }
 
@@ -72,8 +73,6 @@ const uiText = {
   play: {
     eyebrow: "daily3dmaze.exe",
     title: "Daily 3D Maze",
-    intro:
-      "A browser-native retro maze challenge with first-person rendering, daily seeds, named runs, and replay-aware verification.",
     systemBar: "Ready",
     loadingMaze: "Loading daily maze...",
     loadingLeaderboard: "Loading leaderboard...",
@@ -123,7 +122,7 @@ const uiText = {
   },
   gameplay: {
     controls: "Up/Down or W/S move, Left/Right or A/D turn",
-    introStatus: "Navigate from S to E. The top-down player marker shows facing.",
+    introStatus: "Find the exit and finish the run.",
     submittingRun: "Submitting run to the API...",
     submissionError: "The run finished locally, but submission to the API failed.",
     debugViewLabel: "Daily maze debug view",
@@ -189,7 +188,7 @@ function ArchiveNavigator({ archiveDate }: ArchiveNavigatorProps) {
   );
 }
 
-function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
+function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   const startingDirectionIndex = getStartingDirectionIndex(maze);
   const [playerPosition, setPlayerPosition] = useState<MazePoint>(maze.start);
   const [directionIndex, setDirectionIndex] = useState<number>(startingDirectionIndex);
@@ -497,14 +496,7 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
     {
       label: uiText.labels.exit,
       value: `(${maze.exit.x}, ${maze.exit.y})`
-    },
-    { label: uiText.labels.moves, value: moveCount },
-    { label: uiText.labels.time, value: elapsedTime },
-    {
-      label: uiText.labels.facing,
-      value: DIRECTION_ORDER[directionIndex].name
-    },
-    { label: uiText.labels.controls, value: uiText.gameplay.controls }
+    }
   ];
 
   return (
@@ -512,13 +504,29 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
       <h2 id="maze-summary-title" className="section-title">
         {uiText.gameplay.summaryHeading}
       </h2>
+      <dl className="gameplay-hud" aria-label="Current run status">
+        <div className="gameplay-hud-item gameplay-hud-item-primary">
+          <dt>{uiText.labels.time}</dt>
+          <dd>{elapsedTime}</dd>
+        </div>
+        <div className="gameplay-hud-item">
+          <dt>{uiText.labels.moves}</dt>
+          <dd>{moveCount}</dd>
+        </div>
+        <div className="gameplay-hud-item">
+          <dt>{uiText.labels.facing}</dt>
+          <dd>{DIRECTION_ORDER[directionIndex].name}</dd>
+        </div>
+      </dl>
+      <p className="gameplay-controls" aria-label={uiText.labels.controls}>
+        {uiText.gameplay.controls}
+      </p>
       <FirstPersonView
         maze={maze}
         playerPosition={renderPosition}
         playerAngle={renderAngle}
         facingName={DIRECTION_ORDER[directionIndex].name}
       />
-      <MetadataList items={metadataItems} />
       <p
         className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}
         aria-live="polite"
@@ -544,17 +552,22 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
           {uiText.gameplay.submissionError}
         </p>
       )}
-      <div
-        className="maze-grid-preview"
-        role="img"
-        aria-label={uiText.gameplay.debugViewLabel}
-      >
-        {gridRows.map((row, index) => (
-          <code key={`${index}-${row}`} className="maze-grid-row">
-            {row}
-          </code>
-        ))}
-      </div>
+      {isAdmin && (
+        <>
+          <MetadataList items={metadataItems} />
+          <div
+            className="maze-grid-preview"
+            role="img"
+            aria-label={uiText.gameplay.debugViewLabel}
+          >
+            {gridRows.map((row, index) => (
+              <code key={`${index}-${row}`} className="maze-grid-row">
+                {row}
+              </code>
+            ))}
+          </div>
+        </>
+      )}
       <div className="actions">
         <button type="button" className="secondary-button" onClick={handleReset}>
           {uiText.actions.resetRun}
@@ -893,22 +906,7 @@ function PlayPageContent() {
     <main className="page-shell">
       <div className="content-card content-card-wide play-window">
         <p className="eyebrow">{uiText.play.eyebrow}</p>
-        <div className="window-hero">
-          <div>
-            <h1>{uiText.play.title}</h1>
-            <p className="body-copy">{uiText.play.intro}</p>
-          </div>
-          <dl className="window-status">
-            <div className="window-status-row">
-              <dt>Mode</dt>
-              <dd>{archiveDate ? "Archive" : "Daily challenge"}</dd>
-            </div>
-            <div className="window-status-row">
-              <dt>Input</dt>
-              <dd>Keyboard</dd>
-            </div>
-          </dl>
-        </div>
+        <h1 className="sr-only">{uiText.play.title}</h1>
         {archiveDate && (
           <p className="body-copy body-copy-strong">
             Viewing archived challenge <code>{archiveDate}</code>.
@@ -925,6 +923,7 @@ function PlayPageContent() {
         {status === "success" && maze && (
           <MazeDetails
             maze={maze}
+            isAdmin={roleAllows(user?.role, ROLE_ADMIN)}
             onRunSubmitted={() =>
               setLeaderboardRefreshKey((currentKey) => currentKey + 1)
             }

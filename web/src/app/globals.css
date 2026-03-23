@@ -69,45 +69,34 @@ code {
   position: relative;
 }
 
-.window-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 250px;
-  gap: 18px;
-  align-items: start;
-  margin-bottom: 22px;
+.home-card {
+  display: block;
 }
 
-.window-status {
+.home-mascot-shell {
   display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 10px;
+  place-items: center;
+  width: min(100%, 320px);
+  min-height: 220px;
+  margin: 12px 0 8px;
+  padding: 18px;
   border: 2px solid var(--panel-dark);
   border-top-color: var(--panel-darker);
   border-left-color: var(--panel-darker);
   background: var(--panel-soft);
-  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.9);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.85);
 }
 
-.window-status-row {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 10px;
+.home-mascot {
+  width: min(180px, 100%);
+  height: auto;
+  image-rendering: pixelated;
 }
 
-.window-status dt {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.window-status dd {
-  margin: 0;
-  color: var(--text);
-  font-weight: 700;
+.home-card .home-mascot-shell,
+.home-card .actions {
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .content-card {
@@ -227,6 +216,57 @@ h1 {
 .metadata-row dd {
   margin: 0;
   color: var(--muted);
+}
+
+.gameplay-hud {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) repeat(2, minmax(120px, 0.8fr));
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.gameplay-hud-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  background: #efefef;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.gameplay-hud-item dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gameplay-hud-item dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.gameplay-hud-item-primary dd {
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+
+.gameplay-controls {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-darker);
+  border-left-color: var(--panel-darker);
+  background: var(--panel-soft);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .status-copy {
@@ -751,6 +791,9 @@ h1 {
 
 .panel-title {
   font-size: 1rem;
+  color: var(--panel-light);
+  font-weight: 700;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .panel-subtitle {
@@ -881,11 +924,6 @@ h1 {
   box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-.home-status {
-  display: grid;
-  gap: 12px;
-}
-
 .window-footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -922,10 +960,6 @@ h1 {
 }
 
 @media (max-width: 960px) {
-  .window-hero {
-    grid-template-columns: 1fr;
-  }
-
   .play-side-panels {
     grid-template-columns: 1fr;
   }
@@ -949,6 +983,10 @@ h1 {
 }
 
 @media (max-width: 640px) {
+  .gameplay-hud {
+    grid-template-columns: 1fr;
+  }
+
   .raycast-header {
     flex-direction: column;
   }
