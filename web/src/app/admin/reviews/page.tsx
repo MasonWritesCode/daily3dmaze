@@ -15,6 +15,8 @@ import { formatElapsedTime } from "../../../lib/game/maze";
 
 type PageStatus = "loading" | "ready" | "error";
 type RecomputeStatus = "idle" | "submitting" | "success" | "error";
+type VerificationFilter = "all" | "pending" | "verified" | "suspicious" | "invalid";
+type SortMode = "risk" | "newest" | "oldest-pending";
 
 function formatAcceptedAt(value: string): string {
   const date = new Date(value);
@@ -68,6 +70,11 @@ export default function AdminReviewsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [recomputeStatus, setRecomputeStatus] = useState<RecomputeStatus>("idle");
   const [recomputeMessage, setRecomputeMessage] = useState<string>("");
+  const [verificationFilter, setVerificationFilter] =
+    useState<VerificationFilter>("all");
+  const [showOnlyStalePending, setShowOnlyStalePending] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [sortMode, setSortMode] = useState<SortMode>("risk");
 
   useEffect(() => {
     let cancelled = false;
@@ -116,16 +123,62 @@ export default function AdminReviewsPage() {
     };
   }, []);
 
+  const filteredEntries = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return entries.filter((entry) => {
+      if (verificationFilter !== "all" && entry.verificationStatus !== verificationFilter) {
+        return false;
+      }
+
+      if (showOnlyStalePending && !entry.isStalePending) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const haystack = [
+        entry.username || "anonymous",
+        entry.date,
+        entry.seed,
+        entry.verificationStatus
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    });
+  }, [entries, searchQuery, showOnlyStalePending, verificationFilter]);
+
   const sortedEntries = useMemo(() => {
-    return [...entries].sort((left, right) => {
-      const statusWeight = (status: string) =>
-        status === "pending"
-          ? 4
-          : status === "invalid"
-            ? 3
-            : status === "suspicious"
-              ? 2
-              : 1;
+    const statusWeight = (status: string) =>
+      status === "pending"
+        ? 4
+        : status === "invalid"
+          ? 3
+          : status === "suspicious"
+            ? 2
+            : 1;
+
+    return [...filteredEntries].sort((left, right) => {
+      if (sortMode === "newest") {
+        return right.acceptedAt.localeCompare(left.acceptedAt);
+      }
+
+      if (sortMode === "oldest-pending") {
+        if (left.verificationStatus === "pending" && right.verificationStatus !== "pending") {
+          return -1;
+        }
+
+        if (right.verificationStatus === "pending" && left.verificationStatus !== "pending") {
+          return 1;
+        }
+
+        return left.acceptedAt.localeCompare(right.acceptedAt);
+      }
+
       const leftStatusWeight = statusWeight(left.verificationStatus);
       const rightStatusWeight = statusWeight(right.verificationStatus);
       if (rightStatusWeight !== leftStatusWeight) {
@@ -138,7 +191,7 @@ export default function AdminReviewsPage() {
 
       return right.acceptedAt.localeCompare(left.acceptedAt);
     });
-  }, [entries]);
+  }, [filteredEntries, sortMode]);
 
   async function handleRecompute() {
     setRecomputeStatus("submitting");
@@ -272,8 +325,68 @@ export default function AdminReviewsPage() {
               </div>
             )}
 
+            <section className="filter-panel" aria-labelledby="review-filter-title">
+              <h3 id="review-filter-title" className="section-title">
+                Filters and sorting
+              </h3>
+              <div className="filter-grid">
+                <label className="auth-field" htmlFor="verification-filter">
+                  <span>Verification state</span>
+                  <select
+                    id="verification-filter"
+                    value={verificationFilter}
+                    onChange={(event) =>
+                      setVerificationFilter(event.target.value as VerificationFilter)
+                    }
+                  >
+                    <option value="all">All states</option>
+                    <option value="pending">Pending</option>
+                    <option value="verified">Verified</option>
+                    <option value="suspicious">Suspicious</option>
+                    <option value="invalid">Invalid</option>
+                  </select>
+                </label>
+
+                <label className="auth-field" htmlFor="review-search">
+                  <span>Search</span>
+                  <input
+                    id="review-search"
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Username, date, or seed"
+                  />
+                </label>
+
+                <label className="auth-field" htmlFor="review-sort">
+                  <span>Sort by</span>
+                  <select
+                    id="review-sort"
+                    value={sortMode}
+                    onChange={(event) => setSortMode(event.target.value as SortMode)}
+                  >
+                    <option value="risk">Highest risk</option>
+                    <option value="newest">Newest first</option>
+                    <option value="oldest-pending">Oldest pending first</option>
+                  </select>
+                </label>
+
+                <label className="checkbox-field" htmlFor="stale-pending-only">
+                  <input
+                    id="stale-pending-only"
+                    type="checkbox"
+                    checked={showOnlyStalePending}
+                    onChange={(event) => setShowOnlyStalePending(event.target.checked)}
+                  />
+                  <span>Show only stale pending runs</span>
+                </label>
+              </div>
+            </section>
+
             {sortedEntries.length === 0 ? (
-              <p className="body-copy">No run reviews are available yet.</p>
+              <p className="body-copy">
+                No run reviews match the current filters.
+              </p>
             ) : (
               <div className="review-list" role="list" aria-label="Recent run reviews">
                 <div className="review-row review-row-header" role="listitem" aria-hidden="true">
