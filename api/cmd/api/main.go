@@ -97,6 +97,7 @@ type recentRunReviewEntry struct {
 	ReviewStatus          string   `json:"reviewStatus"`
 	ReviewNotes           string   `json:"reviewNotes"`
 	ReviewedAt            *string  `json:"reviewedAt"`
+	ReviewedByUsername    *string  `json:"reviewedByUsername"`
 	IsStalePending        bool     `json:"isStalePending"`
 	AcceptedAt            string   `json:"acceptedAt"`
 }
@@ -137,10 +138,11 @@ type updateRunReviewRequest struct {
 }
 
 type updateRunReviewResponse struct {
-	RunID        int64   `json:"runId"`
-	ReviewStatus string  `json:"reviewStatus"`
-	ReviewNotes  string  `json:"reviewNotes"`
-	ReviewedAt   *string `json:"reviewedAt"`
+	RunID              int64   `json:"runId"`
+	ReviewStatus       string  `json:"reviewStatus"`
+	ReviewNotes        string  `json:"reviewNotes"`
+	ReviewedAt         *string `json:"reviewedAt"`
+	ReviewedByUsername *string `json:"reviewedByUsername"`
 }
 
 type app struct {
@@ -479,7 +481,8 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := a.currentUserFromRequest(r); err != nil {
+	reviewer, err := a.currentUserFromRequest(r)
+	if err != nil {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
 		return
 	}
@@ -542,7 +545,7 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		reviewedAt, err := a.updateRunReview(runID, request)
+		reviewedAt, err := a.updateRunReview(runID, reviewer, request)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				http.Error(w, "run review not found", http.StatusNotFound)
@@ -565,6 +568,13 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 			ReviewStatus: request.ReviewStatus,
 			ReviewNotes:  strings.TrimSpace(request.ReviewNotes),
 			ReviewedAt:   reviewedAtValue,
+			ReviewedByUsername: func() *string {
+				if request.ReviewStatus == "unreviewed" {
+					return nil
+				}
+				value := reviewer.Username
+				return &value
+			}(),
 		}); err != nil {
 			http.Error(w, "failed to encode response", http.StatusInternalServerError)
 		}
@@ -623,9 +633,11 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			runs.review_status,
 			runs.review_notes,
 			runs.reviewed_at,
+			review_users.username,
 			runs.accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
+		LEFT JOIN users AS review_users ON review_users.id = runs.reviewed_by_user_id
 		ORDER BY runs.accepted_at DESC
 		LIMIT 20
 	`
@@ -644,6 +656,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 		var verifiedAt sql.NullTime
 		var verificationError sql.NullString
 		var reviewedAt sql.NullTime
+		var reviewedByUsername sql.NullString
 		var suspicionReasonsJSON []byte
 		var verificationNotesJSON []byte
 		if err := rows.Scan(
@@ -664,6 +677,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			&entry.ReviewStatus,
 			&entry.ReviewNotes,
 			&reviewedAt,
+			&reviewedByUsername,
 			&acceptedAt,
 		); err != nil {
 			return nil, err
@@ -690,6 +704,10 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 		if reviewedAt.Valid {
 			value := reviewedAt.Time.UTC().Format(time.RFC3339)
 			entry.ReviewedAt = &value
+		}
+		if reviewedByUsername.Valid && strings.TrimSpace(reviewedByUsername.String) != "" {
+			value := reviewedByUsername.String
+			entry.ReviewedByUsername = &value
 		}
 		entry.IsStalePending = isStalePendingReview(
 			entry.VerificationStatus,
@@ -805,14 +823,17 @@ func validateRunReviewUpdate(request updateRunReviewRequest) error {
 	return nil
 }
 
-func (a app) updateRunReview(runID int64, request updateRunReviewRequest) (time.Time, error) {
+func (a app) updateRunReview(runID int64, reviewer currentUser, request updateRunReviewRequest) (time.Time, error) {
 	if a.db == nil {
 		return time.Time{}, errors.New("database unavailable")
 	}
 
 	reviewedAt := a.currentTime()
+	var reviewedByUserID *int64
 	if request.ReviewStatus == "unreviewed" {
 		reviewedAt = time.Time{}
+	} else {
+		reviewedByUserID = &reviewer.ID
 	}
 
 	const query = `
@@ -820,7 +841,8 @@ func (a app) updateRunReview(runID int64, request updateRunReviewRequest) (time.
 		SET
 			review_status = $2,
 			review_notes = $3,
-			reviewed_at = $4
+			reviewed_at = $4,
+			reviewed_by_user_id = $5
 		WHERE id = $1
 		RETURNING id
 	`
@@ -832,6 +854,7 @@ func (a app) updateRunReview(runID int64, request updateRunReviewRequest) (time.
 		request.ReviewStatus,
 		strings.TrimSpace(request.ReviewNotes),
 		sql.NullTime{Time: reviewedAt, Valid: !reviewedAt.IsZero()},
+		reviewedByUserID,
 	).Scan(&returnedID); err != nil {
 		return time.Time{}, err
 	}
@@ -976,10 +999,12 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 			runs.review_status,
 			runs.review_notes,
 			runs.reviewed_at,
+			review_users.username,
 			runs.replay_trace_json,
 			runs.accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
+		LEFT JOIN users AS review_users ON review_users.id = runs.reviewed_by_user_id
 		WHERE runs.id = $1
 	`
 
@@ -990,6 +1015,7 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		verifiedAt            sql.NullTime
 		verificationError     sql.NullString
 		reviewedAt            sql.NullTime
+		reviewedByUsername    sql.NullString
 		suspicionReasonsJSON  []byte
 		verificationNotesJSON []byte
 		replayTraceJSON       []byte
@@ -1012,6 +1038,7 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		&detail.Entry.ReviewStatus,
 		&detail.Entry.ReviewNotes,
 		&reviewedAt,
+		&reviewedByUsername,
 		&replayTraceJSON,
 		&acceptedAt,
 	); err != nil {
@@ -1044,6 +1071,10 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 	if reviewedAt.Valid {
 		value := reviewedAt.Time.UTC().Format(time.RFC3339)
 		detail.Entry.ReviewedAt = &value
+	}
+	if reviewedByUsername.Valid && strings.TrimSpace(reviewedByUsername.String) != "" {
+		value := reviewedByUsername.String
+		detail.Entry.ReviewedByUsername = &value
 	}
 	detail.Entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
 	challengeDate, err := time.Parse(dateLayoutISO, detail.Entry.Date)

@@ -123,6 +123,7 @@ export interface RunReviewEntry {
   reviewStatus: string;
   reviewNotes: string;
   reviewedAt: string | null;
+  reviewedByUsername: string | null;
   isStalePending: boolean;
   acceptedAt: string;
 }
@@ -161,6 +162,7 @@ export interface UpdateRunReviewResponse {
   reviewStatus: string;
   reviewNotes: string;
   reviewedAt: string | null;
+  reviewedByUsername: string | null;
 }
 
 export interface RunReviewDetailResponse {

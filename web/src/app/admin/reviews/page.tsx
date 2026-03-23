@@ -515,6 +515,9 @@ export default function AdminReviewsPage() {
                         <span>
                           Reviewed: {formatOptionalTimestamp(entry.reviewedAt)}
                         </span>
+                        <span>
+                          Reviewer: {entry.reviewedByUsername ?? "Not recorded"}
+                        </span>
                       </div>
                       <div className="reason-list" aria-label="Suspicion reasons">
                         {entry.suspicionReasons.length > 0 ? (

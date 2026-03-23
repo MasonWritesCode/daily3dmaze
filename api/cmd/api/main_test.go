@@ -503,17 +503,18 @@ func TestUpdateRunReview(t *testing.T) {
 		SET
 			review_status = $2,
 			review_notes = $3,
-			reviewed_at = $4
+			reviewed_at = $4,
+			reviewed_by_user_id = $5
 		WHERE id = $1
 		RETURNING id
 	`)).
 		WithArgs(int64(7), "confirmed_suspicious", "tool-assisted run; needs follow-up", sql.NullTime{
 			Time:  now,
 			Valid: true,
-		}).
+		}, int64(12)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
 
-	reviewedAt, err := application.updateRunReview(7, updateRunReviewRequest{
+	reviewedAt, err := application.updateRunReview(7, currentUser{ID: 12, Username: "mod_mason"}, updateRunReviewRequest{
 		ReviewStatus: "confirmed_suspicious",
 		ReviewNotes:  " tool-assisted run; needs follow-up ",
 	})

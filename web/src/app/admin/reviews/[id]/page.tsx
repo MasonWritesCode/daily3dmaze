@@ -431,6 +431,10 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                   <dt>Reviewed at</dt>
                   <dd>{formatOptionalTimestamp(detail.entry.reviewedAt)}</dd>
                 </div>
+                <div className="metadata-row">
+                  <dt>Reviewed by</dt>
+                  <dd>{detail.entry.reviewedByUsername ?? "Not recorded"}</dd>
+                </div>
               </dl>
             </section>
 
