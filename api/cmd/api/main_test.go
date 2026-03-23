@@ -244,6 +244,23 @@ func TestRunReviewDetailHandlerRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestRequeueRunReviewHandlerRequiresAuthentication(t *testing.T) {
+	t.Parallel()
+
+	application := app{}
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/7/requeue", nil)
+	recorder := httptest.NewRecorder()
+
+	application.runReviewDetailHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, response.StatusCode)
+	}
+}
+
 func TestRecomputeRunReviewsHandlerRequiresAuthentication(t *testing.T) {
 	t.Parallel()
 
@@ -330,6 +347,45 @@ func TestRecomputeStoredRunVerifications(t *testing.T) {
 
 	if updatedCount != 1 || skippedCount != 1 {
 		t.Fatalf("expected updated=1 skipped=1, got updated=%d skipped=%d", updatedCount, skippedCount)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestRequeueRunReview(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		UPDATE runs
+		SET
+			verification_status = $2,
+			verification_notes_json = $3,
+			verification_started_at = NULL,
+			verified_at = NULL,
+			verification_error = NULL
+		WHERE id = $1
+		RETURNING verification_attempts
+	`)).
+		WithArgs(int64(7), string(VerificationStatusPending), []byte(`["manually_requeued_for_verification"]`)).
+		WillReturnRows(sqlmock.NewRows([]string{"verification_attempts"}).AddRow(3))
+
+	attempts, err := application.requeueRunReview(7)
+	if err != nil {
+		t.Fatalf("requeue run review: %v", err)
+	}
+
+	if attempts != 3 {
+		t.Fatalf("expected verification attempts 3, got %d", attempts)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

@@ -112,6 +112,12 @@ type recomputeRunReviewsResponse struct {
 	SkippedCount int `json:"skippedCount"`
 }
 
+type requeueRunReviewResponse struct {
+	RunID                int64  `json:"runId"`
+	VerificationStatus   string `json:"verificationStatus"`
+	VerificationAttempts int    `json:"verificationAttempts"`
+}
+
 type app struct {
 	db          *sql.DB
 	authLimiter *authRateLimiter
@@ -438,17 +444,52 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	if _, err := a.currentUserFromRequest(r); err != nil {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
 		return
 	}
 
-	runID, err := parseRunReviewID(strings.TrimPrefix(r.URL.Path, "/api/admin/run-reviews/"))
+	pathSuffix := strings.TrimPrefix(r.URL.Path, "/api/admin/run-reviews/")
+	if strings.HasSuffix(pathSuffix, "/requeue") {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		runID, err := parseRunReviewID(strings.TrimSuffix(pathSuffix, "/requeue"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		attempts, err := a.requeueRunReview(runID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "run review not found", http.StatusNotFound)
+				return
+			}
+
+			http.Error(w, "failed to requeue run review", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(requeueRunReviewResponse{
+			RunID:                runID,
+			VerificationStatus:   string(VerificationStatusPending),
+			VerificationAttempts: attempts,
+		}); err != nil {
+			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	runID, err := parseRunReviewID(pathSuffix)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -561,6 +602,36 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 	}
 
 	return entries, nil
+}
+
+func (a app) requeueRunReview(runID int64) (int, error) {
+	if a.db == nil {
+		return 0, errors.New("database unavailable")
+	}
+
+	const query = `
+		UPDATE runs
+		SET
+			verification_status = $2,
+			verification_notes_json = $3,
+			verification_started_at = NULL,
+			verified_at = NULL,
+			verification_error = NULL
+		WHERE id = $1
+		RETURNING verification_attempts
+	`
+
+	notesJSON, err := json.Marshal([]string{"manually_requeued_for_verification"})
+	if err != nil {
+		return 0, err
+	}
+
+	var attempts int
+	if err := a.db.QueryRow(query, runID, string(VerificationStatusPending), notesJSON).Scan(&attempts); err != nil {
+		return 0, err
+	}
+
+	return attempts, nil
 }
 
 func (a app) recomputeStoredRunVerifications() (int, int, error) {

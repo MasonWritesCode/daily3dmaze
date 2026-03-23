@@ -7,6 +7,7 @@ import {
   fetchCurrentUser,
   fetchDailyMaze,
   fetchRunReviewDetail,
+  requeueRunReview,
   type AuthUser,
   type RunReviewDetailResponse
 } from "../../../../lib/api";
@@ -20,6 +21,7 @@ import {
 } from "../../../../lib/game/maze";
 
 type PageStatus = "loading" | "ready" | "error";
+type RequeueStatus = "idle" | "submitting" | "success" | "error";
 
 interface ReviewDetailPageProps {
   params: Promise<{
@@ -79,6 +81,8 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
   const [frames, setFrames] = useState<ReplayFrame[]>([]);
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number>(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [requeueStatus, setRequeueStatus] = useState<RequeueStatus>("idle");
+  const [requeueMessage, setRequeueMessage] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +181,40 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
     comparisonItems.length > 0 &&
     comparisonItems.every((comparisonItem) => comparisonItem.matches);
 
+  async function refreshDetail(runID: string) {
+    const payload = await fetchRunReviewDetail(runID);
+    const mazePayload = await fetchDailyMaze(payload.entry.date);
+
+    setDetail(payload);
+    setMaze(mazePayload);
+    setFrames(buildReplayFrames(mazePayload, payload.replayTrace));
+    setSelectedFrameIndex(0);
+  }
+
+  async function handleRequeue() {
+    if (!detail) {
+      return;
+    }
+
+    setRequeueStatus("submitting");
+    setRequeueMessage("");
+
+    try {
+      const routeParams = await params;
+      const result = await requeueRunReview(routeParams.id);
+      await refreshDetail(routeParams.id);
+      setRequeueStatus("success");
+      setRequeueMessage(
+        `Run ${result.runId} requeued as ${result.verificationStatus}. Attempts remain at ${result.verificationAttempts}.`
+      );
+    } catch (error) {
+      setRequeueStatus("error");
+      setRequeueMessage(
+        error instanceof Error ? error.message : "Unable to requeue this run."
+      );
+    }
+  }
+
   return (
     <main className="page-shell">
       <div className="content-card content-card-wide">
@@ -239,6 +277,26 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                   {detail.entry.verificationStatus}
                 </span>
               </div>
+              <div className="actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleRequeue}
+                  disabled={requeueStatus === "submitting"}
+                >
+                  {requeueStatus === "submitting" ? "Requeueing..." : "Requeue verification"}
+                </button>
+              </div>
+              {requeueMessage && (
+                <p
+                  className={`body-copy status-copy ${
+                    requeueStatus === "error" ? "error-copy" : "success-copy"
+                  }`}
+                  aria-live="polite"
+                >
+                  {requeueMessage}
+                </p>
+              )}
 
               <dl className="metadata-list">
                 <div className="metadata-row">

@@ -132,6 +132,12 @@ export interface RecomputeRunReviewsResponse {
   skippedCount: number;
 }
 
+export interface RequeueRunReviewResponse {
+  runId: number;
+  verificationStatus: string;
+  verificationAttempts: number;
+}
+
 export interface RunReviewDetailResponse {
   entry: RunReviewEntry;
   replayTrace: ReplayTraceEvent[];
@@ -349,4 +355,25 @@ export async function recomputeRunReviews(): Promise<RecomputeRunReviewsResponse
   }
 
   return (await response.json()) as RecomputeRunReviewsResponse;
+}
+
+export async function requeueRunReview(
+  runID: string
+): Promise<RequeueRunReviewResponse> {
+  const response = await fetch(
+    `${adminRunReviewsEndpoint}/${encodeURIComponent(runID)}/requeue`,
+    {
+      method: "POST",
+      credentials: "include"
+    }
+  );
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Run review requeue failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as RequeueRunReviewResponse;
 }
