@@ -153,6 +153,7 @@ type app struct {
 	oauthProviders map[string]oauthProvider
 	apiBaseURL     string
 	webBaseURL     string
+	allowedOrigins map[string]struct{}
 }
 
 const (
@@ -186,6 +187,7 @@ func main() {
 		oauthProviders: configuredOAuthProviders(),
 		apiBaseURL:     envOrDefault("API_BASE_URL", "http://localhost:8080"),
 		webBaseURL:     envOrDefault("WEB_BASE_URL", "http://localhost:3000"),
+		allowedOrigins: configuredAllowedOrigins(),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
@@ -209,7 +211,7 @@ func main() {
 	addr := ":" + port
 	log.Printf("api listening on %s", addr)
 
-	if err := http.ListenAndServe(addr, withCORS(mux)); err != nil {
+	if err := http.ListenAndServe(addr, withCORS(mux, application.allowedOrigins)); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -1281,12 +1283,37 @@ func (a app) currentTime() time.Time {
 	return time.Now().UTC()
 }
 
-func withCORS(next http.Handler) http.Handler {
+func configuredAllowedOrigins() map[string]struct{} {
+	rawOrigins := envOrDefault(
+		"WEB_ALLOWED_ORIGINS",
+		"http://localhost:3000",
+	)
+	allowedOrigins := make(map[string]struct{})
+
+	for _, origin := range strings.Split(rawOrigins, ",") {
+		trimmedOrigin := strings.TrimSpace(origin)
+		if trimmedOrigin == "" {
+			continue
+		}
+
+		allowedOrigins[trimmedOrigin] = struct{}{}
+	}
+
+	return allowedOrigins
+}
+
+func withCORS(next http.Handler, allowedOrigins map[string]struct{}) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			if _, allowed := allowedOrigins[origin]; allowed {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			}
+		}
 
 		next.ServeHTTP(w, r)
 	})

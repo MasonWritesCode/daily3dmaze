@@ -61,9 +61,11 @@ interface FirstPersonViewProps {
   maze: DailyMaze;
   playerPosition: MazePoint;
   playerAngle: number;
-  facingName: string;
   introSequence: number;
   animationMode: "intro" | "outro";
+  onSwipeAction?: (
+    action: "turn_left" | "turn_right" | "move_forward" | "move_backward"
+  ) => void;
 }
 
 function useMazeTextures(): TextureMap {
@@ -214,11 +216,12 @@ export default function FirstPersonView({
   maze,
   playerPosition,
   playerAngle,
-  facingName,
   introSequence,
-  animationMode
+  animationMode,
+  onSwipeAction
 }: FirstPersonViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const textures = useMazeTextures();
   const [introProgress, setIntroProgress] = useState<number>(0);
   const [ratTick, setRatTick] = useState<number>(0);
@@ -580,22 +583,62 @@ export default function FirstPersonView({
     context.stroke();
   }, [introProgress, maze, playerAngle, playerPosition, ratTick, textures]);
 
+  function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const touch = event.changedTouches[0];
+
+    if (!touch) {
+      return;
+    }
+
+    swipeStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY
+    };
+  }
+
+  function handleTouchEnd(event: React.TouchEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!onSwipeAction || !swipeStartRef.current) {
+      swipeStartRef.current = null;
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+
+    if (!touch) {
+      swipeStartRef.current = null;
+      return;
+    }
+
+    const deltaX = touch.clientX - swipeStartRef.current.x;
+    const deltaY = touch.clientY - swipeStartRef.current.y;
+    swipeStartRef.current = null;
+
+    const threshold = 28;
+    if (Math.abs(deltaX) < threshold && Math.abs(deltaY) < threshold) {
+      return;
+    }
+
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      onSwipeAction(deltaX < 0 ? "turn_left" : "turn_right");
+      return;
+    }
+
+    onSwipeAction(deltaY < 0 ? "move_forward" : "move_backward");
+  }
+
   return (
-    <div className="raycast-panel">
-      <div className="raycast-header">
-        <p className="body-copy panel-title">Maze viewport</p>
-        <p className="body-copy panel-subtitle">
-          Heading: {facingName}
-          {textureSurfaceRef.current.supportsSurfaceTextures
-            ? ""
-            : " · privacy-safe fallback"}
-        </p>
-      </div>
+    <div
+      className="raycast-panel"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <canvas
         ref={canvasRef}
         className="raycast-canvas"
         width={480}
-        height={270}
+        height={360}
         aria-label="First-person maze view"
       />
     </div>

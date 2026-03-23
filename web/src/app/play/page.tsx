@@ -72,6 +72,12 @@ interface ArchiveNavigatorProps {
   archiveDate: string;
 }
 
+interface CollapsiblePanelProps {
+  title: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}
+
 const uiText = {
   play: {
     eyebrow: "daily3dmaze.exe",
@@ -98,6 +104,8 @@ const uiText = {
   actions: {
     resetRun: "Reset run",
     backHome: "Return to desktop",
+    fullscreen: "Fullscreen",
+    exitFullscreen: "Exit fullscreen",
     logIn: "Log in",
     createAccount: "Create account",
     logOut: "Log out"
@@ -124,7 +132,7 @@ const uiText = {
     moves: "Moves"
   },
   gameplay: {
-    controls: "Up/Down or W/S move, Left/Right or A/D turn",
+    controls: "W/S or Up/Down move · A/D or Left/Right turn · Swipe in the view on touch devices",
     introStatus: "Find the exit and finish the run.",
     submittingRun: "Submitting run to the API...",
     submissionError: "The run finished locally, but submission to the API failed.",
@@ -132,6 +140,15 @@ const uiText = {
     summaryHeading: "Challenge window"
   }
 } as const;
+
+function CollapsiblePanel({ title, defaultOpen = false, children }: CollapsiblePanelProps) {
+  return (
+    <details className="play-secondary-details" open={defaultOpen}>
+      <summary>{title}</summary>
+      <div className="play-secondary-details-body">{children}</div>
+    </details>
+  );
+}
 
 function MetadataList({ items }: MetadataListProps) {
   return (
@@ -210,11 +227,14 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   const [introSequence, setIntroSequence] = useState<number>(0);
   const [sceneAnimationMode, setSceneAnimationMode] =
     useState<SceneAnimationMode>("intro");
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [supportsFullscreen, setSupportsFullscreen] = useState<boolean>(false);
   const animationRef = useRef<number | null>(null);
   const completionTimeoutRef = useRef<number | null>(null);
   const actionLockRef = useRef<boolean>(false);
   const submittedRunRef = useRef<string | null>(null);
   const replayTraceRef = useRef<ReplayTraceEvent[]>([]);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const gridRows = renderGridRows(maze, playerPosition, directionIndex);
 
   useEffect(() => {
@@ -295,6 +315,25 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       if (completionTimeoutRef.current !== null) {
         window.clearTimeout(completionTimeoutRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      setIsFullscreen(document.fullscreenElement === viewportRef.current);
+    }
+
+    const requestFullscreenSupported =
+      typeof document !== "undefined" &&
+      typeof document.fullscreenEnabled === "boolean" &&
+      document.fullscreenEnabled &&
+      typeof viewportRef.current?.requestFullscreen === "function";
+
+    setSupportsFullscreen(requestFullscreenSupported);
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
   }, []);
 
@@ -418,17 +457,14 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       animationRef.current = window.requestAnimationFrame(step);
     }
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (isTypingTarget(event.target)) {
-        return;
-      }
-
+    function performAction(
+      action: "turn_left" | "turn_right" | "move_forward" | "move_backward"
+    ) {
       if (hasFinished || actionLockRef.current) {
         return;
       }
 
-      if (event.key === "ArrowLeft" || event.key === "a") {
-        event.preventDefault();
+      if (action === "turn_left") {
         const startedAt = beginRunIfNeeded();
         recordReplayAction("turn_left", startedAt);
         const nextDirectionIndex =
@@ -437,8 +473,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
         return;
       }
 
-      if (event.key === "ArrowRight" || event.key === "d") {
-        event.preventDefault();
+      if (action === "turn_right") {
         const startedAt = beginRunIfNeeded();
         recordReplayAction("turn_right", startedAt);
         const nextDirectionIndex = (directionIndex + 1) % DIRECTION_ORDER.length;
@@ -447,9 +482,9 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       }
 
       const movementDirection =
-        event.key === "ArrowUp" || event.key === "w"
+        action === "move_forward"
           ? DIRECTION_ORDER[directionIndex].vector
-          : event.key === "ArrowDown" || event.key === "s"
+          : action === "move_backward"
             ? {
                 x: -DIRECTION_ORDER[directionIndex].vector.x,
                 y: -DIRECTION_ORDER[directionIndex].vector.y
@@ -459,8 +494,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       if (!movementDirection) {
         return;
       }
-
-      event.preventDefault();
 
       const nextPosition = attemptMove(playerPosition, movementDirection, maze);
 
@@ -486,6 +519,30 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       }
 
       animateMovement(nextPosition, startedAt);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+
+      const action =
+        event.key === "ArrowLeft" || event.key === "a"
+          ? "turn_left"
+          : event.key === "ArrowRight" || event.key === "d"
+            ? "turn_right"
+            : event.key === "ArrowUp" || event.key === "w"
+              ? "move_forward"
+              : event.key === "ArrowDown" || event.key === "s"
+                ? "move_backward"
+                : null;
+
+      if (!action) {
+        return;
+      }
+
+      event.preventDefault();
+      performAction(action);
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -539,61 +596,102 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     }
   ];
 
+  async function handleFullscreenToggle() {
+    try {
+      if (document.fullscreenElement === viewportRef.current) {
+        await document.exitFullscreen();
+        return;
+      }
+
+      await viewportRef.current?.requestFullscreen?.();
+    } catch (error) {
+      console.error("Failed to toggle fullscreen", error);
+    }
+  }
+
   return (
-    <section className="maze-summary" aria-labelledby="maze-summary-title">
-      <h2 id="maze-summary-title" className="section-title">
+    <section className="maze-summary play-summary" aria-labelledby="maze-summary-title">
+      <h2 id="maze-summary-title" className="sr-only">
         {uiText.gameplay.summaryHeading}
       </h2>
-      <dl className="gameplay-hud" aria-label="Current run status">
-        <div className="gameplay-hud-item gameplay-hud-item-primary">
-          <dt>{uiText.labels.time}</dt>
-          <dd>{elapsedTime}</dd>
+      <div className="play-focus-layout">
+        <div className="play-focus-sidebar">
+          <dl className="gameplay-hud" aria-label="Current run status">
+            <div className="gameplay-hud-item gameplay-hud-item-primary">
+              <dt>{uiText.labels.time}</dt>
+              <dd>{elapsedTime}</dd>
+            </div>
+            <div className="gameplay-hud-item">
+              <dt>{uiText.labels.moves}</dt>
+              <dd>{moveCount}</dd>
+            </div>
+            <div className="gameplay-hud-item">
+              <dt>{uiText.labels.facing}</dt>
+              <dd>{DIRECTION_ORDER[directionIndex].name}</dd>
+            </div>
+          </dl>
+          <p className="gameplay-controls" aria-label={uiText.labels.controls}>
+            {uiText.gameplay.controls}
+          </p>
+          <div className="actions play-focus-actions">
+            <button type="button" className="secondary-button" onClick={handleReset}>
+              {uiText.actions.resetRun}
+            </button>
+            {supportsFullscreen && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void handleFullscreenToggle()}
+            >
+              {isFullscreen ? uiText.actions.exitFullscreen : uiText.actions.fullscreen}
+            </button>
+          )}
+          </div>
+          <div className="play-status-stack" aria-live="polite">
+            <p className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}>
+              {hasFinished
+                ? `Maze complete in ${elapsedTime}.`
+                : uiText.gameplay.introStatus}
+            </p>
+            {submissionStatus === "submitting" && (
+              <p className="body-copy status-copy">{uiText.gameplay.submittingRun}</p>
+            )}
+            {submissionStatus === "submitted" && submissionSummary && (
+              <p className="body-copy status-copy success-copy">
+                Run accepted by the API at <code>{submissionSummary.acceptedAt}</code> and
+                queued for verification as{" "}
+                <code>{submissionSummary.verificationStatus}</code>.
+              </p>
+            )}
+            {submissionStatus === "error" && (
+              <p className="body-copy status-copy error-copy">
+                {uiText.gameplay.submissionError}
+              </p>
+            )}
+          </div>
         </div>
-        <div className="gameplay-hud-item">
-          <dt>{uiText.labels.moves}</dt>
-          <dd>{moveCount}</dd>
+        <div className="play-focus-main" ref={viewportRef}>
+          <FirstPersonView
+            maze={maze}
+            playerPosition={renderPosition}
+            playerAngle={renderAngle}
+            introSequence={introSequence}
+            animationMode={sceneAnimationMode}
+            onSwipeAction={(action) => {
+              const key =
+                action === "turn_left"
+                  ? "ArrowLeft"
+                  : action === "turn_right"
+                    ? "ArrowRight"
+                    : action === "move_forward"
+                      ? "ArrowUp"
+                      : "ArrowDown";
+
+              window.dispatchEvent(new KeyboardEvent("keydown", { key }));
+            }}
+          />
         </div>
-        <div className="gameplay-hud-item">
-          <dt>{uiText.labels.facing}</dt>
-          <dd>{DIRECTION_ORDER[directionIndex].name}</dd>
-        </div>
-      </dl>
-      <p className="gameplay-controls" aria-label={uiText.labels.controls}>
-        {uiText.gameplay.controls}
-      </p>
-      <FirstPersonView
-        maze={maze}
-        playerPosition={renderPosition}
-        playerAngle={renderAngle}
-        facingName={DIRECTION_ORDER[directionIndex].name}
-        introSequence={introSequence}
-        animationMode={sceneAnimationMode}
-      />
-      <p
-        className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}
-        aria-live="polite"
-      >
-        {hasFinished
-          ? `Maze complete in ${elapsedTime}.`
-          : uiText.gameplay.introStatus}
-      </p>
-      {submissionStatus === "submitting" && (
-        <p className="body-copy status-copy" aria-live="polite">
-          {uiText.gameplay.submittingRun}
-        </p>
-      )}
-      {submissionStatus === "submitted" && submissionSummary && (
-        <p className="body-copy status-copy success-copy" aria-live="polite">
-          Run accepted by the API at <code>{submissionSummary.acceptedAt}</code> and
-          queued for verification as{" "}
-          <code>{submissionSummary.verificationStatus}</code>.
-        </p>
-      )}
-      {submissionStatus === "error" && (
-        <p className="body-copy status-copy error-copy" aria-live="polite">
-          {uiText.gameplay.submissionError}
-        </p>
-      )}
+      </div>
       {isAdmin && (
         <>
           <MetadataList items={metadataItems} />
@@ -610,11 +708,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
           </div>
         </>
       )}
-      <div className="actions">
-        <button type="button" className="secondary-button" onClick={handleReset}>
-          {uiText.actions.resetRun}
-        </button>
-      </div>
     </section>
   );
 }
@@ -843,6 +936,18 @@ function PlayPageContent() {
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState<number>(0);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
+  const [isCompactLandscape, setIsCompactLandscape] = useState<boolean>(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 960px) and (orientation: landscape)");
+    const sync = () => setIsCompactLandscape(mediaQuery.matches);
+
+    sync();
+    mediaQuery.addEventListener("change", sync);
+    return () => {
+      mediaQuery.removeEventListener("change", sync);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -954,7 +1059,14 @@ function PlayPageContent() {
             Viewing archived challenge <code>{archiveDate}</code>.
           </p>
         )}
-        {archiveDate && <ArchiveNavigator archiveDate={archiveDate} />}
+        {archiveDate &&
+          (isCompactLandscape ? (
+            <CollapsiblePanel title="Archive navigation">
+              <ArchiveNavigator archiveDate={archiveDate} />
+            </CollapsiblePanel>
+          ) : (
+            <ArchiveNavigator archiveDate={archiveDate} />
+          ))}
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">
@@ -975,28 +1087,57 @@ function PlayPageContent() {
         {status === "success" && maze && (
           <div className="play-side-panels">
             <div className="play-side-panel">
-              {leaderboardStatus === "loading" && (
-                <p className="body-copy status-copy" aria-live="polite">
-                  {uiText.play.loadingLeaderboard}
-                </p>
-              )}
-
-              {leaderboardStatus !== "error" && (
-                <Leaderboard entries={leaderboardEntries} />
+              {isCompactLandscape ? (
+                <CollapsiblePanel title="Leaderboard">
+                  {leaderboardStatus === "loading" && (
+                    <p className="body-copy status-copy" aria-live="polite">
+                      {uiText.play.loadingLeaderboard}
+                    </p>
+                  )}
+                  {leaderboardStatus !== "error" && (
+                    <Leaderboard entries={leaderboardEntries} />
+                  )}
+                </CollapsiblePanel>
+              ) : (
+                <>
+                  {leaderboardStatus === "loading" && (
+                    <p className="body-copy status-copy" aria-live="polite">
+                      {uiText.play.loadingLeaderboard}
+                    </p>
+                  )}
+                  {leaderboardStatus !== "error" && (
+                    <Leaderboard entries={leaderboardEntries} />
+                  )}
+                </>
               )}
             </div>
 
             <div className="play-side-panel">
-              {authStatus !== "loading" && (
-                <AuthPanel
-                  user={user}
-                  onAuthChange={(nextUser) => {
-                    setUser(nextUser);
-                    setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
-                    setLeaderboardRefreshKey((currentKey) => currentKey + 1);
-                  }}
-                />
-              )}
+              {authStatus !== "loading" &&
+                (isCompactLandscape ? (
+                  <CollapsiblePanel
+                    title={user ? "Player panel" : "Sign in"}
+                    defaultOpen={false}
+                  >
+                    <AuthPanel
+                      user={user}
+                      onAuthChange={(nextUser) => {
+                        setUser(nextUser);
+                        setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
+                        setLeaderboardRefreshKey((currentKey) => currentKey + 1);
+                      }}
+                    />
+                  </CollapsiblePanel>
+                ) : (
+                  <AuthPanel
+                    user={user}
+                    onAuthChange={(nextUser) => {
+                      setUser(nextUser);
+                      setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
+                      setLeaderboardRefreshKey((currentKey) => currentKey + 1);
+                    }}
+                  />
+                ))}
             </div>
           </div>
         )}
