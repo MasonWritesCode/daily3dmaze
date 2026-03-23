@@ -54,6 +54,42 @@ code {
   padding: 20px;
 }
 
+.locale-switcher {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  background: var(--panel);
+  box-shadow:
+    inset 1px 1px 0 var(--panel-soft),
+    inset -1px -1px 0 var(--panel-darker);
+}
+
+.locale-switcher-label {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.locale-switcher-select {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-darker);
+  border-left-color: var(--panel-darker);
+  border-radius: 0;
+  background: var(--field-bg);
+  color: var(--text);
+  font: inherit;
+}
+
 .play-side-panels {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
@@ -1196,6 +1232,22 @@ h1 {
 }
 
 @media (max-width: 640px) {
+  .locale-switcher {
+    top: 6px;
+    right: 6px;
+    padding: 4px 6px;
+    gap: 6px;
+  }
+
+  .locale-switcher-label {
+    font-size: 0.72rem;
+  }
+
+  .locale-switcher-select {
+    min-height: 26px;
+    padding: 0 6px;
+  }
+
   .page-shell {
     padding: 10px;
   }

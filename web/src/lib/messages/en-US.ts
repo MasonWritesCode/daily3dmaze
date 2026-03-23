@@ -1,3 +1,16 @@
+type DeepWidenLiterals<T> =
+  T extends string
+    ? string
+    : T extends number
+      ? number
+      : T extends boolean
+        ? boolean
+        : T extends readonly (infer U)[]
+          ? ReadonlyArray<DeepWidenLiterals<U>>
+          : T extends object
+            ? { [K in keyof T]: DeepWidenLiterals<T[K]> }
+            : T;
+
 export const enUSMessages = {
   home: {
     eyebrow: "daily3dmaze.exe",
@@ -406,7 +419,12 @@ export const enUSMessages = {
       submissionAccepted:
         "Run accepted by the API at {acceptedAt} and queued for verification as {status}."
     }
+  },
+  locale: {
+    label: "Language",
+    english: "English",
+    spanish: "Español"
   }
 } as const;
 
-export type AppMessages = typeof enUSMessages;
+export type AppMessages = DeepWidenLiterals<typeof enUSMessages>;

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import LocaleSwitcher from "../components/LocaleSwitcher";
 import { LocaleProvider } from "../lib/locale";
 import "./globals.css";
 
@@ -17,7 +18,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <LocaleProvider>{children}</LocaleProvider>
+        <LocaleProvider>
+          <LocaleSwitcher />
+          {children}
+        </LocaleProvider>
       </body>
     </html>
   );
