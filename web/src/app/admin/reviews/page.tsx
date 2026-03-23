@@ -15,6 +15,7 @@ import {
   type RunReviewSummary
 } from "../../../lib/api";
 import { formatElapsedTime } from "../../../lib/game/maze";
+import { formatCount, formatDateTime } from "../../../lib/i18n";
 
 type PageStatus = "loading" | "ready" | "error";
 type RecomputeStatus = "idle" | "submitting" | "success" | "error";
@@ -27,11 +28,7 @@ type ReviewStatusFilter =
 type SortMode = "risk" | "newest" | "oldest-pending";
 
 function formatAcceptedAt(value: string): string {
-  const date = new Date(value);
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
+  return formatDateTime(value);
 }
 
 function formatOptionalTimestamp(value: string | null): string {
@@ -369,23 +366,23 @@ export default function AdminReviewsPage() {
               <div className="summary-grid" aria-label="Verification queue health">
                 <article className="summary-card">
                   <span className="summary-label">Pending</span>
-                  <strong className="summary-value">{summary.pendingCount}</strong>
+                  <strong className="summary-value">{formatCount(summary.pendingCount)}</strong>
                 </article>
                 <article className="summary-card">
                   <span className="summary-label">Verified</span>
-                  <strong className="summary-value">{summary.verifiedCount}</strong>
+                  <strong className="summary-value">{formatCount(summary.verifiedCount)}</strong>
                 </article>
                 <article className="summary-card">
                   <span className="summary-label">Suspicious</span>
-                  <strong className="summary-value">{summary.suspiciousCount}</strong>
+                  <strong className="summary-value">{formatCount(summary.suspiciousCount)}</strong>
                 </article>
                 <article className="summary-card">
                   <span className="summary-label">Invalid</span>
-                  <strong className="summary-value">{summary.invalidCount}</strong>
+                  <strong className="summary-value">{formatCount(summary.invalidCount)}</strong>
                 </article>
                 <article className="summary-card">
                   <span className="summary-label">Stale pending</span>
-                  <strong className="summary-value">{summary.stalePendingCount}</strong>
+                  <strong className="summary-value">{formatCount(summary.stalePendingCount)}</strong>
                 </article>
               </div>
             )}
@@ -470,7 +467,7 @@ export default function AdminReviewsPage() {
                 </div>
               </fieldset>
               <p id={resultsCountId} className="assistive-copy" aria-live="polite">
-                Showing {sortedEntries.length} run review{sortedEntries.length === 1 ? "" : "s"}.
+                Showing {formatCount(sortedEntries.length)} run review{sortedEntries.length === 1 ? "" : "s"}.
               </p>
             </section>
 
@@ -510,8 +507,8 @@ export default function AdminReviewsPage() {
                           {entry.verificationStatus}
                         </span>
                         <div className="review-detail-stack">
-                          <span className="assistive-copy">
-                            Attempts: {entry.verificationAttempts}
+                            <span className="assistive-copy">
+                            Attempts: {formatCount(entry.verificationAttempts)}
                           </span>
                           {entry.isStalePending && (
                             <span className="reason-chip">stale pending</span>
@@ -526,7 +523,7 @@ export default function AdminReviewsPage() {
                       <div>
                         <span className="sr-only">Suspicion score </span>
                         <span className={`score-badge score-badge-${tone}`}>
-                          {entry.suspicionScore}
+                          {formatCount(entry.suspicionScore)}
                         </span>
                       </div>
                       <div>

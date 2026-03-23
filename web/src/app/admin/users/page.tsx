@@ -15,6 +15,7 @@ import {
   type AdminUserEntry,
   type AuthUser
 } from "../../../lib/api";
+import { formatCount, formatDateTime } from "../../../lib/i18n";
 
 type PageStatus = "loading" | "ready" | "error";
 type RowStatus = "idle" | "submitting" | "success" | "error";
@@ -57,10 +58,7 @@ function formatTimestamp(value: string | null): string {
     return "Not recorded";
   }
 
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(value));
+  return formatDateTime(value);
 }
 
 export default function AdminUsersPage() {
@@ -268,7 +266,7 @@ export default function AdminUsersPage() {
             </label>
 
             <p id={resultsCountId} className="assistive-copy" aria-live="polite">
-              {filteredEntries.length} user{filteredEntries.length === 1 ? "" : "s"} shown
+              {formatCount(filteredEntries.length)} user{filteredEntries.length === 1 ? "" : "s"} shown
             </p>
 
             <div className="review-list" role="list" aria-label={uiText.listLabel}>

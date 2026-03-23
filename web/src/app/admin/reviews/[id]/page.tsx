@@ -23,6 +23,7 @@ import {
   type DailyMaze,
   type ReplayFrame
 } from "../../../../lib/game/maze";
+import { formatCount, formatDateTime } from "../../../../lib/i18n";
 
 type PageStatus = "loading" | "ready" | "error";
 type RequeueStatus = "idle" | "submitting" | "success" | "error";
@@ -35,11 +36,7 @@ interface ReviewDetailPageProps {
 }
 
 function formatAcceptedAt(value: string): string {
-  const date = new Date(value);
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(date);
+  return formatDateTime(value);
 }
 
 function formatOptionalTimestamp(value: string | null): string {
@@ -224,6 +221,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
       setRequeueStatus("success");
       setRequeueMessage(
         `Run ${result.runPublicId} requeued as ${result.verificationStatus}. Attempts remain at ${result.verificationAttempts}.`
+        
       );
     } catch (error) {
       setRequeueStatus("error");
@@ -396,7 +394,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                 </div>
                 <div className="metadata-row">
                   <dt>Moves</dt>
-                  <dd>{detail.entry.moveCount}</dd>
+                  <dd>{formatCount(detail.entry.moveCount)}</dd>
                 </div>
                 <div className="metadata-row">
                   <dt>Accepted</dt>
@@ -412,7 +410,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                 </div>
                 <div className="metadata-row">
                   <dt>Attempts</dt>
-                  <dd>{detail.entry.verificationAttempts}</dd>
+                  <dd>{formatCount(detail.entry.verificationAttempts)}</dd>
                 </div>
                 <div className="metadata-row">
                   <dt>Reasons</dt>

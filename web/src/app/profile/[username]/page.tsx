@@ -9,6 +9,7 @@ import {
   type PlayerProfile
 } from "../../../lib/api";
 import { formatElapsedTime } from "../../../lib/game/maze";
+import { formatCount, formatDate, formatDateTime, formatDayCount } from "../../../lib/i18n";
 
 type PageStatus = "loading" | "success" | "error";
 
@@ -112,15 +113,15 @@ export default function ProfilePage() {
                 </div>
                 <div className="metadata-row">
                   <dt>{uiText.labels.joined}</dt>
-                  <dd>{new Date(profile.user.createdAt).toLocaleDateString()}</dd>
+                  <dd>{formatDate(profile.user.createdAt)}</dd>
                 </div>
                 <div className="metadata-row">
                   <dt>{uiText.labels.totalRuns}</dt>
-                  <dd>{profile.stats.totalRuns}</dd>
+                  <dd>{formatCount(profile.stats.totalRuns)}</dd>
                 </div>
                 <div className="metadata-row">
                   <dt>{uiText.labels.daysPlayed}</dt>
-                  <dd>{profile.stats.daysPlayed}</dd>
+                  <dd>{formatCount(profile.stats.daysPlayed)}</dd>
                 </div>
                 <div className="metadata-row">
                   <dt>{uiText.labels.bestTime}</dt>
@@ -143,16 +144,16 @@ export default function ProfilePage() {
                   <dd>
                     {profile.stats.lastPlayedAt === null
                       ? uiText.emptyStats
-                      : new Date(profile.stats.lastPlayedAt).toLocaleString()}
+                      : formatDateTime(profile.stats.lastPlayedAt)}
                   </dd>
                 </div>
                 <div className="metadata-row">
                   <dt>{uiText.labels.currentStreak}</dt>
-                  <dd>{profile.stats.currentStreakDays} day(s)</dd>
+                  <dd>{formatDayCount(profile.stats.currentStreakDays)}</dd>
                 </div>
                 <div className="metadata-row">
                   <dt>{uiText.labels.bestStreak}</dt>
-                  <dd>{profile.stats.bestStreakDays} day(s)</dd>
+                  <dd>{formatDayCount(profile.stats.bestStreakDays)}</dd>
                 </div>
               </dl>
             </section>
@@ -186,7 +187,7 @@ export default function ProfilePage() {
                         <code>{run.seed}</code>
                       </span>
                       <span>{formatElapsedTime(run.elapsedTimeMs)}</span>
-                      <span>{run.moveCount}</span>
+                      <span>{formatCount(run.moveCount)}</span>
                     </div>
                   ))}
                 </div>
