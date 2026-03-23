@@ -443,7 +443,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
         <p className="eyebrow">{uiText.eyebrow}</p>
         <h1>{uiText.title}</h1>
         <p className="body-copy">{uiText.intro}</p>
-        <div className="actions">
+        <div className="actions admin-page-toolbar">
           <Link href="/admin/reviews" className="primary-link">
             {uiText.actions.backToReviews}
           </Link>
@@ -488,17 +488,15 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
 
         {status === "ready" && user && roleAllows(user.role, ROLE_MODERATOR) && detail && (
           <>
-            <section className="maze-summary" aria-labelledby="review-detail-summary-title">
-              <div className="review-header">
-                <div>
-                  <h2 id="review-detail-summary-title" className="section-title">
-                    {uiText.sections.submissionOverview}
-                  </h2>
-                  <p className="assistive-copy">
-                    {uiText.replay.viewingRunAs} <code>{detail.entry.publicId}</code> {uiText.replay.asUser}{" "}
-                    <strong>{user.username}</strong>.
-                  </p>
-                </div>
+            <section className="maze-summary admin-panel-section" aria-labelledby="review-detail-summary-title">
+              <h2 id="review-detail-summary-title" className="section-title">
+                {uiText.sections.submissionOverview}
+              </h2>
+              <div className="admin-section-toolbar admin-detail-toolbar">
+                <p className="assistive-copy admin-toolbar-copy">
+                  {uiText.replay.viewingRunAs} <code>{detail.entry.publicId}</code> {uiText.replay.asUser}{" "}
+                  <strong>{user.username}</strong>.
+                </p>
                 <span
                   className={`score-badge score-badge-${getVerificationTone(
                     detail.entry.verificationStatus
@@ -656,15 +654,11 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               </dl>
             </section>
 
-            <section className="maze-summary" aria-labelledby="review-moderation-title">
-              <div className="review-header">
-                <div>
-                  <h2 id="review-moderation-title" className="section-title">
-                    {uiText.sections.moderatorReview}
-                  </h2>
-                  <p className="assistive-copy">{uiText.moderation.intro}</p>
-                </div>
-              </div>
+            <section className="maze-summary admin-panel-section" aria-labelledby="review-moderation-title">
+              <h2 id="review-moderation-title" className="section-title">
+                {uiText.sections.moderatorReview}
+              </h2>
+              <p className="assistive-copy admin-section-copy">{uiText.moderation.intro}</p>
 
               <form
                 onSubmit={(event) => {
@@ -724,16 +718,14 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               )}
             </section>
 
-            <section className="maze-summary" aria-labelledby="review-simulation-title">
-              <div className="review-header">
-                <div>
-                  <h2 id="review-simulation-title" className="section-title">
-                    {uiText.sections.simulation}
-                  </h2>
-                  <p className="assistive-copy">
-                    {uiText.simulation.intro}
-                  </p>
-                </div>
+            <section className="maze-summary admin-panel-section" aria-labelledby="review-simulation-title">
+              <h2 id="review-simulation-title" className="section-title">
+                {uiText.sections.simulation}
+              </h2>
+              <div className="admin-section-toolbar admin-detail-toolbar">
+                <p className="assistive-copy admin-toolbar-copy">
+                  {uiText.simulation.intro}
+                </p>
                 {hasSimulation ? (
                   <span
                     className={`score-badge score-badge-${
@@ -792,16 +784,14 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
             </section>
 
             {reconstructedFinalFrame && hasSimulation && (
-              <section className="maze-summary" aria-labelledby="review-reconciliation-title">
-                <div className="review-header">
-                  <div>
-                    <h2 id="review-reconciliation-title" className="section-title">
-                      {uiText.sections.replayComparison}
-                    </h2>
-                    <p className="assistive-copy">
-                      {uiText.comparison.intro}
-                    </p>
-                  </div>
+              <section className="maze-summary admin-panel-section" aria-labelledby="review-reconciliation-title">
+                <h2 id="review-reconciliation-title" className="section-title">
+                  {uiText.sections.replayComparison}
+                </h2>
+                <div className="admin-section-toolbar admin-detail-toolbar">
+                  <p className="assistive-copy admin-toolbar-copy">
+                    {uiText.comparison.intro}
+                  </p>
                   <span
                     className={`score-badge score-badge-${
                       allComparisonItemsMatch ? "low" : "high"
@@ -849,15 +839,13 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
             )}
 
             {maze && selectedFrame && (
-              <section className="maze-summary" aria-labelledby="review-visualizer-title">
-                <div className="review-header">
-                  <div>
-                    <h2 id="review-visualizer-title" className="section-title">
-                      {uiText.sections.replayViewer}
-                    </h2>
-                    <p className="assistive-copy">{uiText.replay.visualizerIntro}</p>
-                  </div>
-                  <p className="assistive-copy">
+              <section className="maze-summary admin-panel-section" aria-labelledby="review-visualizer-title">
+                <h2 id="review-visualizer-title" className="section-title">
+                  {uiText.sections.replayViewer}
+                </h2>
+                <div className="admin-section-toolbar admin-detail-toolbar">
+                  <p className="assistive-copy admin-toolbar-copy">{uiText.replay.visualizerIntro}</p>
+                  <p className="assistive-copy admin-toolbar-copy">
                     {uiText.replay.frameProgress
                       .replace("{current}", String(selectedFrameIndex + 1))
                       .replace("{total}", String(frames.length))}
@@ -963,7 +951,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               </section>
             )}
 
-            <section className="maze-summary" aria-labelledby="review-trace-title">
+            <section className="maze-summary admin-panel-section" aria-labelledby="review-trace-title">
               <h2 id="review-trace-title" className="section-title">
                 {uiText.sections.replayTimeline}
               </h2>

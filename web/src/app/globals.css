@@ -245,9 +245,11 @@ h1 {
 .maze-summary .section-title {
   display: flex;
   align-items: center;
+  width: 100%;
   min-height: 34px;
   margin: -18px -18px 18px;
   padding: 6px 10px;
+  box-sizing: border-box;
   border-bottom: 2px solid var(--panel-dark);
   background: linear-gradient(90deg, #000080, #2d6fd2);
   color: var(--panel-light);
@@ -473,14 +475,67 @@ h1 {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: flex-start;
-  margin-bottom: 16px;
+  align-items: stretch;
+  margin-bottom: 14px;
+}
+
+.review-header > div {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.review-header .section-title,
+.review-header .assistive-copy {
+  margin-bottom: 0;
 }
 
 .review-actions {
   display: grid;
   gap: 10px;
   justify-items: end;
+}
+
+.admin-page-toolbar {
+  margin-top: 18px;
+  margin-bottom: 12px;
+}
+
+.admin-page-toolbar .primary-link,
+.admin-page-toolbar .secondary-link {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.admin-panel-section {
+  padding-top: 18px;
+}
+
+.admin-filter-panel {
+  margin-top: 4px;
+}
+
+.admin-section-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.admin-toolbar-actions {
+  justify-content: flex-end;
+}
+
+.admin-toolbar-copy {
+  margin: 0;
+}
+
+.admin-sort-hint {
+  margin: -4px 0 16px;
+  text-align: right;
 }
 
 .review-list {
@@ -537,12 +592,17 @@ h1 {
 
 .filter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
   align-items: end;
 }
 
+.filter-grid > * {
+  min-width: 0;
+}
+
 .auth-field select {
+  width: 100%;
   min-height: 44px;
   padding: 0 14px;
   border: 2px solid var(--panel-dark);
@@ -580,10 +640,12 @@ h1 {
 .checkbox-field {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
   min-height: 44px;
   color: var(--muted);
-  padding-top: 22px;
+  padding-top: 8px;
+  grid-column: 1 / -1;
+  max-width: 340px;
 }
 
 .checkbox-field input {
@@ -610,16 +672,42 @@ h1 {
 }
 
 .admin-user-row {
-  grid-template-columns: minmax(180px, 1.2fr) minmax(140px, 180px) minmax(120px, 160px) minmax(140px, 180px) minmax(220px, 1.3fr);
-  align-items: center;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 220px) minmax(150px, 180px) minmax(180px, 220px) minmax(220px, 1fr);
+  align-items: start;
+  row-gap: 10px;
+  padding: 18px 16px;
 }
 
 .admin-user-row-header {
-  align-items: end;
+  align-items: center;
+}
+
+.admin-users-toolbar {
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+
+.admin-users-signed-in {
+  margin: 0 0 14px;
+}
+
+.admin-users-results {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 16px;
+}
+
+.admin-user-identity {
+  margin-top: 0;
+}
+
+.admin-user-row .review-detail-stack {
+  margin-top: 0;
 }
 
 .admin-user-role-cell select {
   width: 100%;
+  min-height: 40px;
 }
 
 .admin-user-status-cell {
@@ -628,21 +716,52 @@ h1 {
 
 .admin-user-created-cell {
   line-height: 1.4;
+  padding-top: 0;
+  align-self: center;
 }
 
 .admin-user-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-top: 0;
 }
 
 .admin-user-actions .secondary-button {
   min-width: 88px;
+  min-height: 40px;
+}
+
+.admin-user-actions-cell {
+  align-self: start;
 }
 
 .admin-user-message {
-  margin-top: 4px;
+  margin-top: 8px;
   line-height: 1.4;
+}
+
+.admin-users-list {
+  gap: 14px;
+}
+
+.admin-users-list-header {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.admin-user-card {
+  align-items: center;
+  row-gap: 12px;
+}
+
+.admin-user-card .admin-user-cell {
+  min-width: 0;
+}
+
+.admin-user-created-cell {
+  align-self: center;
+  line-height: 1.35;
 }
 
 .review-row-header {
@@ -663,6 +782,73 @@ h1 {
   display: grid;
   gap: 4px;
   margin-top: 8px;
+}
+
+.admin-review-list {
+  gap: 14px;
+}
+
+.admin-review-card {
+  grid-template-columns: minmax(240px, 1.1fr) minmax(180px, 0.8fr) minmax(260px, 1fr);
+  grid-template-areas:
+    "status challenge moderation"
+    "player stats accepted"
+    "reasons reasons accepted";
+  gap: 16px 22px;
+  padding: 18px 16px;
+}
+
+.admin-review-block {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.admin-review-status-block {
+  grid-area: status;
+}
+
+.admin-review-player-block {
+  grid-area: player;
+}
+
+.admin-review-challenge-block {
+  grid-area: challenge;
+}
+
+.admin-review-stats-block {
+  grid-area: stats;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-review-moderation-block {
+  grid-area: moderation;
+}
+
+.admin-review-reasons-block {
+  grid-area: reasons;
+}
+
+.admin-review-accepted-block {
+  grid-area: accepted;
+}
+
+.admin-review-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-detail-toolbar {
+  align-items: center;
+}
+
+.admin-section-copy {
+  margin: 0 0 14px;
 }
 
 .review-error-copy {

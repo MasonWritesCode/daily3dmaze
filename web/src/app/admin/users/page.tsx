@@ -181,7 +181,7 @@ export default function AdminUsersPage() {
         <p className="eyebrow">{uiText.eyebrow}</p>
         <h1>{uiText.title}</h1>
         <p className="body-copy">{uiText.intro}</p>
-        <div className="actions">
+        <div className="actions admin-page-toolbar admin-users-toolbar">
           <Link href="/admin/reviews" className="primary-link">
             {uiText.actions.reviewQueue}
           </Link>
@@ -225,17 +225,13 @@ export default function AdminUsersPage() {
         )}
 
         {status === "ready" && user && roleAllows(user.role, ROLE_ADMIN) && (
-          <section className="maze-summary" aria-labelledby="user-list-title">
-            <div className="review-header">
-              <div>
-                <h2 id="user-list-title" className="section-title">
-                  {uiText.usersTitle}
-                </h2>
-                <p className="assistive-copy">
-                  {uiText.signedInAs} <strong>{user.username}</strong>.
-                </p>
-              </div>
-            </div>
+          <section className="maze-summary admin-panel-section" aria-labelledby="user-list-title">
+            <h2 id="user-list-title" className="section-title">
+              {uiText.usersTitle}
+            </h2>
+            <p className="assistive-copy admin-users-signed-in">
+              {uiText.signedInAs} <strong>{user.username}</strong>.
+            </p>
 
             <label className="auth-field" htmlFor="user-search">
               <span>{uiText.searchLabel}</span>
@@ -249,15 +245,19 @@ export default function AdminUsersPage() {
               />
             </label>
 
-            <p id={resultsCountId} className="assistive-copy" aria-live="polite">
+            <p
+              id={resultsCountId}
+              className="assistive-copy admin-users-results"
+              aria-live="polite"
+            >
               {uiText.resultsShown
                 .replace("{count}", formatCount(filteredEntries.length))
                 .replace("{suffix}", filteredEntries.length === 1 ? "" : "s")}
             </p>
 
-            <div className="review-list" role="list" aria-label={uiText.listLabel}>
+            <div className="review-list admin-users-list" role="list" aria-label={uiText.listLabel}>
               <div
-                className="review-row review-row-header admin-user-row admin-user-row-header"
+                className="review-row review-row-header admin-user-row admin-user-row-header admin-users-list-header"
                 role="listitem"
                 aria-hidden="true"
               >
@@ -270,10 +270,10 @@ export default function AdminUsersPage() {
               {filteredEntries.map((entry) => (
                 <div
                   key={entry.username}
-                  className="review-row admin-user-row"
+                  className="review-row admin-user-row admin-user-card"
                   role="listitem"
                 >
-                  <span className="review-detail-stack">
+                  <span className="review-detail-stack admin-user-identity admin-user-cell">
                     <strong>{entry.username}</strong>
                     <span className="assistive-copy">
                       {entry.role === ROLE_ADMIN
@@ -283,7 +283,7 @@ export default function AdminUsersPage() {
                           : uiText.labels.standardUser}
                     </span>
                   </span>
-                  <span className="admin-user-role-cell">
+                  <span className="admin-user-role-cell admin-user-cell">
                     <label className="sr-only" htmlFor={`role-${entry.username}`}>
                       {uiText.selectorLabels.roleForUser.replace("{username}", entry.username)}
                     </label>
@@ -302,7 +302,7 @@ export default function AdminUsersPage() {
                       <option value={ROLE_ADMIN}>{uiText.labels.admin}</option>
                     </select>
                   </span>
-                  <span className="review-detail-stack admin-user-status-cell">
+                  <span className="review-detail-stack admin-user-status-cell admin-user-cell">
                     <span
                       className={`score-badge ${
                         entry.isBanned ? "score-badge-high" : "score-badge-low"
@@ -319,8 +319,10 @@ export default function AdminUsersPage() {
                       </span>
                     )}
                   </span>
-                  <span className="admin-user-created-cell">{formatDateTime(entry.createdAt)}</span>
-                  <span className="review-detail-stack admin-user-actions-cell">
+                  <span className="admin-user-created-cell admin-user-cell">
+                    {formatDateTime(entry.createdAt)}
+                  </span>
+                  <span className="review-detail-stack admin-user-actions-cell admin-user-cell">
                     <div className="actions admin-user-actions">
                       <button
                         type="button"

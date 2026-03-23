@@ -337,7 +337,7 @@ export default function AdminReviewsPage() {
         <p className="eyebrow">{uiText.eyebrow}</p>
         <h1>{uiText.title}</h1>
         <p className="body-copy">{uiText.intro}</p>
-        <div className="actions">
+        <div className="actions admin-page-toolbar">
           <Link href="/play" className="primary-link">
             {uiText.actions.returnToChallenge}
           </Link>
@@ -386,23 +386,20 @@ export default function AdminReviewsPage() {
         )}
 
         {status === "ready" && user && roleAllows(user.role, ROLE_MODERATOR) && (
-          <section className="maze-summary" aria-labelledby="review-table-title">
-            <div className="review-header">
-              <div>
-                <h2 id="review-table-title" className="section-title">
-                  {uiText.sections.recentSubmissions}
-                </h2>
-                <p className="assistive-copy">
-                  {uiText.signedInAs} <strong>{user.username}</strong>.
-                </p>
-              </div>
-              <div className="review-actions">
+          <section className="maze-summary admin-panel-section" aria-labelledby="review-table-title">
+            <h2 id="review-table-title" className="section-title">
+              {uiText.sections.recentSubmissions}
+            </h2>
+            <div className="admin-section-toolbar admin-reviews-toolbar">
+              <p className="assistive-copy admin-toolbar-copy">
+                {uiText.signedInAs} <strong>{user.username}</strong>.
+              </p>
+              <div className="actions admin-toolbar-actions">
                 {roleAllows(user.role, ROLE_ADMIN) && (
                   <Link href="/admin/users" className="secondary-link">
                     {uiText.actions.manageUsers}
                   </Link>
                 )}
-                <p className="assistive-copy">{uiText.sortHint}</p>
                 {roleAllows(user.role, ROLE_ADMIN) && (
                   <button
                     type="button"
@@ -417,6 +414,7 @@ export default function AdminReviewsPage() {
                 )}
               </div>
             </div>
+            <p className="assistive-copy admin-sort-hint">{uiText.sortHint}</p>
             {recomputeMessage && (
               <p
                 className={`body-copy status-copy ${
@@ -453,7 +451,7 @@ export default function AdminReviewsPage() {
               </div>
             )}
 
-            <section className="filter-panel" aria-labelledby="review-filter-title">
+            <section className="filter-panel admin-filter-panel" aria-labelledby="review-filter-title">
               <h3 id="review-filter-title" className="section-title">
                 {uiText.sections.filters}
               </h3>
@@ -542,18 +540,11 @@ export default function AdminReviewsPage() {
             {sortedEntries.length === 0 ? (
               <p className="body-copy">{uiText.noMatches}</p>
             ) : (
-              <div className="review-list" role="list" aria-label={uiText.sections.recentSubmissions}>
-                <div className="review-row review-row-header" role="listitem" aria-hidden="true">
-                  <span>{uiText.table.verification}</span>
-                  <span>{uiText.table.score}</span>
-                  <span>{uiText.table.player}</span>
-                  <span>{uiText.table.challenge}</span>
-                  <span>{uiText.table.time}</span>
-                  <span>{uiText.table.moves}</span>
-                  <span>{uiText.table.review}</span>
-                  <span>{uiText.table.reasons}</span>
-                  <span>{uiText.table.accepted}</span>
-                </div>
+              <div
+                className="review-list admin-review-list"
+                role="list"
+                aria-label={uiText.sections.recentSubmissions}
+              >
                 {sortedEntries.map((entry) => {
                   const tone = getSuspicionTone(entry.suspicionScore);
                   const playerLabel = entry.username || uiText.anonymous;
@@ -561,10 +552,11 @@ export default function AdminReviewsPage() {
                   return (
                     <article
                       key={`${entry.acceptedAt}:${entry.seed}:${playerLabel}`}
-                      className="review-row"
+                      className="review-row admin-review-card"
                       role="listitem"
                     >
-                      <div>
+                      <div className="admin-review-block admin-review-status-block">
+                        <span className="admin-review-label">{uiText.table.verification}</span>
                         <span
                           className={`score-badge score-badge-${getVerificationTone(
                             entry.verificationStatus
@@ -576,6 +568,10 @@ export default function AdminReviewsPage() {
                           )}
                         </span>
                         <div className="review-detail-stack">
+                          <span className="admin-review-label">{uiText.table.score}</span>
+                          <span className={`score-badge score-badge-${tone}`}>
+                            {formatCount(entry.suspicionScore)}
+                          </span>
                           <span className="assistive-copy">
                             {uiText.attemptsLabel}: {formatCount(entry.verificationAttempts)}
                           </span>
@@ -589,13 +585,8 @@ export default function AdminReviewsPage() {
                           )}
                         </div>
                       </div>
-                      <div>
-                        <span className="sr-only">{uiText.table.score} </span>
-                        <span className={`score-badge score-badge-${tone}`}>
-                          {formatCount(entry.suspicionScore)}
-                        </span>
-                      </div>
-                      <div>
+                      <div className="admin-review-block admin-review-player-block">
+                        <span className="admin-review-label">{uiText.table.player}</span>
                         {entry.username ? (
                           <Link href={`/profile/${entry.username}`} className="inline-link">
                             {entry.username}
@@ -604,15 +595,25 @@ export default function AdminReviewsPage() {
                           playerLabel
                         )}
                       </div>
-                      <div className="review-challenge">
+                      <div className="admin-review-block admin-review-challenge-block review-challenge">
+                        <span className="admin-review-label">{uiText.table.challenge}</span>
                         <Link href={`/history/${entry.date}`} className="inline-link">
                           {entry.date}
                         </Link>
                         <span>{entry.seed}</span>
                       </div>
-                      <div>{formatElapsedTime(entry.elapsedTimeMs)}</div>
-                      <div>{entry.moveCount}</div>
-                      <div className="review-challenge">
+                      <div className="admin-review-block admin-review-stats-block">
+                        <div className="review-detail-stack">
+                          <span className="admin-review-label">{uiText.table.time}</span>
+                          <span>{formatElapsedTime(entry.elapsedTimeMs)}</span>
+                        </div>
+                        <div className="review-detail-stack">
+                          <span className="admin-review-label">{uiText.table.moves}</span>
+                          <span>{formatCount(entry.moveCount)}</span>
+                        </div>
+                      </div>
+                      <div className="admin-review-block admin-review-moderation-block review-challenge">
+                        <span className="admin-review-label">{uiText.table.review}</span>
                         <span className={`score-badge score-badge-${getReviewTone(entry.reviewStatus)}`}>
                           {getLocalizedReviewStatus(entry.reviewStatus, uiText.statuses.review)}
                         </span>
@@ -623,18 +624,22 @@ export default function AdminReviewsPage() {
                           {uiText.reviewer}: {entry.reviewedByUsername ?? uiText.notRecorded}
                         </span>
                       </div>
-                      <div className="reason-list" aria-label={uiText.table.reasons}>
-                        {entry.suspicionReasons.length > 0 ? (
-                          entry.suspicionReasons.map((reason) => (
-                            <span key={reason} className="reason-chip">
-                              {getLocalizedSuspicionReason(reason, uiText.statuses.reasons)}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="assistive-copy">{uiText.none}</span>
-                        )}
+                      <div className="admin-review-block admin-review-reasons-block">
+                        <span className="admin-review-label">{uiText.table.reasons}</span>
+                        <div className="reason-list" aria-label={uiText.table.reasons}>
+                          {entry.suspicionReasons.length > 0 ? (
+                            entry.suspicionReasons.map((reason) => (
+                              <span key={reason} className="reason-chip">
+                                {getLocalizedSuspicionReason(reason, uiText.statuses.reasons)}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="assistive-copy">{uiText.none}</span>
+                          )}
+                        </div>
                       </div>
-                      <div className="review-challenge">
+                      <div className="admin-review-block admin-review-accepted-block review-challenge">
+                        <span className="admin-review-label">{uiText.table.accepted}</span>
                         <span>{formatDateTime(entry.acceptedAt)}</span>
                         <span>
                           {uiText.started}:{" "}
