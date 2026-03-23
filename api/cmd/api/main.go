@@ -80,17 +80,21 @@ type leaderboardResponse struct {
 }
 
 type recentRunReviewEntry struct {
-	ID                 int64    `json:"id"`
-	Date               string   `json:"date"`
-	Seed               string   `json:"seed"`
-	Username           string   `json:"username"`
-	MoveCount          int      `json:"moveCount"`
-	ElapsedTimeMs      int      `json:"elapsedTimeMs"`
-	SuspicionScore     int      `json:"suspicionScore"`
-	SuspicionReasons   []string `json:"suspicionReasons"`
-	VerificationStatus string   `json:"verificationStatus"`
-	VerificationNotes  []string `json:"verificationNotes"`
-	AcceptedAt         string   `json:"acceptedAt"`
+	ID                    int64    `json:"id"`
+	Date                  string   `json:"date"`
+	Seed                  string   `json:"seed"`
+	Username              string   `json:"username"`
+	MoveCount             int      `json:"moveCount"`
+	ElapsedTimeMs         int      `json:"elapsedTimeMs"`
+	SuspicionScore        int      `json:"suspicionScore"`
+	SuspicionReasons      []string `json:"suspicionReasons"`
+	VerificationStatus    string   `json:"verificationStatus"`
+	VerificationNotes     []string `json:"verificationNotes"`
+	VerificationStartedAt *string  `json:"verificationStartedAt"`
+	VerifiedAt            *string  `json:"verifiedAt"`
+	VerificationAttempts  int      `json:"verificationAttempts"`
+	VerificationError     *string  `json:"verificationError"`
+	AcceptedAt            string   `json:"acceptedAt"`
 }
 
 type recentRunReviewsResponse struct {
@@ -484,6 +488,10 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			runs.suspicion_reasons_json,
 			runs.verification_status,
 			runs.verification_notes_json,
+			runs.verification_started_at,
+			runs.verified_at,
+			runs.verification_attempts,
+			runs.verification_error,
 			runs.accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
@@ -501,6 +509,9 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 	for rows.Next() {
 		var entry recentRunReviewEntry
 		var acceptedAt time.Time
+		var verificationStartedAt sql.NullTime
+		var verifiedAt sql.NullTime
+		var verificationError sql.NullString
 		var suspicionReasonsJSON []byte
 		var verificationNotesJSON []byte
 		if err := rows.Scan(
@@ -514,6 +525,10 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			&suspicionReasonsJSON,
 			&entry.VerificationStatus,
 			&verificationNotesJSON,
+			&verificationStartedAt,
+			&verifiedAt,
+			&entry.VerificationAttempts,
+			&verificationError,
 			&acceptedAt,
 		); err != nil {
 			return nil, err
@@ -524,6 +539,18 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 		}
 		if err := json.Unmarshal(verificationNotesJSON, &entry.VerificationNotes); err != nil {
 			return nil, err
+		}
+		if verificationStartedAt.Valid {
+			value := verificationStartedAt.Time.UTC().Format(time.RFC3339)
+			entry.VerificationStartedAt = &value
+		}
+		if verifiedAt.Valid {
+			value := verifiedAt.Time.UTC().Format(time.RFC3339)
+			entry.VerifiedAt = &value
+		}
+		if verificationError.Valid && strings.TrimSpace(verificationError.String) != "" {
+			value := verificationError.String
+			entry.VerificationError = &value
 		}
 		entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
 		entries = append(entries, entry)
@@ -585,7 +612,10 @@ func (a app) recomputeStoredRunVerifications() (int, int, error) {
 			suspicion_score = $2,
 			suspicion_reasons_json = $3,
 			verification_status = $4,
-			verification_notes_json = $5
+			verification_notes_json = $5,
+			verification_started_at = COALESCE(verification_started_at, $6),
+			verified_at = $6,
+			verification_error = NULL
 		WHERE id = $1
 	`
 
@@ -622,6 +652,7 @@ func (a app) recomputeStoredRunVerifications() (int, int, error) {
 			suspicionReasonsJSON,
 			string(replayValidation.VerificationStatus),
 			verificationNotesJSON,
+			a.currentTime(),
 		); err != nil {
 			return updatedCount, skippedCount, err
 		}
@@ -662,6 +693,10 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 			runs.suspicion_reasons_json,
 			runs.verification_status,
 			runs.verification_notes_json,
+			runs.verification_started_at,
+			runs.verified_at,
+			runs.verification_attempts,
+			runs.verification_error,
 			runs.replay_trace_json,
 			runs.accepted_at
 		FROM runs
@@ -672,6 +707,9 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 	var (
 		detail                runReviewDetailResponse
 		acceptedAt            time.Time
+		verificationStartedAt sql.NullTime
+		verifiedAt            sql.NullTime
+		verificationError     sql.NullString
 		suspicionReasonsJSON  []byte
 		verificationNotesJSON []byte
 		replayTraceJSON       []byte
@@ -687,6 +725,10 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		&suspicionReasonsJSON,
 		&detail.Entry.VerificationStatus,
 		&verificationNotesJSON,
+		&verificationStartedAt,
+		&verifiedAt,
+		&detail.Entry.VerificationAttempts,
+		&verificationError,
 		&replayTraceJSON,
 		&acceptedAt,
 	); err != nil {
@@ -703,6 +745,18 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		if err := json.Unmarshal(replayTraceJSON, &detail.ReplayTrace); err != nil {
 			return runReviewDetailResponse{}, err
 		}
+	}
+	if verificationStartedAt.Valid {
+		value := verificationStartedAt.Time.UTC().Format(time.RFC3339)
+		detail.Entry.VerificationStartedAt = &value
+	}
+	if verifiedAt.Valid {
+		value := verifiedAt.Time.UTC().Format(time.RFC3339)
+		detail.Entry.VerifiedAt = &value
+	}
+	if verificationError.Valid && strings.TrimSpace(verificationError.String) != "" {
+		value := verificationError.String
+		detail.Entry.VerificationError = &value
 	}
 	detail.Entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
 	challengeDate, err := time.Parse(dateLayoutISO, detail.Entry.Date)

@@ -314,10 +314,13 @@ func TestRecomputeStoredRunVerifications(t *testing.T) {
 			suspicion_score = $2,
 			suspicion_reasons_json = $3,
 			verification_status = $4,
-			verification_notes_json = $5
+			verification_notes_json = $5,
+			verification_started_at = COALESCE(verification_started_at, $6),
+			verified_at = $6,
+			verification_error = NULL
 		WHERE id = $1
 	`)).
-		WithArgs(int64(7), 0, []byte("[]"), string(VerificationStatusVerified), []byte(`["simulation_matches_expected_outcome"]`)).
+		WithArgs(int64(7), 0, []byte("[]"), string(VerificationStatusVerified), []byte(`["simulation_matches_expected_outcome"]`), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	updatedCount, skippedCount, err := application.recomputeStoredRunVerifications()

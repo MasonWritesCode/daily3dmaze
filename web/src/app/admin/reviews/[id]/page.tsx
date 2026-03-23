@@ -35,6 +35,14 @@ function formatAcceptedAt(value: string): string {
   }).format(date);
 }
 
+function formatOptionalTimestamp(value: string | null): string {
+  if (!value) {
+    return "Not recorded";
+  }
+
+  return formatAcceptedAt(value);
+}
+
 function getSuspicionTone(score: number): string {
   if (score >= 50) {
     return "high";
@@ -128,37 +136,40 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
 
   const selectedFrame = frames[selectedFrameIndex] ?? null;
   const reconstructedFinalFrame = frames[frames.length - 1] ?? null;
+  const simulation = detail?.simulation;
+  const hasSimulation =
+    simulation !== undefined &&
+    simulation.finalPosition !== undefined &&
+    typeof simulation.finalPosition.x === "number" &&
+    typeof simulation.finalPosition.y === "number";
   const gridRows =
     maze && selectedFrame
       ? renderGridRows(maze, selectedFrame.playerPosition, selectedFrame.directionIndex)
       : [];
   const comparisonItems =
-    detail && reconstructedFinalFrame
+    hasSimulation && reconstructedFinalFrame
       ? [
           {
             label: "Final position",
             frontend: `(${reconstructedFinalFrame.playerPosition.x}, ${reconstructedFinalFrame.playerPosition.y})`,
-            backend: `(${detail.simulation.finalPosition.x}, ${detail.simulation.finalPosition.y})`,
+            backend: `(${simulation.finalPosition.x}, ${simulation.finalPosition.y})`,
             matches:
-              reconstructedFinalFrame.playerPosition.x === detail.simulation.finalPosition.x &&
-              reconstructedFinalFrame.playerPosition.y === detail.simulation.finalPosition.y
+              reconstructedFinalFrame.playerPosition.x === simulation.finalPosition.x &&
+              reconstructedFinalFrame.playerPosition.y === simulation.finalPosition.y
           },
           {
             label: "Final facing",
             frontend:
               DIRECTION_ORDER[reconstructedFinalFrame.directionIndex]?.name ?? "Unknown",
-            backend:
-              DIRECTION_ORDER[detail.simulation.finalDirectionIndex]?.name ?? "Unknown",
+            backend: DIRECTION_ORDER[simulation.finalDirectionIndex]?.name ?? "Unknown",
             matches:
-              reconstructedFinalFrame.directionIndex ===
-              detail.simulation.finalDirectionIndex
+              reconstructedFinalFrame.directionIndex === simulation.finalDirectionIndex
           },
           {
             label: "Exit reached",
             frontend: reconstructedFinalFrame.reachedExit ? "Yes" : "No",
-            backend: detail.simulation.reachedExit ? "Yes" : "No",
-            matches:
-              reconstructedFinalFrame.reachedExit === detail.simulation.reachedExit
+            backend: simulation.reachedExit ? "Yes" : "No",
+            matches: reconstructedFinalFrame.reachedExit === simulation.reachedExit
           }
         ]
       : [];
@@ -274,6 +285,18 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                   <dd>{formatAcceptedAt(detail.entry.acceptedAt)}</dd>
                 </div>
                 <div className="metadata-row">
+                  <dt>Verification started</dt>
+                  <dd>{formatOptionalTimestamp(detail.entry.verificationStartedAt)}</dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Verified at</dt>
+                  <dd>{formatOptionalTimestamp(detail.entry.verifiedAt)}</dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Attempts</dt>
+                  <dd>{detail.entry.verificationAttempts}</dd>
+                </div>
+                <div className="metadata-row">
                   <dt>Reasons</dt>
                   <dd className="reason-list">
                     {detail.entry.suspicionReasons.length > 0 ? (
@@ -301,6 +324,10 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                     )}
                   </dd>
                 </div>
+                <div className="metadata-row">
+                  <dt>Worker error</dt>
+                  <dd>{detail.entry.verificationError ?? "None"}</dd>
+                </div>
               </dl>
             </section>
 
@@ -315,48 +342,55 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                     canonical maze for this day.
                   </p>
                 </div>
-                <span
-                  className={`score-badge score-badge-${
-                    detail.simulation.reachedExit ? "low" : "high"
-                  }`}
-                >
-                  {detail.simulation.reachedExit ? "Reached exit" : "Did not finish"}
-                </span>
+                {hasSimulation ? (
+                  <span
+                    className={`score-badge score-badge-${
+                      simulation.reachedExit ? "low" : "high"
+                    }`}
+                  >
+                    {simulation.reachedExit ? "Reached exit" : "Did not finish"}
+                  </span>
+                ) : (
+                  <span className="score-badge score-badge-pending">
+                    Simulation unavailable
+                  </span>
+                )}
               </div>
 
-              <dl className="metadata-list">
-                <div className="metadata-row">
-                  <dt>Final position</dt>
-                  <dd>
-                    ({detail.simulation.finalPosition.x}, {detail.simulation.finalPosition.y})
-                  </dd>
-                </div>
-                <div className="metadata-row">
-                  <dt>Final facing</dt>
-                  <dd>
-                    {DIRECTION_ORDER[detail.simulation.finalDirectionIndex]?.name ?? "Unknown"}
-                  </dd>
-                </div>
-                <div className="metadata-row">
-                  <dt>First exit step</dt>
-                  <dd>
-                    {detail.simulation.firstExitStep >= 0
-                      ? detail.simulation.firstExitStep
-                      : "Never"}
-                  </dd>
-                </div>
-                <div className="metadata-row">
-                  <dt>Blocked moves</dt>
-                  <dd>{detail.simulation.blockedMoveCount}</dd>
-                </div>
-                <div className="metadata-row">
-                  <dt>Actions after exit</dt>
-                  <dd>{detail.simulation.actionsAfterExit}</dd>
-                </div>
-              </dl>
+              {hasSimulation ? (
+                <dl className="metadata-list">
+                  <div className="metadata-row">
+                    <dt>Final position</dt>
+                    <dd>
+                      ({simulation.finalPosition.x}, {simulation.finalPosition.y})
+                    </dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>Final facing</dt>
+                    <dd>{DIRECTION_ORDER[simulation.finalDirectionIndex]?.name ?? "Unknown"}</dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>First exit step</dt>
+                    <dd>{simulation.firstExitStep >= 0 ? simulation.firstExitStep : "Never"}</dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>Blocked moves</dt>
+                    <dd>{simulation.blockedMoveCount}</dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>Actions after exit</dt>
+                    <dd>{simulation.actionsAfterExit}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="body-copy">
+                  This run does not have a server-side simulation payload yet. That can
+                  happen for older stored reviews or while local services are out of sync.
+                </p>
+              )}
             </section>
 
-            {reconstructedFinalFrame && (
+            {reconstructedFinalFrame && hasSimulation && (
               <section className="maze-summary" aria-labelledby="review-reconciliation-title">
                 <div className="review-header">
                   <div>

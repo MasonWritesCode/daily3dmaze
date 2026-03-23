@@ -17,6 +17,8 @@ type storedRun struct {
 	Request replay.RunSubmission
 }
 
+const verificationRetryDelay = 30 * time.Second
+
 func main() {
 	db, err := openWorkerDatabase()
 	if err != nil {
@@ -66,18 +68,9 @@ func openWorkerDatabase() (*sql.DB, error) {
 }
 
 func processNextPendingRun(db *sql.DB) (bool, error) {
-	tx, err := db.Begin()
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback()
-
-	run, err := claimNextPendingRun(tx)
+	run, err := claimNextPendingRun(db)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			if err := tx.Commit(); err != nil {
-				return false, err
-			}
 			return false, nil
 		}
 
@@ -87,11 +80,17 @@ func processNextPendingRun(db *sql.DB) (bool, error) {
 	validation := replay.EvaluateRun(run.Request)
 	suspicionReasonsJSON, err := json.Marshal(validation.ReasonStrings())
 	if err != nil {
-		return false, err
+		if updateErr := markRunVerificationFailure(db, run.ID, err); updateErr != nil {
+			return false, errors.Join(err, updateErr)
+		}
+		return true, nil
 	}
 	verificationNotesJSON, err := json.Marshal(validation.VerificationNotes)
 	if err != nil {
-		return false, err
+		if updateErr := markRunVerificationFailure(db, run.ID, err); updateErr != nil {
+			return false, errors.Join(err, updateErr)
+		}
+		return true, nil
 	}
 
 	const updateQuery = `
@@ -100,21 +99,20 @@ func processNextPendingRun(db *sql.DB) (bool, error) {
 			suspicion_score = $2,
 			suspicion_reasons_json = $3,
 			verification_status = $4,
-			verification_notes_json = $5
+			verification_notes_json = $5,
+			verified_at = $6,
+			verification_error = NULL
 		WHERE id = $1
 	`
-	if _, err := tx.Exec(
+	if _, err := db.Exec(
 		updateQuery,
 		run.ID,
 		validation.Score,
 		suspicionReasonsJSON,
 		string(validation.VerificationStatus),
 		verificationNotesJSON,
+		time.Now().UTC(),
 	); err != nil {
-		return false, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return false, err
 	}
 
@@ -122,11 +120,21 @@ func processNextPendingRun(db *sql.DB) (bool, error) {
 	return true, nil
 }
 
-func claimNextPendingRun(tx *sql.Tx) (storedRun, error) {
+func claimNextPendingRun(db *sql.DB) (storedRun, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return storedRun{}, err
+	}
+	defer tx.Rollback()
+
 	const query = `
 		SELECT id, run_date::text, seed, move_count, elapsed_time_ms, replay_trace_json
 		FROM runs
 		WHERE verification_status = 'pending'
+			AND (
+				verification_started_at IS NULL
+				OR verification_started_at < NOW() - INTERVAL '30 seconds'
+			)
 		ORDER BY accepted_at ASC
 		LIMIT 1
 		FOR UPDATE SKIP LOCKED
@@ -147,9 +155,50 @@ func claimNextPendingRun(tx *sql.Tx) (storedRun, error) {
 		return storedRun{}, err
 	}
 
+	const claimUpdateQuery = `
+		UPDATE runs
+		SET
+			verification_started_at = $2,
+			verification_attempts = verification_attempts + 1,
+			verification_error = NULL
+		WHERE id = $1
+	`
+	if _, err := tx.Exec(claimUpdateQuery, run.ID, time.Now().UTC()); err != nil {
+		return storedRun{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return storedRun{}, err
+	}
+
 	if err := json.Unmarshal(replayTraceJSON, &run.Request.ReplayTrace); err != nil {
+		if updateErr := markRunVerificationFailure(db, run.ID, err); updateErr != nil {
+			return storedRun{}, errors.Join(err, updateErr)
+		}
 		return storedRun{}, err
 	}
 
 	return run, nil
+}
+
+type verificationFailureWriter interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
+func markRunVerificationFailure(executor verificationFailureWriter, runID int64, cause error) error {
+	const failureQuery = `
+		UPDATE runs
+		SET
+			verification_error = $2,
+			verification_notes_json = $3
+		WHERE id = $1
+	`
+
+	notesJSON, err := json.Marshal([]string{"worker_verification_failed"})
+	if err != nil {
+		return err
+	}
+
+	_, err = executor.Exec(failureQuery, runID, cause.Error(), notesJSON)
+	return err
 }

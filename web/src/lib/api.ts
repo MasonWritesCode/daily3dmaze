@@ -116,6 +116,10 @@ export interface RunReviewEntry {
   suspicionReasons: string[];
   verificationStatus: string;
   verificationNotes: string[];
+  verificationStartedAt: string | null;
+  verifiedAt: string | null;
+  verificationAttempts: number;
+  verificationError: string | null;
   acceptedAt: string;
 }
 
@@ -131,7 +135,7 @@ export interface RecomputeRunReviewsResponse {
 export interface RunReviewDetailResponse {
   entry: RunReviewEntry;
   replayTrace: ReplayTraceEvent[];
-  simulation: {
+  simulation?: {
     finalPosition: {
       x: number;
       y: number;

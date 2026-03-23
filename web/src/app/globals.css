@@ -220,6 +220,19 @@ h1 {
   gap: 4px;
 }
 
+.review-detail-stack {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.review-error-copy {
+  color: #fca5a5;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
 .reason-list {
   display: flex;
   flex-wrap: wrap;

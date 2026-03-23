@@ -23,6 +23,14 @@ function formatAcceptedAt(value: string): string {
   }).format(date);
 }
 
+function formatOptionalTimestamp(value: string | null): string {
+  if (!value) {
+    return "Not recorded";
+  }
+
+  return formatAcceptedAt(value);
+}
+
 function getSuspicionTone(score: number): string {
   if (score >= 50) {
     return "high";
@@ -267,6 +275,16 @@ export default function AdminReviewsPage() {
                         >
                           {entry.verificationStatus}
                         </span>
+                        <div className="review-detail-stack">
+                          <span className="assistive-copy">
+                            Attempts: {entry.verificationAttempts}
+                          </span>
+                          {entry.verificationError && (
+                            <span className="review-error-copy">
+                              {entry.verificationError}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <span className="sr-only">Suspicion score </span>
@@ -304,6 +322,10 @@ export default function AdminReviewsPage() {
                       </div>
                       <div className="review-challenge">
                         <span>{formatAcceptedAt(entry.acceptedAt)}</span>
+                        <span>
+                          Started: {formatOptionalTimestamp(entry.verificationStartedAt)}
+                        </span>
+                        <span>Finished: {formatOptionalTimestamp(entry.verifiedAt)}</span>
                         <Link href={`/admin/reviews/${entry.id}`} className="inline-link">
                           Inspect run
                         </Link>
