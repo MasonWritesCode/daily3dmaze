@@ -62,13 +62,13 @@ func TestResolveOAuthUserUsesExistingLinkedAccount(t *testing.T) {
 	application := app{db: db}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT users.id, users.username, users.role
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
 		FROM oauth_accounts
 		JOIN users ON users.id = oauth_accounts.user_id
 		WHERE oauth_accounts.provider = $1 AND oauth_accounts.provider_user_id = $2
 	`)).
 		WithArgs("github", "42").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleUser))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleUser, false))
 
 	user, err := application.resolveOAuthUser(httptest.NewRequest(http.MethodGet, "/", nil), oauthIdentity{
 		Provider:       "github",

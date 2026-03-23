@@ -27,6 +27,8 @@ const (
 	roleAdmin            = "admin"
 )
 
+var errAccountBanned = errors.New("account is banned")
+
 type authRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -46,6 +48,7 @@ type currentUser struct {
 	ID       int64
 	Username string
 	Role     string
+	IsBanned bool
 }
 
 func (a app) registerHandler(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +127,10 @@ func (a app) loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	user, passwordHash, err := a.findUserByUsername(strings.ToLower(request.Username))
 	if err != nil {
+		if errors.Is(err, errAccountBanned) {
+			http.Error(w, "account is disabled", http.StatusForbidden)
+			return
+		}
 		http.Error(w, "invalid username or password", http.StatusUnauthorized)
 		return
 	}
@@ -224,15 +231,18 @@ func (a app) createUser(username, passwordHash string) (currentUser, error) {
 
 func (a app) findUserByUsername(username string) (currentUser, string, error) {
 	const query = `
-		SELECT id, username, role, password_hash
+		SELECT id, username, role, COALESCE(is_banned, FALSE), password_hash
 		FROM users
 		WHERE username = $1
 	`
 
 	var user currentUser
 	var passwordHash string
-	if err := a.db.QueryRow(query, username).Scan(&user.ID, &user.Username, &user.Role, &passwordHash); err != nil {
+	if err := a.db.QueryRow(query, username).Scan(&user.ID, &user.Username, &user.Role, &user.IsBanned, &passwordHash); err != nil {
 		return currentUser{}, "", err
+	}
+	if user.IsBanned {
+		return currentUser{}, "", errAccountBanned
 	}
 
 	return user, passwordHash, nil
@@ -267,15 +277,18 @@ func (a app) currentUserFromRequest(r *http.Request) (currentUser, error) {
 	}
 
 	const query = `
-		SELECT users.id, users.username, users.role
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
 		FROM sessions
 		JOIN users ON users.id = sessions.user_id
 		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
 	`
 
 	var user currentUser
-	if err := a.db.QueryRow(query, hashToken(cookie.Value)).Scan(&user.ID, &user.Username, &user.Role); err != nil {
+	if err := a.db.QueryRow(query, hashToken(cookie.Value)).Scan(&user.ID, &user.Username, &user.Role, &user.IsBanned); err != nil {
 		return currentUser{}, err
+	}
+	if user.IsBanned {
+		return currentUser{}, errAccountBanned
 	}
 
 	return user, nil

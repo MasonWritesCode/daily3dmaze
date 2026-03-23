@@ -167,14 +167,14 @@ func TestLoginHandlerRejectsInvalidPassword(t *testing.T) {
 	}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, username, role, password_hash
+		SELECT id, username, role, COALESCE(is_banned, FALSE), password_hash
 		FROM users
 		WHERE username = $1
 	`)).
 		WithArgs("mason_dev").
 		WillReturnRows(
-			sqlmock.NewRows([]string{"id", "username", "role", "password_hash"}).
-				AddRow(7, "mason_dev", roleUser, string(passwordHash)),
+			sqlmock.NewRows([]string{"id", "username", "role", "is_banned", "password_hash"}).
+				AddRow(7, "mason_dev", roleUser, false, string(passwordHash)),
 		)
 
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(
@@ -210,13 +210,13 @@ func TestMeHandlerReturnsAuthenticatedUser(t *testing.T) {
 	token := "session-token"
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT users.id, users.username, users.role
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
 		FROM sessions
 		JOIN users ON users.id = sessions.user_id
 		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
 	`)).
 		WithArgs(hashToken(token)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleModerator))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleModerator, false))
 
 	request := httptest.NewRequest(http.MethodGet, "/api/me", nil)
 	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})

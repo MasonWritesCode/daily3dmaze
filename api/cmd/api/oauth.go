@@ -171,6 +171,10 @@ func (a app) oauthCallbackHandler(w http.ResponseWriter, r *http.Request, provid
 
 	user, err := a.resolveOAuthUser(r, identity)
 	if err != nil {
+		if errors.Is(err, errAccountBanned) {
+			http.Error(w, "account is disabled", http.StatusForbidden)
+			return
+		}
 		http.Error(w, "failed to resolve oauth user", http.StatusInternalServerError)
 		return
 	}
@@ -382,15 +386,18 @@ func (a app) resolveOAuthUser(r *http.Request, identity oauthIdentity) (currentU
 
 func (a app) findUserByOAuthAccount(providerName, providerUserID string) (currentUser, error) {
 	const query = `
-		SELECT users.id, users.username, users.role
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
 		FROM oauth_accounts
 		JOIN users ON users.id = oauth_accounts.user_id
 		WHERE oauth_accounts.provider = $1 AND oauth_accounts.provider_user_id = $2
 	`
 
 	var user currentUser
-	if err := a.db.QueryRow(query, providerName, providerUserID).Scan(&user.ID, &user.Username, &user.Role); err != nil {
+	if err := a.db.QueryRow(query, providerName, providerUserID).Scan(&user.ID, &user.Username, &user.Role, &user.IsBanned); err != nil {
 		return currentUser{}, err
+	}
+	if user.IsBanned {
+		return currentUser{}, errAccountBanned
 	}
 
 	return user, nil

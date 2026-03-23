@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   fetchCurrentUser,
   roleAllows,
+  ROLE_ADMIN,
   ROLE_MODERATOR,
   type AuthUser
 } from "../lib/api";
@@ -58,6 +59,11 @@ export default function HomePage() {
           {canAccessReviews && (
             <Link href="/admin/reviews" className="secondary-link">
               Internal reviews
+            </Link>
+          )}
+          {roleAllows(user?.role, ROLE_ADMIN) && (
+            <Link href="/admin/users" className="secondary-link">
+              Manage users
             </Link>
           )}
         </div>

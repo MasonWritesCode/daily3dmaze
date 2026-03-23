@@ -202,6 +202,8 @@ func main() {
 	mux.HandleFunc("/api/admin/run-reviews", application.recentRunReviewsHandler)
 	mux.HandleFunc("/api/admin/run-reviews/recompute", application.recomputeRunReviewsHandler)
 	mux.HandleFunc("/api/admin/run-reviews/", application.runReviewDetailHandler)
+	mux.HandleFunc("/api/admin/users", application.adminUsersHandler)
+	mux.HandleFunc("/api/admin/users/", application.adminUserDetailHandler)
 	mux.HandleFunc("/api/leaderboard", application.leaderboardHandler)
 
 	addr := ":" + port

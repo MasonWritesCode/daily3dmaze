@@ -201,6 +201,29 @@ export interface RunReviewDetailResponse {
   };
 }
 
+export interface AdminUserEntry {
+  username: string;
+  role: string;
+  isBanned: boolean;
+  bannedAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminUsersResponse {
+  entries: AdminUserEntry[];
+}
+
+export interface UpdateAdminUserRoleResponse {
+  username: string;
+  role: string;
+}
+
+export interface UpdateAdminUserBanResponse {
+  username: string;
+  isBanned: boolean;
+  bannedAt: string | null;
+}
+
 async function readTextError(response: Response, fallback: string): Promise<Error> {
   const message = (await response.text()).trim();
   return new Error(message || fallback);
@@ -449,4 +472,71 @@ export async function updateRunReview(
   }
 
   return (await response.json()) as UpdateRunReviewResponse;
+}
+
+export async function fetchAdminUsers(): Promise<AdminUsersResponse> {
+  const response = await fetch(`${apiBaseUrl}/api/admin/users`, {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Admin users request failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as AdminUsersResponse;
+}
+
+export async function updateAdminUserRole(
+  username: string,
+  role: string
+): Promise<UpdateAdminUserRoleResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/admin/users/${encodeURIComponent(username)}/role`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ role })
+    }
+  );
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Admin user role update failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as UpdateAdminUserRoleResponse;
+}
+
+export async function updateAdminUserBan(
+  username: string,
+  banned: boolean
+): Promise<UpdateAdminUserBanResponse> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/admin/users/${encodeURIComponent(username)}/ban`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ banned })
+    }
+  );
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Admin user ban update failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as UpdateAdminUserBanResponse;
 }

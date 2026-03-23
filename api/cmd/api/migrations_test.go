@@ -202,6 +202,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS runs_public_id_idx
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`)).
+		WithArgs("000013_add_ban_fields_to_users.sql").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`ALTER TABLE users
+	ADD COLUMN IF NOT EXISTS is_banned BOOLEAN NOT NULL DEFAULT FALSE,
+	ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ;`)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO schema_migrations (version) VALUES ($1)`)).
+		WithArgs("000013_add_ban_fields_to_users.sql").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
 	if err := runMigrations(db); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}

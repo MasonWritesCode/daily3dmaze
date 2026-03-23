@@ -331,6 +331,11 @@ export default function AdminReviewsPage() {
                 </p>
               </div>
               <div className="review-actions">
+                {roleAllows(user.role, ROLE_ADMIN) && (
+                  <Link href="/admin/users" className="secondary-link">
+                    Manage users
+                  </Link>
+                )}
                 <p className="assistive-copy">
                   Highest verification risk and suspicion scores are shown first.
                 </p>

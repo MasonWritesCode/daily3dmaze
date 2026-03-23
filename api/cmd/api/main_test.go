@@ -242,13 +242,13 @@ func TestRecentRunReviewsHandlerRequiresModeratorRole(t *testing.T) {
 	token := "session-token"
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT users.id, users.username, users.role
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
 		FROM sessions
 		JOIN users ON users.id = sessions.user_id
 		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
 	`)).
 		WithArgs(hashToken(token)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleUser))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleUser, false))
 
 	request := httptest.NewRequest(http.MethodGet, "/api/admin/run-reviews", nil)
 	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
@@ -346,13 +346,13 @@ func TestRecomputeRunReviewsHandlerRequiresAdminRole(t *testing.T) {
 	token := "session-token"
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT users.id, users.username, users.role
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
 		FROM sessions
 		JOIN users ON users.id = sessions.user_id
 		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
 	`)).
 		WithArgs(hashToken(token)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mod_mason", roleModerator))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mod_mason", roleModerator, false))
 
 	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/recompute", nil)
 	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})

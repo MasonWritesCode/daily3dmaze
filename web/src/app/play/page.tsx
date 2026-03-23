@@ -13,6 +13,7 @@ import {
   fetchDailyMaze,
   fetchLeaderboard,
   logout,
+  ROLE_ADMIN,
   roleAllows,
   ROLE_MODERATOR,
   submitRun,
@@ -670,6 +671,11 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
             {roleAllows(user.role, ROLE_MODERATOR) && (
               <Link href="/admin/reviews" className="secondary-link">
                 Internal reviews
+              </Link>
+            )}
+            {roleAllows(user.role, ROLE_ADMIN) && (
+              <Link href="/admin/users" className="secondary-link">
+                Manage users
               </Link>
             )}
             <button type="button" className="secondary-button" onClick={handleLogout}>
