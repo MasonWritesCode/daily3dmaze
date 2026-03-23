@@ -12,6 +12,32 @@ import { formatElapsedTime } from "../../../lib/game/maze";
 
 type PageStatus = "loading" | "success" | "error";
 
+const uiText = {
+  eyebrow: "Profile",
+  fallbackTitle: "Player profile",
+  loading: "Loading profile...",
+  error: "Unable to load that profile right now.",
+  overviewTitle: "Overview",
+  recentRunsTitle: "Recent runs",
+  noRuns: "No attributed runs yet.",
+  actions: {
+    backToPlay: "Back to /play"
+  },
+  labels: {
+    username: "Username",
+    joined: "Joined",
+    totalRuns: "Total runs",
+    daysPlayed: "Days played",
+    bestTime: "Best time",
+    averageTime: "Average time",
+    lastPlayed: "Last played",
+    currentStreak: "Current streak",
+    bestStreak: "Best streak",
+    recentRunsLabel: "Recent player runs"
+  },
+  emptyStats: "No completed runs yet"
+} as const;
+
 export default function ProfilePage() {
   const params = useParams<{ username: string }>();
   const username = typeof params.username === "string" ? params.username.toLowerCase() : "";
@@ -56,18 +82,18 @@ export default function ProfilePage() {
   return (
     <main className="page-shell">
       <div className="content-card">
-        <p className="eyebrow">Profile</p>
-        <h1>{username ? `${username}'s runs` : "Player profile"}</h1>
+        <p className="eyebrow">{uiText.eyebrow}</p>
+        <h1>{username ? `${username}'s runs` : uiText.fallbackTitle}</h1>
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">
-            Loading profile...
+            {uiText.loading}
           </p>
         )}
 
         {status === "error" && (
           <p className="body-copy status-copy error-copy" aria-live="assertive">
-            Unable to load that profile right now.
+            {uiText.error}
           </p>
         )}
 
@@ -75,57 +101,57 @@ export default function ProfilePage() {
           <>
             <section className="maze-summary" aria-labelledby="profile-overview-title">
               <h2 id="profile-overview-title" className="section-title">
-                Overview
+                {uiText.overviewTitle}
               </h2>
               <dl className="metadata-list">
                 <div className="metadata-row">
-                  <dt>Username</dt>
+                  <dt>{uiText.labels.username}</dt>
                   <dd>
                     <code>{profile.user.username}</code>
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Joined</dt>
+                  <dt>{uiText.labels.joined}</dt>
                   <dd>{new Date(profile.user.createdAt).toLocaleDateString()}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Total runs</dt>
+                  <dt>{uiText.labels.totalRuns}</dt>
                   <dd>{profile.stats.totalRuns}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Days played</dt>
+                  <dt>{uiText.labels.daysPlayed}</dt>
                   <dd>{profile.stats.daysPlayed}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Best time</dt>
+                  <dt>{uiText.labels.bestTime}</dt>
                   <dd>
                     {profile.stats.bestElapsedTimeMs === null
-                      ? "No completed runs yet"
+                      ? uiText.emptyStats
                       : formatElapsedTime(profile.stats.bestElapsedTimeMs)}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Average time</dt>
+                  <dt>{uiText.labels.averageTime}</dt>
                   <dd>
                     {profile.stats.averageElapsedTimeMs === null
-                      ? "No completed runs yet"
+                      ? uiText.emptyStats
                       : formatElapsedTime(profile.stats.averageElapsedTimeMs)}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Last played</dt>
+                  <dt>{uiText.labels.lastPlayed}</dt>
                   <dd>
                     {profile.stats.lastPlayedAt === null
-                      ? "No completed runs yet"
+                      ? uiText.emptyStats
                       : new Date(profile.stats.lastPlayedAt).toLocaleString()}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Current streak</dt>
+                  <dt>{uiText.labels.currentStreak}</dt>
                   <dd>{profile.stats.currentStreakDays} day(s)</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Best streak</dt>
+                  <dt>{uiText.labels.bestStreak}</dt>
                   <dd>{profile.stats.bestStreakDays} day(s)</dd>
                 </div>
               </dl>
@@ -133,12 +159,12 @@ export default function ProfilePage() {
 
             <section className="maze-summary" aria-labelledby="recent-runs-title">
               <h2 id="recent-runs-title" className="section-title">
-                Recent runs
+                {uiText.recentRunsTitle}
               </h2>
               {profile.recentRuns.length === 0 ? (
-                <p className="body-copy">No attributed runs yet.</p>
+                <p className="body-copy">{uiText.noRuns}</p>
               ) : (
-                <div className="leaderboard-list" aria-label="Recent player runs">
+                <div className="leaderboard-list" aria-label={uiText.labels.recentRunsLabel}>
                   <div className="leaderboard-row leaderboard-row-header" aria-hidden="true">
                     <span>Date</span>
                     <span>Seed</span>
@@ -166,7 +192,7 @@ export default function ProfilePage() {
 
         <div className="actions">
           <Link href="/play" className="secondary-link">
-            Back to /play
+            {uiText.actions.backToPlay}
           </Link>
         </div>
       </div>

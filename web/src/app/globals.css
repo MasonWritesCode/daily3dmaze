@@ -233,8 +233,9 @@ h1 {
 
 .filter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
+  align-items: end;
 }
 
 .auth-field select {
@@ -274,6 +275,7 @@ h1 {
   align-items: center;
   min-height: 44px;
   color: var(--muted);
+  padding-top: 22px;
 }
 
 .checkbox-field input {
@@ -295,6 +297,42 @@ h1 {
   border-radius: 14px;
   background: rgba(13, 16, 21, 0.6);
   color: var(--muted);
+}
+
+.admin-user-row {
+  grid-template-columns: minmax(180px, 1.2fr) minmax(140px, 180px) minmax(120px, 160px) minmax(140px, 180px) minmax(220px, 1.3fr);
+  align-items: center;
+}
+
+.admin-user-row-header {
+  align-items: end;
+}
+
+.admin-user-role-cell select {
+  width: 100%;
+}
+
+.admin-user-status-cell {
+  margin-top: 0;
+}
+
+.admin-user-created-cell {
+  line-height: 1.4;
+}
+
+.admin-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-user-actions .secondary-button {
+  min-width: 88px;
+}
+
+.admin-user-message {
+  margin-top: 4px;
+  line-height: 1.4;
 }
 
 .review-row-header {

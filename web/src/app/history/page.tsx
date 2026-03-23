@@ -8,6 +8,28 @@ import { formatElapsedTime } from "../../lib/game/maze";
 
 type PageStatus = "loading" | "success" | "error";
 
+const uiText = {
+  eyebrow: "History",
+  title: "Daily challenge archive",
+  intro:
+    "Browse recent daily mazes, see how many runs each day received, and inspect the current best result for each challenge.",
+  loading: "Loading challenge history...",
+  error: "Unable to load the challenge history right now.",
+  sectionTitle: "Recent daily challenges",
+  listLabel: "Daily challenge history",
+  empty: "No archived challenges are available yet.",
+  labels: {
+    seed: "Seed",
+    size: "Maze size",
+    bestRun: "Best run"
+  },
+  actions: {
+    openPlay: "Open /play",
+    backHome: "Back home"
+  },
+  bestRunNoSubmissions: "No submissions yet"
+} as const;
+
 export default function HistoryPage() {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [status, setStatus] = useState<PageStatus>("loading");
@@ -47,30 +69,30 @@ export default function HistoryPage() {
     <main className="page-shell">
       <div className="content-card">
         <p className="eyebrow">History</p>
-        <h1>Daily challenge archive</h1>
-        <p className="body-copy">
-          Browse recent daily mazes, see how many runs each day received, and
-          inspect the current best result for each challenge.
-        </p>
+        <h1>{uiText.title}</h1>
+        <p className="body-copy">{uiText.intro}</p>
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">
-            Loading challenge history...
+            {uiText.loading}
           </p>
         )}
 
         {status === "error" && (
           <p className="body-copy status-copy error-copy" aria-live="assertive">
-            Unable to load the challenge history right now.
+            {uiText.error}
           </p>
         )}
 
         {status === "success" && (
           <section className="maze-summary" aria-labelledby="history-title">
             <h2 id="history-title" className="section-title">
-              Recent daily challenges
+              {uiText.sectionTitle}
             </h2>
-            <div className="history-list" aria-label="Daily challenge history">
+            {entries.length === 0 ? (
+              <p className="body-copy">{uiText.empty}</p>
+            ) : (
+            <div className="history-list" aria-label={uiText.listLabel}>
               {entries.map((entry) => (
                 <article key={entry.date} className="history-card">
                   <div className="history-card-header">
@@ -92,19 +114,19 @@ export default function HistoryPage() {
                   </div>
                   <dl className="metadata-list">
                     <div className="metadata-row">
-                      <dt>Seed</dt>
+                      <dt>{uiText.labels.seed}</dt>
                       <dd>
                         <code>{entry.seed}</code>
                       </dd>
                     </div>
                     <div className="metadata-row">
-                      <dt>Maze size</dt>
+                      <dt>{uiText.labels.size}</dt>
                       <dd>
                         {entry.size.width} x {entry.size.height}
                       </dd>
                     </div>
                     <div className="metadata-row">
-                      <dt>Best run</dt>
+                      <dt>{uiText.labels.bestRun}</dt>
                       <dd>
                         {entry.bestRun ? (
                           <>
@@ -122,7 +144,7 @@ export default function HistoryPage() {
                             {entry.bestRun.moveCount} moves
                           </>
                         ) : (
-                          "No submissions yet"
+                          uiText.bestRunNoSubmissions
                         )}
                       </dd>
                     </div>
@@ -130,15 +152,16 @@ export default function HistoryPage() {
                 </article>
               ))}
             </div>
+            )}
           </section>
         )}
 
         <div className="actions">
           <Link href="/play" className="primary-link">
-            Open /play
+            {uiText.actions.openPlay}
           </Link>
           <Link href="/" className="secondary-link">
-            Back home
+            {uiText.actions.backHome}
           </Link>
         </div>
       </div>

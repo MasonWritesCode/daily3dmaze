@@ -8,6 +8,7 @@ import {
   fetchDailyMaze,
   fetchRunReviewDetail,
   requeueRunReview,
+  ROLE_ADMIN,
   roleAllows,
   ROLE_MODERATOR,
   updateRunReview,
@@ -333,16 +334,18 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                   {detail.entry.verificationStatus}
                 </span>
               </div>
-              <div className="actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={handleRequeue}
-                  disabled={requeueStatus === "submitting"}
-                >
-                  {requeueStatus === "submitting" ? "Requeueing..." : "Requeue verification"}
-                </button>
-              </div>
+              {roleAllows(user.role, ROLE_ADMIN) && (
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={handleRequeue}
+                    disabled={requeueStatus === "submitting"}
+                  >
+                    {requeueStatus === "submitting" ? "Requeueing..." : "Requeue verification"}
+                  </button>
+                </div>
+              )}
               {requeueMessage && (
                 <p
                   className={`body-copy status-copy ${

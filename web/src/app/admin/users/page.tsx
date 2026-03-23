@@ -19,6 +19,39 @@ import {
 type PageStatus = "loading" | "ready" | "error";
 type RowStatus = "idle" | "submitting" | "success" | "error";
 
+const uiText = {
+  eyebrow: "Internal tooling",
+  title: "User management",
+  intro: "Admins can grant or revoke moderator access and ban or unban accounts.",
+  loading: "Loading users...",
+  error: "Unable to load admin users.",
+  authRequiredTitle: "Sign in required",
+  authRequiredBody: "Admin user management requires an authenticated session.",
+  forbiddenTitle: "Admin access required",
+  usersTitle: "Accounts",
+  searchLabel: "Search users",
+  searchPlaceholder: "Search by username, role, or status",
+  listLabel: "Managed users",
+  actions: {
+    backToReviews: "Back to reviews",
+    backToPlay: "Back to play",
+    saveRole: "Save role",
+    ban: "Ban",
+    unban: "Unban"
+  },
+  labels: {
+    user: "User",
+    role: "Role",
+    status: "Status",
+    created: "Created",
+    actions: "Actions",
+    active: "active",
+    banned: "banned",
+    admin: "Admin",
+    moderator: "Moderator"
+  }
+} as const;
+
 function formatTimestamp(value: string | null): string {
   if (!value) {
     return "Not recorded";
@@ -164,44 +197,42 @@ export default function AdminUsersPage() {
     <main className="page-shell">
       <div className="content-card content-card-wide">
         <p className="eyebrow">Internal tooling</p>
-        <h1>User management</h1>
-        <p className="body-copy">
-          Admins can grant or revoke moderator access and ban or unban accounts.
-        </p>
+        <h1>{uiText.title}</h1>
+        <p className="body-copy">{uiText.intro}</p>
         <div className="actions">
           <Link href="/admin/reviews" className="primary-link">
-            Back to reviews
+            {uiText.actions.backToReviews}
           </Link>
           <Link href="/play" className="secondary-link">
-            Back to play
+            {uiText.actions.backToPlay}
           </Link>
         </div>
 
         {status === "loading" && (
           <p className="status-copy" aria-live="polite">
-            Loading users...
+            {uiText.loading}
           </p>
         )}
 
         {status === "error" && errorMessage && (
           <p className="status-copy error-copy" role="alert">
-            {errorMessage}
+            {errorMessage || uiText.error}
           </p>
         )}
 
         {status === "ready" && !user && (
           <section className="maze-summary" aria-labelledby="users-auth-title">
             <h2 id="users-auth-title" className="section-title">
-              Sign in required
+              {uiText.authRequiredTitle}
             </h2>
-            <p className="body-copy">Admin user management requires an authenticated session.</p>
+            <p className="body-copy">{uiText.authRequiredBody}</p>
           </section>
         )}
 
         {status === "ready" && user && !roleAllows(user.role, ROLE_ADMIN) && (
           <section className="maze-summary" aria-labelledby="users-forbidden-title">
             <h2 id="users-forbidden-title" className="section-title">
-              Admin access required
+              {uiText.forbiddenTitle}
             </h2>
             <p className="body-copy">
               Your current role is <code>{user.role}</code>. Only admins can manage
@@ -215,7 +246,7 @@ export default function AdminUsersPage() {
             <div className="review-header">
               <div>
                 <h2 id="user-list-title" className="section-title">
-                  Accounts
+                  {uiText.usersTitle}
                 </h2>
                 <p className="assistive-copy">
                   Signed in as <strong>{user.username}</strong>.
@@ -224,37 +255,49 @@ export default function AdminUsersPage() {
             </div>
 
             <label className="auth-field" htmlFor="user-search">
-              <span>Search users</span>
+              <span>{uiText.searchLabel}</span>
               <input
                 id="user-search"
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search by username, role, or status"
+                placeholder={uiText.searchPlaceholder}
               />
             </label>
 
-            <div className="review-list" role="list" aria-label="Managed users">
-              <div className="review-row review-row-header" role="listitem" aria-hidden="true">
-                <span>User</span>
-                <span>Role</span>
-                <span>Status</span>
-                <span>Created</span>
-                <span>Actions</span>
+            <p className="assistive-copy" aria-live="polite">
+              {filteredEntries.length} user{filteredEntries.length === 1 ? "" : "s"} shown
+            </p>
+
+            <div className="review-list" role="list" aria-label={uiText.listLabel}>
+              <div
+                className="review-row review-row-header admin-user-row admin-user-row-header"
+                role="listitem"
+                aria-hidden="true"
+              >
+                <span>{uiText.labels.user}</span>
+                <span>{uiText.labels.role}</span>
+                <span>{uiText.labels.status}</span>
+                <span>{uiText.labels.created}</span>
+                <span>{uiText.labels.actions}</span>
               </div>
               {filteredEntries.map((entry) => (
-                <div key={entry.username} className="review-row" role="listitem">
+                <div
+                  key={entry.username}
+                  className="review-row admin-user-row"
+                  role="listitem"
+                >
                   <span className="review-detail-stack">
                     <strong>{entry.username}</strong>
                     <span className="assistive-copy">
                       {entry.role === ROLE_ADMIN
-                        ? "Admin"
+                        ? uiText.labels.admin
                         : entry.role === ROLE_MODERATOR
-                          ? "Moderator"
-                          : "User"}
+                          ? uiText.labels.moderator
+                          : uiText.labels.user}
                     </span>
                   </span>
-                  <span>
+                  <span className="admin-user-role-cell">
                     <label className="sr-only" htmlFor={`role-${entry.username}`}>
                       Role for {entry.username}
                     </label>
@@ -273,13 +316,13 @@ export default function AdminUsersPage() {
                       <option value={ROLE_ADMIN}>Admin</option>
                     </select>
                   </span>
-                  <span className="review-detail-stack">
+                  <span className="review-detail-stack admin-user-status-cell">
                     <span
                       className={`score-badge ${
                         entry.isBanned ? "score-badge-high" : "score-badge-low"
                       }`}
                     >
-                      {entry.isBanned ? "banned" : "active"}
+                      {entry.isBanned ? uiText.labels.banned : uiText.labels.active}
                     </span>
                     {entry.isBanned && (
                       <span className="assistive-copy">
@@ -287,16 +330,16 @@ export default function AdminUsersPage() {
                       </span>
                     )}
                   </span>
-                  <span>{formatTimestamp(entry.createdAt)}</span>
-                  <span className="review-detail-stack">
-                    <div className="actions">
+                  <span className="admin-user-created-cell">{formatTimestamp(entry.createdAt)}</span>
+                  <span className="review-detail-stack admin-user-actions-cell">
+                    <div className="actions admin-user-actions">
                       <button
                         type="button"
                         className="secondary-button"
                         disabled={rowStatuses[entry.username] === "submitting"}
                         onClick={() => void handleRoleSave(entry)}
                       >
-                        Save role
+                        {uiText.actions.saveRole}
                       </button>
                       <button
                         type="button"
@@ -304,12 +347,13 @@ export default function AdminUsersPage() {
                         disabled={rowStatuses[entry.username] === "submitting"}
                         onClick={() => void handleBanToggle(entry)}
                       >
-                        {entry.isBanned ? "Unban" : "Ban"}
+                        {entry.isBanned ? uiText.actions.unban : uiText.actions.ban}
                       </button>
                     </div>
                     {rowMessages[entry.username] && (
                       <span
-                        className={`assistive-copy ${
+                        aria-live="polite"
+                        className={`assistive-copy admin-user-message ${
                           rowStatuses[entry.username] === "error" ? "error-copy" : "success-copy"
                         }`}
                       >

@@ -12,6 +12,34 @@ import { formatElapsedTime } from "../../../lib/game/maze";
 
 type PageStatus = "loading" | "success" | "error";
 
+const uiText = {
+  eyebrow: "Archive Day",
+  fallbackTitle: "Daily challenge detail",
+  loading: "Loading archived challenge...",
+  error: "Unable to load that archived challenge right now.",
+  detailsTitle: "Challenge details",
+  leaderboardTitle: "Leaderboard",
+  leaderboardEmpty: "No submissions for this challenge yet.",
+  leaderboardLabel: "Archived daily leaderboard",
+  labels: {
+    date: "Date",
+    title: "Title",
+    seed: "Seed",
+    size: "Maze size",
+    start: "Start",
+    exit: "Exit",
+    rank: "Rank",
+    player: "Player",
+    time: "Time",
+    moves: "Moves"
+  },
+  actions: {
+    play: "Play this challenge",
+    backToHistory: "Back to history",
+    openPlay: "Open /play"
+  }
+} as const;
+
 export default function HistoryDayPage() {
   const params = useParams<{ date: string }>();
   const date = typeof params.date === "string" ? params.date : "";
@@ -56,18 +84,18 @@ export default function HistoryDayPage() {
   return (
     <main className="page-shell">
       <div className="content-card">
-        <p className="eyebrow">Archive Day</p>
-        <h1>{date || "Daily challenge detail"}</h1>
+        <p className="eyebrow">{uiText.eyebrow}</p>
+        <h1>{date || uiText.fallbackTitle}</h1>
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">
-            Loading archived challenge...
+            {uiText.loading}
           </p>
         )}
 
         {status === "error" && (
           <p className="body-copy status-copy error-copy" aria-live="assertive">
-            Unable to load that archived challenge right now.
+            {uiText.error}
           </p>
         )}
 
@@ -75,37 +103,37 @@ export default function HistoryDayPage() {
           <>
             <section className="maze-summary" aria-labelledby="archive-challenge-title">
               <h2 id="archive-challenge-title" className="section-title">
-                Challenge details
+                {uiText.detailsTitle}
               </h2>
               <dl className="metadata-list">
                 <div className="metadata-row">
-                  <dt>Date</dt>
+                  <dt>{uiText.labels.date}</dt>
                   <dd>{payload.challenge.date}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Title</dt>
+                  <dt>{uiText.labels.title}</dt>
                   <dd>{payload.challenge.title}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Seed</dt>
+                  <dt>{uiText.labels.seed}</dt>
                   <dd>
                     <code>{payload.challenge.seed}</code>
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Maze size</dt>
+                  <dt>{uiText.labels.size}</dt>
                   <dd>
                     {payload.challenge.size.width} x {payload.challenge.size.height}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Start</dt>
+                  <dt>{uiText.labels.start}</dt>
                   <dd>
                     ({payload.challenge.start.x}, {payload.challenge.start.y})
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Exit</dt>
+                  <dt>{uiText.labels.exit}</dt>
                   <dd>
                     ({payload.challenge.exit.x}, {payload.challenge.exit.y})
                   </dd>
@@ -115,17 +143,17 @@ export default function HistoryDayPage() {
 
             <section className="maze-summary" aria-labelledby="archive-leaderboard-title">
               <h2 id="archive-leaderboard-title" className="section-title">
-                Leaderboard
+                {uiText.leaderboardTitle}
               </h2>
               {payload.leaderboard.entries.length === 0 ? (
-                <p className="body-copy">No submissions for this challenge yet.</p>
+                <p className="body-copy">{uiText.leaderboardEmpty}</p>
               ) : (
-                <div className="leaderboard-list" aria-label="Archived daily leaderboard">
+                <div className="leaderboard-list" aria-label={uiText.leaderboardLabel}>
                   <div className="leaderboard-row leaderboard-row-header" aria-hidden="true">
-                    <span>Rank</span>
-                    <span>Player</span>
-                    <span>Time</span>
-                    <span>Moves</span>
+                    <span>{uiText.labels.rank}</span>
+                    <span>{uiText.labels.player}</span>
+                    <span>{uiText.labels.time}</span>
+                    <span>{uiText.labels.moves}</span>
                   </div>
                   {payload.leaderboard.entries.map((entry) => (
                     <div key={`${entry.rank}-${entry.acceptedAt}`} className="leaderboard-row">
@@ -154,13 +182,13 @@ export default function HistoryDayPage() {
 
         <div className="actions">
           <Link href={`/play?date=${date}`} className="primary-link">
-            Play this challenge
+            {uiText.actions.play}
           </Link>
           <Link href="/history" className="primary-link">
-            Back to history
+            {uiText.actions.backToHistory}
           </Link>
           <Link href="/play" className="secondary-link">
-            Open /play
+            {uiText.actions.openPlay}
           </Link>
         </div>
       </div>
