@@ -3,16 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
-import { getStartingBillboardPoint, normalizeAngle } from "../../lib/game/maze";
+import {
+  getAccentWallCells,
+  getAmbientRatPath,
+  getStartingBillboardPoint,
+  normalizeAngle
+} from "../../lib/game/maze";
 
 const FLOOR_TEXTURE_SCALE = 0.84;
 const CEILING_TEXTURE_SCALE = 1.02;
 const FIELD_OF_VIEW = Math.PI * 0.285;
 const INTRO_RISE_DURATION_MS = 1250;
+const RAT_STEP_DURATION_MS = 2200;
 const TEXTURE_PATHS = {
   wall: "/assets/3d-maze/wall.png",
+  accentWall: "/assets/3d-maze/openglwall.png",
   floor: "/assets/3d-maze/floor.png",
   ceiling: "/assets/3d-maze/ceiling.png",
+  rat: "/assets/3d-maze/rat.png",
   start: "/assets/3d-maze/start.png",
   exit: "/assets/3d-maze/smiley.png"
 } as const;
@@ -30,6 +38,7 @@ interface TextureSurfaceState {
   source: TextureMap | null;
   supportsSurfaceTextures: boolean;
   wall: TextureSurface | null;
+  accentWall: TextureSurface | null;
   floor: TextureSurface | null;
   ceiling: TextureSurface | null;
 }
@@ -40,6 +49,7 @@ interface SpriteDefinition {
   worldY: number;
   scale: number;
   alpha: number;
+  verticalAnchor: number;
 }
 
 interface SpriteProjection extends SpriteDefinition {
@@ -59,8 +69,10 @@ interface FirstPersonViewProps {
 function useMazeTextures(): TextureMap {
   const [textures, setTextures] = useState<TextureMap>({
     wall: null,
+    accentWall: null,
     floor: null,
     ceiling: null,
+    rat: null,
     start: null,
     exit: null
   });
@@ -209,10 +221,12 @@ export default function FirstPersonView({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textures = useMazeTextures();
   const [introProgress, setIntroProgress] = useState<number>(0);
+  const [ratTick, setRatTick] = useState<number>(0);
   const textureSurfaceRef = useRef<TextureSurfaceState>({
     source: null,
     supportsSurfaceTextures: false,
     wall: null,
+    accentWall: null,
     floor: null,
     ceiling: null
   });
@@ -240,6 +254,16 @@ export default function FirstPersonView({
   }, [animationMode, introSequence, maze.date, maze.seed]);
 
   useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setRatTick((currentTick) => currentTick + 1);
+    }, 120);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
 
     if (!canvas) {
@@ -256,6 +280,8 @@ export default function FirstPersonView({
     const height = canvas.height;
     const originX = playerPosition.x + 0.5;
     const originY = playerPosition.y + 0.5;
+    const accentWallCells = getAccentWallCells(maze);
+    const ratPath = getAmbientRatPath(maze);
     const startingBillboardPoint = getStartingBillboardPoint(maze);
     const fieldOfView = FIELD_OF_VIEW;
     const maxDistance = 24;
@@ -272,6 +298,7 @@ export default function FirstPersonView({
         source: textures,
         supportsSurfaceTextures,
         wall: createTextureSurface(textures.wall),
+        accentWall: createTextureSurface(textures.accentWall),
         floor: supportsSurfaceTextures ? createTextureSurface(textures.floor) : null,
         ceiling: supportsSurfaceTextures
           ? createTextureSurface(textures.ceiling)
@@ -358,6 +385,8 @@ export default function FirstPersonView({
       let hitWall = false;
       let hitPointX = originX;
       let hitPointY = originY;
+      let hitCellX = Math.floor(originX);
+      let hitCellY = Math.floor(originY);
 
       while (distance < maxDistance && !hitWall) {
         distance += 0.02;
@@ -366,6 +395,8 @@ export default function FirstPersonView({
 
         const sampleX = Math.floor(hitPointX);
         const sampleY = Math.floor(hitPointY);
+        hitCellX = sampleX;
+        hitCellY = sampleY;
 
         if (
           sampleX < 0 ||
@@ -391,17 +422,24 @@ export default function FirstPersonView({
       const animatedWallHeight = Math.max(1, wallHeight * introProgress);
       const wallTop = wallBottom - animatedWallHeight;
       const shade = Math.max(50, Math.min(200, 215 - correctedDistance * 18));
+      const useAccentWall = accentWallCells.has(`${hitCellX},${hitCellY}`);
+      const wallSurface =
+        useAccentWall && textureSurfaces.accentWall
+          ? textureSurfaces.accentWall
+          : textureSurfaces.wall;
+      const wallImage =
+        useAccentWall && textures.accentWall ? textures.accentWall : textures.wall;
 
-      if (textureSurfaces.wall && textures.wall) {
-        const textureColumn = getTextureColumn(textureSurfaces.wall, hitPointX, hitPointY);
+      if (wallSurface && wallImage) {
+        const textureColumn = getTextureColumn(wallSurface, hitPointX, hitPointY);
         context.save();
         context.globalAlpha = Math.max(0.55, Math.min(1, shade / 180));
         context.drawImage(
-          textures.wall,
+          wallImage,
           textureColumn,
           0,
           1,
-          textureSurfaces.wall.height,
+          wallSurface.height,
           column,
           wallTop,
           1,
@@ -415,6 +453,34 @@ export default function FirstPersonView({
     }
 
     const spriteDefinitions: SpriteProjection[] = [
+      textures.rat && ratPath.length > 0
+        ? (() => {
+            const patrolPath =
+              ratPath.length > 1
+                ? [...ratPath, ...ratPath.slice(1, -1).reverse()]
+                : ratPath;
+            const totalSegments = Math.max(1, patrolPath.length);
+            const now = performance.now();
+            const rawStep = Math.floor(now / RAT_STEP_DURATION_MS);
+            const segmentIndex = rawStep % totalSegments;
+            const nextSegmentIndex = (segmentIndex + 1) % totalSegments;
+            const segmentProgress = (now % RAT_STEP_DURATION_MS) / RAT_STEP_DURATION_MS;
+            const fromPoint = patrolPath[segmentIndex] ?? patrolPath[0] ?? maze.start;
+            const toPoint = patrolPath[nextSegmentIndex] ?? fromPoint;
+            const easedProgress = 1 - Math.pow(1 - segmentProgress, 2);
+
+            return {
+              image: textures.rat,
+              worldX: fromPoint.x + (toPoint.x - fromPoint.x) * easedProgress + 0.5,
+              worldY: fromPoint.y + (toPoint.y - fromPoint.y) * easedProgress + 0.5,
+              scale: 0.42,
+              alpha: 1,
+              verticalAnchor: 1.08,
+              angle: 0,
+              distance: 0
+            };
+          })()
+        : null,
       textures.start
         ? {
             image: textures.start,
@@ -422,6 +488,7 @@ export default function FirstPersonView({
             worldY: startingBillboardPoint.y + 0.5,
             scale: 0.52,
             alpha: 0.42,
+            verticalAnchor: 0.5,
             angle: 0,
             distance: 0
           }
@@ -433,6 +500,7 @@ export default function FirstPersonView({
             worldY: maze.exit.y + 0.5,
             scale: 0.94,
             alpha: 0.78,
+            verticalAnchor: 0.5,
             angle: 0,
             distance: 0
           }
@@ -466,7 +534,8 @@ export default function FirstPersonView({
       const projectedHeight = (height / correctedDistance) * sprite.scale;
       const projectedWidth =
         (projectedHeight * sprite.image.width) / sprite.image.height;
-      const projectedBottom = (height + projectedHeight) / 2;
+      const projectedBottom =
+        height / 2 + projectedHeight * sprite.verticalAnchor;
       const animatedSpriteHeight = Math.max(1, projectedHeight * introProgress);
       const animatedSpriteWidth = Math.max(1, projectedWidth * introProgress);
       const hiddenBottom = height + projectedHeight * 0.2;
@@ -509,7 +578,7 @@ export default function FirstPersonView({
     context.moveTo(0, height / 2);
     context.lineTo(width, height / 2);
     context.stroke();
-  }, [introProgress, maze, playerAngle, playerPosition, textures]);
+  }, [introProgress, maze, playerAngle, playerPosition, ratTick, textures]);
 
   return (
     <div className="raycast-panel">

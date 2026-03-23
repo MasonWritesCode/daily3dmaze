@@ -49,6 +49,17 @@ export const DIRECTION_ORDER: Direction[] = [
 export const MOVE_DURATION_MS = 180;
 export const TURN_DURATION_MS = 150;
 
+function hashString(value: string): number {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
 export function getStartingDirectionIndex(maze: DailyMaze): number {
   const exitDelta = {
     x: maze.exit.x - maze.start.x,
@@ -108,6 +119,100 @@ export function getStartingBillboardPoint(maze: DailyMaze): MazePoint {
   }
 
   return fallbackPoint;
+}
+
+export function getAccentWallCells(maze: DailyMaze): Set<string> {
+  const accentWalls = new Set<string>();
+
+  for (let y = 1; y < maze.size.height - 1; y += 1) {
+    const row = maze.grid[y];
+
+    for (let x = 1; x < maze.size.width - 1; x += 1) {
+      if (row?.[x] !== "#") {
+        continue;
+      }
+
+      const key = `${x},${y}`;
+      const score = hashString(`${maze.seed}:accent:${key}`);
+
+      if (score % 23 !== 0) {
+        continue;
+      }
+
+      const touchingAccent = [
+        `${x - 1},${y}`,
+        `${x + 1},${y}`,
+        `${x},${y - 1}`,
+        `${x},${y + 1}`
+      ].some((neighborKey) => accentWalls.has(neighborKey));
+
+      if (!touchingAccent) {
+        accentWalls.add(key);
+      }
+    }
+  }
+
+  return accentWalls;
+}
+
+export function getAmbientRatPath(maze: DailyMaze): MazePoint[] {
+  const openCells: MazePoint[] = [];
+
+  for (let y = 1; y < maze.size.height - 1; y += 1) {
+    const row = maze.grid[y];
+
+    for (let x = 1; x < maze.size.width - 1; x += 1) {
+      if (row?.[x] !== "#") {
+        openCells.push({ x, y });
+      }
+    }
+  }
+
+  const candidateCells = openCells.filter((cell) => {
+    const startDistance = Math.abs(cell.x - maze.start.x) + Math.abs(cell.y - maze.start.y);
+    const exitDistance = Math.abs(cell.x - maze.exit.x) + Math.abs(cell.y - maze.exit.y);
+    return startDistance >= 4 && exitDistance >= 3;
+  });
+
+  const pool = candidateCells.length > 0 ? candidateCells : openCells;
+  if (pool.length === 0) {
+    return [maze.start];
+  }
+
+  const startIndex = hashString(`${maze.seed}:rat:start`) % pool.length;
+  const path: MazePoint[] = [pool[startIndex] ?? maze.start];
+  let previousPoint: MazePoint | null = null;
+
+  for (let step = 1; step < 12; step += 1) {
+    const currentPoint = path[path.length - 1] ?? maze.start;
+    const neighbors = DIRECTION_ORDER.map((direction) => ({
+      x: currentPoint.x + direction.vector.x,
+      y: currentPoint.y + direction.vector.y
+    })).filter((neighbor) => {
+      const cell = maze.grid[neighbor.y]?.[neighbor.x];
+      return cell && cell !== "#";
+    });
+
+    const forwardOptions = neighbors.filter(
+      (neighbor) =>
+        !previousPoint ||
+        neighbor.x !== previousPoint.x ||
+        neighbor.y !== previousPoint.y
+    );
+    const options = forwardOptions.length > 0 ? forwardOptions : neighbors;
+
+    if (options.length === 0) {
+      break;
+    }
+
+    const nextIndex = hashString(`${maze.seed}:rat:${step}:${currentPoint.x},${currentPoint.y}`) %
+      options.length;
+    const nextPoint = options[nextIndex] ?? currentPoint;
+    path.push(nextPoint);
+    previousPoint = currentPoint;
+  }
+
+  return path;
 }
 
 export function renderGridRows(
