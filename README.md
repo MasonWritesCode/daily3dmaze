@@ -30,11 +30,17 @@ Planned local ports:
 
 Local backend configuration:
 - `DATABASE_URL` should point at the local Postgres instance
+- `API_BASE_URL` and `WEB_BASE_URL` should match your local callback origins if using OAuth
 
 Current helper commands:
 - `make infra-up`
 - `make infra-down`
 - `make infra-logs`
 - `make dev-web`
+
+Optional OAuth configuration:
+- `GITHUB_OAUTH_CLIENT_ID`
+- `GITHUB_OAUTH_CLIENT_SECRET`
+- `NEXT_PUBLIC_GITHUB_OAUTH_ENABLED=true`
 
 At this stage, Compose is only responsible for local infrastructure services.

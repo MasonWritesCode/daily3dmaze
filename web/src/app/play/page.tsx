@@ -19,6 +19,7 @@ import {
   type ReplayTraceEvent,
   type RunSubmissionResponse
 } from "../../lib/api";
+import { githubOAuthEnabled, oauthStartEndpoint } from "../../lib/config";
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import {
   DIRECTION_ORDER,
@@ -100,10 +101,12 @@ const uiText = {
     username: "Username",
     password: "Password",
     signedInAs: "Signed in as",
+    role: "Role",
     signingIn: "Signing in...",
     creatingAccount: "Creating account...",
     loginSuccess: "Signed in successfully.",
-    registerSuccess: "Account created and signed in."
+    registerSuccess: "Account created and signed in.",
+    continueWithGitHub: "Continue with GitHub"
   },
   leaderboard: {
     heading: "Leaderboard",
@@ -659,6 +662,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
             <Link href={`/profile/${user.username}`} className="inline-link">
               <code>{user.username}</code>
             </Link>
+            {" "}({uiText.auth.role}: <code>{user.role}</code>)
           </p>
           <div className="actions">
             <button type="button" className="secondary-button" onClick={handleLogout}>
@@ -734,6 +738,11 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
             <button type="submit" className="primary-button" disabled={status === "submitting"}>
               {submitLabel}
             </button>
+            {githubOAuthEnabled && (
+              <a href={oauthStartEndpoint("github")} className="secondary-link">
+                {uiText.auth.continueWithGitHub}
+              </a>
+            )}
           </div>
           {(status === "submitting" || status === "success") && (
             <p className="body-copy status-copy success-copy" aria-live="polite">

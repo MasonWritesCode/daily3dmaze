@@ -146,9 +146,13 @@ type updateRunReviewResponse struct {
 }
 
 type app struct {
-	db          *sql.DB
-	authLimiter *authRateLimiter
-	now         func() time.Time
+	db             *sql.DB
+	authLimiter    *authRateLimiter
+	now            func() time.Time
+	oauthClient    *http.Client
+	oauthProviders map[string]oauthProvider
+	apiBaseURL     string
+	webBaseURL     string
 }
 
 const (
@@ -175,9 +179,13 @@ func main() {
 	defer db.Close()
 
 	application := app{
-		db:          db,
-		authLimiter: newAuthRateLimiter(authRateLimit, authWindow),
-		now:         time.Now,
+		db:             db,
+		authLimiter:    newAuthRateLimiter(authRateLimit, authWindow),
+		now:            time.Now,
+		oauthClient:    http.DefaultClient,
+		oauthProviders: configuredOAuthProviders(),
+		apiBaseURL:     envOrDefault("API_BASE_URL", "http://localhost:8080"),
+		webBaseURL:     envOrDefault("WEB_BASE_URL", "http://localhost:3000"),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
@@ -185,6 +193,7 @@ func main() {
 	mux.HandleFunc("/api/auth/register", application.registerHandler)
 	mux.HandleFunc("/api/auth/login", application.loginHandler)
 	mux.HandleFunc("/api/auth/logout", application.logoutHandler)
+	mux.HandleFunc("/api/auth/oauth/", application.oauthHandler)
 	mux.HandleFunc("/api/me", application.meHandler)
 	mux.HandleFunc("/api/profile", application.profileHandler)
 	mux.HandleFunc("/api/history", application.historyHandler)
