@@ -418,8 +418,13 @@ func (a app) recentRunReviewsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := a.currentUserFromRequest(r); err != nil {
+	user, err := a.currentUserFromRequest(r)
+	if err != nil {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !roleAllows(user.Role, roleModerator, roleAdmin) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -455,8 +460,13 @@ func (a app) recomputeRunReviewsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if _, err := a.currentUserFromRequest(r); err != nil {
+	user, err := a.currentUserFromRequest(r)
+	if err != nil {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !roleAllows(user.Role, roleAdmin) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -484,6 +494,10 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 	reviewer, err := a.currentUserFromRequest(r)
 	if err != nil {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+	if !roleAllows(reviewer.Role, roleModerator, roleAdmin) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 

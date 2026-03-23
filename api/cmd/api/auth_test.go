@@ -91,12 +91,12 @@ func TestRegisterHandlerCreatesUserAndSession(t *testing.T) {
 	application := app{db: db}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		INSERT INTO users (username, password_hash)
-		VALUES ($1, $2)
-		RETURNING id, username
+		INSERT INTO users (username, password_hash, role)
+		VALUES ($1, $2, $3)
+		RETURNING id, username, role
 	`)).
-		WithArgs("mason_dev", sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username"}).AddRow(7, "mason_dev"))
+		WithArgs("mason_dev", sqlmock.AnyArg(), roleUser).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleUser))
 
 	mock.ExpectExec(regexp.QuoteMeta(`
 		INSERT INTO sessions (user_id, token_hash, expires_at)
@@ -127,6 +127,9 @@ func TestRegisterHandlerCreatesUserAndSession(t *testing.T) {
 
 	if payload.User.Username != "mason_dev" {
 		t.Fatalf("expected lowercased username, got %q", payload.User.Username)
+	}
+	if payload.User.Role != roleUser {
+		t.Fatalf("expected role %q, got %q", roleUser, payload.User.Role)
 	}
 
 	cookies := response.Cookies()
@@ -164,14 +167,14 @@ func TestLoginHandlerRejectsInvalidPassword(t *testing.T) {
 	}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, username, password_hash
+		SELECT id, username, role, password_hash
 		FROM users
 		WHERE username = $1
 	`)).
 		WithArgs("mason_dev").
 		WillReturnRows(
-			sqlmock.NewRows([]string{"id", "username", "password_hash"}).
-				AddRow(7, "mason_dev", string(passwordHash)),
+			sqlmock.NewRows([]string{"id", "username", "role", "password_hash"}).
+				AddRow(7, "mason_dev", roleUser, string(passwordHash)),
 		)
 
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(
@@ -207,13 +210,13 @@ func TestMeHandlerReturnsAuthenticatedUser(t *testing.T) {
 	token := "session-token"
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT users.id, users.username
+		SELECT users.id, users.username, users.role
 		FROM sessions
 		JOIN users ON users.id = sessions.user_id
 		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
 	`)).
 		WithArgs(hashToken(token)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username"}).AddRow(7, "mason_dev"))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleModerator))
 
 	request := httptest.NewRequest(http.MethodGet, "/api/me", nil)
 	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
@@ -235,6 +238,9 @@ func TestMeHandlerReturnsAuthenticatedUser(t *testing.T) {
 
 	if payload.User.Username != "mason_dev" {
 		t.Fatalf("expected username %q, got %q", "mason_dev", payload.User.Username)
+	}
+	if payload.User.Role != roleModerator {
+		t.Fatalf("expected role %q, got %q", roleModerator, payload.User.Role)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

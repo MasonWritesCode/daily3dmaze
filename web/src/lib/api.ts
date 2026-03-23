@@ -47,6 +47,7 @@ export interface RunSubmissionResponse extends RunSubmissionPayload {
 export interface AuthUser {
   id: number;
   username: string;
+  role: string;
 }
 
 export interface AuthResponse {

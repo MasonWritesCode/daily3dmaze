@@ -22,6 +22,9 @@ const (
 	maxUsernameLength    = 32
 	minUsernameLength    = 3
 	usernameAllowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+	roleUser             = "user"
+	roleModerator        = "moderator"
+	roleAdmin            = "admin"
 )
 
 type authRequest struct {
@@ -36,11 +39,13 @@ type authResponse struct {
 type authUserResponse struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
+	Role     string `json:"role"`
 }
 
 type currentUser struct {
 	ID       int64
 	Username string
+	Role     string
 }
 
 func (a app) registerHandler(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +92,7 @@ func (a app) registerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, authResponse{
-		User: authUserResponse{ID: user.ID, Username: user.Username},
+		User: authUserResponse{ID: user.ID, Username: user.Username, Role: user.Role},
 	})
 }
 
@@ -134,7 +139,7 @@ func (a app) loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, authResponse{
-		User: authUserResponse{ID: user.ID, Username: user.Username},
+		User: authUserResponse{ID: user.ID, Username: user.Username, Role: user.Role},
 	})
 }
 
@@ -179,7 +184,7 @@ func (a app) meHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, authResponse{
-		User: authUserResponse{ID: user.ID, Username: user.Username},
+		User: authUserResponse{ID: user.ID, Username: user.Username, Role: user.Role},
 	})
 }
 
@@ -204,13 +209,13 @@ func validateAuthRequest(request authRequest) error {
 
 func (a app) createUser(username, passwordHash string) (currentUser, error) {
 	const query = `
-		INSERT INTO users (username, password_hash)
-		VALUES ($1, $2)
-		RETURNING id, username
+		INSERT INTO users (username, password_hash, role)
+		VALUES ($1, $2, $3)
+		RETURNING id, username, role
 	`
 
 	var user currentUser
-	if err := a.db.QueryRow(query, username, passwordHash).Scan(&user.ID, &user.Username); err != nil {
+	if err := a.db.QueryRow(query, username, passwordHash, roleUser).Scan(&user.ID, &user.Username, &user.Role); err != nil {
 		return currentUser{}, err
 	}
 
@@ -219,14 +224,14 @@ func (a app) createUser(username, passwordHash string) (currentUser, error) {
 
 func (a app) findUserByUsername(username string) (currentUser, string, error) {
 	const query = `
-		SELECT id, username, password_hash
+		SELECT id, username, role, password_hash
 		FROM users
 		WHERE username = $1
 	`
 
 	var user currentUser
 	var passwordHash string
-	if err := a.db.QueryRow(query, username).Scan(&user.ID, &user.Username, &passwordHash); err != nil {
+	if err := a.db.QueryRow(query, username).Scan(&user.ID, &user.Username, &user.Role, &passwordHash); err != nil {
 		return currentUser{}, "", err
 	}
 
@@ -262,14 +267,14 @@ func (a app) currentUserFromRequest(r *http.Request) (currentUser, error) {
 	}
 
 	const query = `
-		SELECT users.id, users.username
+		SELECT users.id, users.username, users.role
 		FROM sessions
 		JOIN users ON users.id = sessions.user_id
 		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
 	`
 
 	var user currentUser
-	if err := a.db.QueryRow(query, hashToken(cookie.Value)).Scan(&user.ID, &user.Username); err != nil {
+	if err := a.db.QueryRow(query, hashToken(cookie.Value)).Scan(&user.ID, &user.Username, &user.Role); err != nil {
 		return currentUser{}, err
 	}
 
@@ -343,4 +348,14 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func roleAllows(userRole string, allowedRoles ...string) bool {
+	for _, allowedRole := range allowedRoles {
+		if userRole == allowedRole {
+			return true
+		}
+	}
+
+	return false
 }

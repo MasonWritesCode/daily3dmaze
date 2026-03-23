@@ -229,6 +229,41 @@ func TestRecentRunReviewsHandlerRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestRecentRunReviewsHandlerRequiresModeratorRole(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	token := "session-token"
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role
+		FROM sessions
+		JOIN users ON users.id = sessions.user_id
+		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
+	`)).
+		WithArgs(hashToken(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleUser))
+
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/run-reviews", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	application.recentRunReviewsHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, response.StatusCode)
+	}
+}
+
 func TestRunReviewDetailHandlerRequiresAuthentication(t *testing.T) {
 	t.Parallel()
 
@@ -295,6 +330,41 @@ func TestRecomputeRunReviewsHandlerRequiresAuthentication(t *testing.T) {
 
 	if response.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, response.StatusCode)
+	}
+}
+
+func TestRecomputeRunReviewsHandlerRequiresAdminRole(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	token := "session-token"
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role
+		FROM sessions
+		JOIN users ON users.id = sessions.user_id
+		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
+	`)).
+		WithArgs(hashToken(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mod_mason", roleModerator))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/recompute", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	application.recomputeRunReviewsHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, response.StatusCode)
 	}
 }
 
