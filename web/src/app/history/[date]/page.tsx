@@ -148,7 +148,7 @@ export default function HistoryDayPage() {
               {payload.leaderboard.entries.length === 0 ? (
                 <p className="body-copy">{uiText.leaderboardEmpty}</p>
               ) : (
-                <div className="leaderboard-list" aria-label={uiText.leaderboardLabel}>
+                <div className="leaderboard-list" role="list" aria-label={uiText.leaderboardLabel}>
                   <div className="leaderboard-row leaderboard-row-header" aria-hidden="true">
                     <span>{uiText.labels.rank}</span>
                     <span>{uiText.labels.player}</span>
@@ -156,7 +156,11 @@ export default function HistoryDayPage() {
                     <span>{uiText.labels.moves}</span>
                   </div>
                   {payload.leaderboard.entries.map((entry) => (
-                    <div key={`${entry.rank}-${entry.acceptedAt}`} className="leaderboard-row">
+                    <div
+                      key={`${entry.rank}-${entry.acceptedAt}`}
+                      className="leaderboard-row"
+                      role="listitem"
+                    >
                       <span>#{entry.rank}</span>
                       <span>
                         {entry.username ? (

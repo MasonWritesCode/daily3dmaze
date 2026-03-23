@@ -229,6 +229,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     useState<SceneAnimationMode>("intro");
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [supportsFullscreen, setSupportsFullscreen] = useState<boolean>(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(false);
   const animationRef = useRef<number | null>(null);
   const completionTimeoutRef = useRef<number | null>(null);
   const actionLockRef = useRef<boolean>(false);
@@ -319,6 +320,17 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   }, []);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    sync();
+    mediaQuery.addEventListener("change", sync);
+    return () => {
+      mediaQuery.removeEventListener("change", sync);
+    };
+  }, []);
+
+  useEffect(() => {
     function handleFullscreenChange() {
       setIsFullscreen(document.fullscreenElement === viewportRef.current);
     }
@@ -378,6 +390,21 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     }
 
     function animateMovement(nextPosition: MazePoint, startedAtForRun: number) {
+      if (prefersReducedMotion) {
+        setPlayerPosition(nextPosition);
+        setRenderPosition(nextPosition);
+        setMoveCount((currentCount) => currentCount + 1);
+
+        if (isExitReached(nextPosition, maze)) {
+          const completedAt = Date.now();
+          setHasFinished(true);
+          setFinishTime(completedAt);
+          setElapsedMs(completedAt - startedAtForRun);
+        }
+
+        return;
+      }
+
       const startPosition = playerPosition;
       const startedAt = performance.now();
       actionLockRef.current = true;
@@ -417,6 +444,14 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       actionLockRef.current = true;
       setMoveCount((currentCount) => currentCount + 1);
       setElapsedMs(completedAt - startedAtForRun);
+
+      if (prefersReducedMotion) {
+        setHasFinished(true);
+        setFinishTime(completedAt);
+        actionLockRef.current = false;
+        return;
+      }
+
       setSceneAnimationMode("outro");
       setIntroSequence((current) => current + 1);
 
@@ -432,6 +467,12 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     }
 
     function animateTurn(nextDirectionIndex: number) {
+      if (prefersReducedMotion) {
+        setDirectionIndex(nextDirectionIndex);
+        setRenderAngle(DIRECTION_ORDER[nextDirectionIndex].angle);
+        return;
+      }
+
       const startAngle = renderAngle;
       const targetAngle = DIRECTION_ORDER[nextDirectionIndex].angle;
       const delta = normalizeAngle(targetAngle - startAngle);
@@ -550,7 +591,15 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [directionIndex, hasFinished, maze, playerPosition, renderAngle, runStartTime]);
+  }, [
+    directionIndex,
+    hasFinished,
+    maze,
+    playerPosition,
+    prefersReducedMotion,
+    renderAngle,
+    runStartTime
+  ]);
 
   function handleReset() {
     if (animationRef.current !== null) {

@@ -92,9 +92,9 @@ export default function HistoryPage() {
             {entries.length === 0 ? (
               <p className="body-copy">{uiText.empty}</p>
             ) : (
-            <div className="history-list" aria-label={uiText.listLabel}>
+            <div className="history-list" role="list" aria-label={uiText.listLabel}>
               {entries.map((entry) => (
-                <article key={entry.date} className="history-card">
+                <article key={entry.date} className="history-card" role="listitem">
                   <div className="history-card-header">
                     <div>
                       <p className="body-copy history-date">

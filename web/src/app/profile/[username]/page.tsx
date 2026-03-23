@@ -164,7 +164,11 @@ export default function ProfilePage() {
               {profile.recentRuns.length === 0 ? (
                 <p className="body-copy">{uiText.noRuns}</p>
               ) : (
-                <div className="leaderboard-list" aria-label={uiText.labels.recentRunsLabel}>
+                <div
+                  className="leaderboard-list"
+                  role="list"
+                  aria-label={uiText.labels.recentRunsLabel}
+                >
                   <div className="leaderboard-row leaderboard-row-header" aria-hidden="true">
                     <span>Date</span>
                     <span>Seed</span>
@@ -175,6 +179,7 @@ export default function ProfilePage() {
                     <div
                       key={`${run.acceptedAt}-${run.seed}`}
                       className="leaderboard-row"
+                      role="listitem"
                     >
                       <span>{run.date}</span>
                       <span>

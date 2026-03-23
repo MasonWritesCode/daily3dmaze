@@ -225,6 +225,7 @@ export default function FirstPersonView({
   const textures = useMazeTextures();
   const [introProgress, setIntroProgress] = useState<number>(0);
   const [ratTick, setRatTick] = useState<number>(0);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(false);
   const textureSurfaceRef = useRef<TextureSurfaceState>({
     source: null,
     supportsSurfaceTextures: false,
@@ -235,7 +236,24 @@ export default function FirstPersonView({
   });
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setPrefersReducedMotion(mediaQuery.matches);
+
+    sync();
+    mediaQuery.addEventListener("change", sync);
+
+    return () => {
+      mediaQuery.removeEventListener("change", sync);
+    };
+  }, []);
+
+  useEffect(() => {
     let frameId = 0;
+    if (prefersReducedMotion) {
+      setIntroProgress(animationMode === "intro" ? 1 : 0);
+      return undefined;
+    }
+
     const startedAt = performance.now();
     setIntroProgress(animationMode === "intro" ? 0 : 1);
 
@@ -254,9 +272,14 @@ export default function FirstPersonView({
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [animationMode, introSequence, maze.date, maze.seed]);
+  }, [animationMode, introSequence, maze.date, maze.seed, prefersReducedMotion]);
 
   useEffect(() => {
+    if (prefersReducedMotion) {
+      setRatTick(0);
+      return undefined;
+    }
+
     const intervalId = window.setInterval(() => {
       setRatTick((currentTick) => currentTick + 1);
     }, 120);
@@ -264,7 +287,7 @@ export default function FirstPersonView({
     return () => {
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [prefersReducedMotion]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -463,7 +486,7 @@ export default function FirstPersonView({
                 ? [...ratPath, ...ratPath.slice(1, -1).reverse()]
                 : ratPath;
             const totalSegments = Math.max(1, patrolPath.length);
-            const now = performance.now();
+            const now = prefersReducedMotion ? 0 : performance.now();
             const rawStep = Math.floor(now / RAT_STEP_DURATION_MS);
             const segmentIndex = rawStep % totalSegments;
             const nextSegmentIndex = (segmentIndex + 1) % totalSegments;
@@ -581,7 +604,7 @@ export default function FirstPersonView({
     context.moveTo(0, height / 2);
     context.lineTo(width, height / 2);
     context.stroke();
-  }, [introProgress, maze, playerAngle, playerPosition, ratTick, textures]);
+  }, [introProgress, maze, playerAngle, playerPosition, prefersReducedMotion, ratTick, textures]);
 
   function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
     event.preventDefault();
