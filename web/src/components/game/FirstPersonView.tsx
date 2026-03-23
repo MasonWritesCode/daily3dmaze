@@ -477,9 +477,9 @@ export default function FirstPersonView({
   return (
     <div className="raycast-panel">
       <div className="raycast-header">
-        <p className="body-copy panel-title">First-person debug view</p>
+        <p className="body-copy panel-title">Maze viewport</p>
         <p className="body-copy panel-subtitle">
-          Facing {facingName}
+          Heading: {facingName}
           {textureSurfaceRef.current.supportsSurfaceTextures
             ? ""
             : " · privacy-safe fallback"}

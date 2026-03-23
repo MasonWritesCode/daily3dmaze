@@ -70,10 +70,11 @@ interface ArchiveNavigatorProps {
 
 const uiText = {
   play: {
-    eyebrow: "Play",
-    title: "Daily maze metadata",
+    eyebrow: "daily3dmaze.exe",
+    title: "Daily 3D Maze",
     intro:
-      "This page now fetches the first real piece of game data from the Go API. It includes a simple first-person raycast panel and keeps the top-down maze visible for debugging.",
+      "A browser-native retro maze challenge with first-person rendering, daily seeds, named runs, and replay-aware verification.",
+    systemBar: "Ready",
     loadingMaze: "Loading daily maze...",
     loadingLeaderboard: "Loading leaderboard...",
     leaderboardError: "Unable to load the leaderboard right now.",
@@ -126,7 +127,7 @@ const uiText = {
     submittingRun: "Submitting run to the API...",
     submissionError: "The run finished locally, but submission to the API failed.",
     debugViewLabel: "Daily maze debug view",
-    summaryHeading: "Maze summary"
+    summaryHeading: "Challenge window"
   }
 } as const;
 
@@ -890,12 +891,26 @@ function PlayPageContent() {
 
   return (
     <main className="page-shell">
-      <div className="content-card">
+      <div className="content-card content-card-wide play-window">
         <p className="eyebrow">{uiText.play.eyebrow}</p>
-        <h1>{uiText.play.title}</h1>
-        <p className="body-copy">{uiText.play.intro}</p>
+        <div className="window-hero">
+          <div>
+            <h1>{uiText.play.title}</h1>
+            <p className="body-copy">{uiText.play.intro}</p>
+          </div>
+          <dl className="window-status">
+            <div className="window-status-row">
+              <dt>Mode</dt>
+              <dd>{archiveDate ? "Archive" : "Daily challenge"}</dd>
+            </div>
+            <div className="window-status-row">
+              <dt>Input</dt>
+              <dd>Keyboard</dd>
+            </div>
+          </dl>
+        </div>
         {archiveDate && (
-          <p className="body-copy">
+          <p className="body-copy body-copy-strong">
             Viewing archived challenge <code>{archiveDate}</code>.
           </p>
         )}
@@ -916,25 +931,33 @@ function PlayPageContent() {
           />
         )}
 
-        {status === "success" && maze && leaderboardStatus === "loading" && (
-          <p className="body-copy status-copy" aria-live="polite">
-            {uiText.play.loadingLeaderboard}
-          </p>
-        )}
+        {status === "success" && maze && (
+          <div className="play-side-panels">
+            <div className="play-side-panel">
+              {leaderboardStatus === "loading" && (
+                <p className="body-copy status-copy" aria-live="polite">
+                  {uiText.play.loadingLeaderboard}
+                </p>
+              )}
 
-        {status === "success" && maze && leaderboardStatus !== "error" && (
-          <Leaderboard entries={leaderboardEntries} />
-        )}
+              {leaderboardStatus !== "error" && (
+                <Leaderboard entries={leaderboardEntries} />
+              )}
+            </div>
 
-        {authStatus !== "loading" && (
-          <AuthPanel
-            user={user}
-            onAuthChange={(nextUser) => {
-              setUser(nextUser);
-              setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
-              setLeaderboardRefreshKey((currentKey) => currentKey + 1);
-            }}
-          />
+            <div className="play-side-panel">
+              {authStatus !== "loading" && (
+                <AuthPanel
+                  user={user}
+                  onAuthChange={(nextUser) => {
+                    setUser(nextUser);
+                    setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
+                    setLeaderboardRefreshKey((currentKey) => currentKey + 1);
+                  }}
+                />
+              )}
+            </div>
+          </div>
         )}
 
         {status === "success" && maze && leaderboardStatus === "error" && (
@@ -957,6 +980,10 @@ function PlayPageContent() {
             {uiText.actions.backHome}
           </Link>
         </div>
+        <div className="window-footer" aria-label="Application status bar">
+          <span>{uiText.play.systemBar}</span>
+          <span>{archiveDate ? `Archive ${archiveDate}` : "Today"}</span>
+        </div>
       </div>
     </main>
   );
@@ -967,7 +994,7 @@ export default function PlayPage() {
     <Suspense
       fallback={
         <main className="page-shell">
-          <div className="content-card">
+          <div className="content-card content-card-wide play-window">
             <p className="eyebrow">{uiText.play.eyebrow}</p>
             <h1>{uiText.play.title}</h1>
             <p className="body-copy status-copy" aria-live="polite">
