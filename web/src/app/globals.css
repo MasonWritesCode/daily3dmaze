@@ -279,6 +279,31 @@ h1 {
   background: transparent;
 }
 
+.trace-row-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.2);
+}
+
+.trace-step-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.14em;
+}
+
+.trace-step-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 .history-card-header {
   display: flex;
   justify-content: space-between;
@@ -401,6 +426,11 @@ h1 {
   color: var(--text);
   font: inherit;
   cursor: pointer;
+}
+
+.secondary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .primary-button {

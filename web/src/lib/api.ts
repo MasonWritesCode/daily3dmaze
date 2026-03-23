@@ -9,7 +9,8 @@ import {
   registerEndpoint,
   runsEndpoint
 } from "./config";
-import type { DailyMaze } from "./game/maze";
+import type { DailyMaze, ReplayTraceEvent } from "./game/maze";
+export type { ReplayTraceEvent } from "./game/maze";
 
 export interface LeaderboardEntry {
   rank: number;
@@ -39,11 +40,6 @@ export interface RunSubmissionResponse extends RunSubmissionPayload {
   acceptedAt: string;
   suspicionScore: number;
   suspicionReasons: string[];
-}
-
-export interface ReplayTraceEvent {
-  elapsedTimeMs: number;
-  action: "move_forward" | "move_backward" | "turn_left" | "turn_right";
 }
 
 export interface AuthUser {

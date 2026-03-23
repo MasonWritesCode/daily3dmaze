@@ -18,6 +18,20 @@ export interface DailyMaze {
   grid: string[];
 }
 
+export interface ReplayTraceEvent {
+  elapsedTimeMs: number;
+  action: "move_forward" | "move_backward" | "turn_left" | "turn_right";
+}
+
+export interface ReplayFrame {
+  step: number;
+  action: ReplayTraceEvent["action"] | "start";
+  elapsedTimeMs: number;
+  playerPosition: MazePoint;
+  directionIndex: number;
+  reachedExit: boolean;
+}
+
 export interface Direction {
   name: "North" | "East" | "South" | "West";
   marker: "^" | ">" | "v" | "<";
@@ -164,4 +178,59 @@ export function formatElapsedTime(elapsedMs: number): string {
     2,
     "0"
   )}.${String(centiseconds).padStart(2, "0")}`;
+}
+
+export function buildReplayFrames(
+  maze: DailyMaze,
+  replayTrace: ReplayTraceEvent[]
+): ReplayFrame[] {
+  const startingDirectionIndex = getStartingDirectionIndex(maze);
+  const frames: ReplayFrame[] = [
+    {
+      step: 0,
+      action: "start",
+      elapsedTimeMs: 0,
+      playerPosition: maze.start,
+      directionIndex: startingDirectionIndex,
+      reachedExit: isExitReached(maze.start, maze)
+    }
+  ];
+
+  let playerPosition = maze.start;
+  let directionIndex = startingDirectionIndex;
+
+  for (const event of replayTrace) {
+    if (event.action === "turn_left") {
+      directionIndex =
+        (directionIndex + DIRECTION_ORDER.length - 1) % DIRECTION_ORDER.length;
+    } else if (event.action === "turn_right") {
+      directionIndex = (directionIndex + 1) % DIRECTION_ORDER.length;
+    } else if (event.action === "move_forward") {
+      playerPosition = attemptMove(
+        playerPosition,
+        DIRECTION_ORDER[directionIndex].vector,
+        maze
+      );
+    } else if (event.action === "move_backward") {
+      playerPosition = attemptMove(
+        playerPosition,
+        {
+          x: -DIRECTION_ORDER[directionIndex].vector.x,
+          y: -DIRECTION_ORDER[directionIndex].vector.y
+        },
+        maze
+      );
+    }
+
+    frames.push({
+      step: frames.length,
+      action: event.action,
+      elapsedTimeMs: event.elapsedTimeMs,
+      playerPosition,
+      directionIndex,
+      reachedExit: isExitReached(playerPosition, maze)
+    });
+  }
+
+  return frames;
 }

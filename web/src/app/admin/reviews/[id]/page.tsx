@@ -5,11 +5,19 @@ import { useEffect, useState } from "react";
 
 import {
   fetchCurrentUser,
+  fetchDailyMaze,
   fetchRunReviewDetail,
   type AuthUser,
   type RunReviewDetailResponse
 } from "../../../../lib/api";
-import { formatElapsedTime } from "../../../../lib/game/maze";
+import {
+  DIRECTION_ORDER,
+  buildReplayFrames,
+  formatElapsedTime,
+  renderGridRows,
+  type DailyMaze,
+  type ReplayFrame
+} from "../../../../lib/game/maze";
 
 type PageStatus = "loading" | "ready" | "error";
 
@@ -43,6 +51,9 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [detail, setDetail] = useState<RunReviewDetailResponse | null>(null);
+  const [maze, setMaze] = useState<DailyMaze | null>(null);
+  const [frames, setFrames] = useState<ReplayFrame[]>([]);
+  const [selectedFrameIndex, setSelectedFrameIndex] = useState<number>(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,7 +81,15 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
           return;
         }
 
+        const mazePayload = await fetchDailyMaze(payload.entry.date);
+        if (cancelled) {
+          return;
+        }
+
         setDetail(payload);
+        setMaze(mazePayload);
+        setFrames(buildReplayFrames(mazePayload, payload.replayTrace));
+        setSelectedFrameIndex(0);
         setStatus("ready");
       } catch (error) {
         if (cancelled) {
@@ -90,6 +109,12 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
       cancelled = true;
     };
   }, [params]);
+
+  const selectedFrame = frames[selectedFrameIndex] ?? null;
+  const gridRows =
+    maze && selectedFrame
+      ? renderGridRows(maze, selectedFrame.playerPosition, selectedFrame.directionIndex)
+      : [];
 
   return (
     <main className="page-shell">
@@ -211,6 +236,106 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               </dl>
             </section>
 
+            {maze && selectedFrame && (
+              <section className="maze-summary" aria-labelledby="review-visualizer-title">
+                <div className="review-header">
+                  <div>
+                    <h2 id="review-visualizer-title" className="section-title">
+                      Replay visualizer
+                    </h2>
+                    <p className="assistive-copy">
+                      Step through the stored trace against the original maze layout.
+                    </p>
+                  </div>
+                  <p className="assistive-copy">
+                    Frame {selectedFrameIndex + 1} of {frames.length}
+                  </p>
+                </div>
+
+                <dl className="metadata-list">
+                  <div className="metadata-row">
+                    <dt>Selected step</dt>
+                    <dd>{selectedFrame.step}</dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>Action</dt>
+                    <dd>{selectedFrame.action}</dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>Elapsed</dt>
+                    <dd>{formatElapsedTime(selectedFrame.elapsedTimeMs)}</dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>Position</dt>
+                    <dd>
+                      ({selectedFrame.playerPosition.x}, {selectedFrame.playerPosition.y})
+                    </dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>Facing</dt>
+                    <dd>{DIRECTION_ORDER[selectedFrame.directionIndex]?.name ?? "Unknown"}</dd>
+                  </div>
+                  <div className="metadata-row">
+                    <dt>Exit reached</dt>
+                    <dd>{selectedFrame.reachedExit ? "Yes" : "No"}</dd>
+                  </div>
+                </dl>
+
+                <div
+                  className="maze-grid-preview"
+                  role="img"
+                  aria-label="Replay snapshot in the maze grid"
+                >
+                  {gridRows.map((row, index) => (
+                    <code key={`${index}-${row}`} className="maze-grid-row">
+                      {row}
+                    </code>
+                  ))}
+                </div>
+
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setSelectedFrameIndex(0)}
+                    disabled={selectedFrameIndex === 0}
+                  >
+                    First frame
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() =>
+                      setSelectedFrameIndex((currentIndex) => Math.max(0, currentIndex - 1))
+                    }
+                    disabled={selectedFrameIndex === 0}
+                  >
+                    Previous frame
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() =>
+                      setSelectedFrameIndex((currentIndex) =>
+                        Math.min(frames.length - 1, currentIndex + 1)
+                      )
+                    }
+                    disabled={selectedFrameIndex >= frames.length - 1}
+                  >
+                    Next frame
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setSelectedFrameIndex(frames.length - 1)}
+                    disabled={selectedFrameIndex >= frames.length - 1}
+                  >
+                    Last frame
+                  </button>
+                </div>
+              </section>
+            )}
+
             <section className="maze-summary" aria-labelledby="review-trace-title">
               <h2 id="review-trace-title" className="section-title">
                 Replay trace
@@ -227,12 +352,21 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                   {detail.replayTrace.map((event, index) => (
                     <div
                       key={`${event.action}:${event.elapsedTimeMs}:${index}`}
-                      className="trace-row"
+                      className={`trace-row ${
+                        index + 1 === selectedFrameIndex ? "trace-row-active" : ""
+                      }`}
                       role="listitem"
+                      aria-current={index + 1 === selectedFrameIndex ? "step" : undefined}
                     >
                       <span>{index + 1}</span>
                       <span>{event.action}</span>
-                      <span>{formatElapsedTime(event.elapsedTimeMs)}</span>
+                      <button
+                        type="button"
+                        className="trace-step-button"
+                        onClick={() => setSelectedFrameIndex(index + 1)}
+                      >
+                        {formatElapsedTime(event.elapsedTimeMs)}
+                      </button>
                     </div>
                   ))}
                 </div>
