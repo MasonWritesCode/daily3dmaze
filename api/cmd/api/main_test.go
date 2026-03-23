@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -262,6 +263,24 @@ func TestRequeueRunReviewHandlerRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestUpdateRunReviewHandlerRequiresAuthentication(t *testing.T) {
+	t.Parallel()
+
+	application := app{}
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/7/review", strings.NewReader(`{"reviewStatus":"reviewed_clean","reviewNotes":"looks good"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	application.runReviewDetailHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, response.StatusCode)
+	}
+}
+
 func TestRecomputeRunReviewsHandlerRequiresAuthentication(t *testing.T) {
 	t.Parallel()
 
@@ -440,6 +459,70 @@ func TestLoadRunReviewSummary(t *testing.T) {
 
 	if summary.PendingCount != 4 || summary.VerifiedCount != 9 || summary.StalePendingCount != 1 {
 		t.Fatalf("unexpected summary: %+v", summary)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestValidateRunReviewUpdate(t *testing.T) {
+	t.Parallel()
+
+	if err := validateRunReviewUpdate(updateRunReviewRequest{
+		ReviewStatus: "reviewed_clean",
+		ReviewNotes:  "confirmed legitimate",
+	}); err != nil {
+		t.Fatalf("expected valid review update, got %v", err)
+	}
+
+	if err := validateRunReviewUpdate(updateRunReviewRequest{
+		ReviewStatus: "bad_status",
+	}); err == nil {
+		t.Fatal("expected invalid review status to fail")
+	}
+}
+
+func TestUpdateRunReview(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Date(2026, 3, 23, 16, 30, 0, 0, time.UTC)
+	application := app{
+		db:  db,
+		now: func() time.Time { return now },
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		UPDATE runs
+		SET
+			review_status = $2,
+			review_notes = $3,
+			reviewed_at = $4
+		WHERE id = $1
+		RETURNING id
+	`)).
+		WithArgs(int64(7), "confirmed_suspicious", "tool-assisted run; needs follow-up", sql.NullTime{
+			Time:  now,
+			Valid: true,
+		}).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
+
+	reviewedAt, err := application.updateRunReview(7, updateRunReviewRequest{
+		ReviewStatus: "confirmed_suspicious",
+		ReviewNotes:  " tool-assisted run; needs follow-up ",
+	})
+	if err != nil {
+		t.Fatalf("update run review: %v", err)
+	}
+
+	if !reviewedAt.Equal(now) {
+		t.Fatalf("expected reviewedAt %s, got %s", now, reviewedAt)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

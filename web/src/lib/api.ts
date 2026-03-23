@@ -120,6 +120,9 @@ export interface RunReviewEntry {
   verifiedAt: string | null;
   verificationAttempts: number;
   verificationError: string | null;
+  reviewStatus: string;
+  reviewNotes: string;
+  reviewedAt: string | null;
   isStalePending: boolean;
   acceptedAt: string;
 }
@@ -146,6 +149,18 @@ export interface RequeueRunReviewResponse {
   runId: number;
   verificationStatus: string;
   verificationAttempts: number;
+}
+
+export interface UpdateRunReviewPayload {
+  reviewStatus: string;
+  reviewNotes: string;
+}
+
+export interface UpdateRunReviewResponse {
+  runId: number;
+  reviewStatus: string;
+  reviewNotes: string;
+  reviewedAt: string | null;
 }
 
 export interface RunReviewDetailResponse {
@@ -386,4 +401,30 @@ export async function requeueRunReview(
   }
 
   return (await response.json()) as RequeueRunReviewResponse;
+}
+
+export async function updateRunReview(
+  runID: string,
+  payload: UpdateRunReviewPayload
+): Promise<UpdateRunReviewResponse> {
+  const response = await fetch(
+    `${adminRunReviewsEndpoint}/${encodeURIComponent(runID)}/review`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Run review update failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as UpdateRunReviewResponse;
 }

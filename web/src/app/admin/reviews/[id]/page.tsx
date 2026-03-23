@@ -8,6 +8,7 @@ import {
   fetchDailyMaze,
   fetchRunReviewDetail,
   requeueRunReview,
+  updateRunReview,
   type AuthUser,
   type RunReviewDetailResponse
 } from "../../../../lib/api";
@@ -22,6 +23,7 @@ import {
 
 type PageStatus = "loading" | "ready" | "error";
 type RequeueStatus = "idle" | "submitting" | "success" | "error";
+type ReviewUpdateStatus = "idle" | "submitting" | "success" | "error";
 
 interface ReviewDetailPageProps {
   params: Promise<{
@@ -83,6 +85,10 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [requeueStatus, setRequeueStatus] = useState<RequeueStatus>("idle");
   const [requeueMessage, setRequeueMessage] = useState<string>("");
+  const [reviewFormStatus, setReviewFormStatus] = useState<ReviewUpdateStatus>("idle");
+  const [reviewFormMessage, setReviewFormMessage] = useState<string>("");
+  const [reviewStatusValue, setReviewStatusValue] = useState<string>("unreviewed");
+  const [reviewNotesValue, setReviewNotesValue] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +124,8 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
         setMaze(mazePayload);
         setFrames(buildReplayFrames(mazePayload, payload.replayTrace));
         setSelectedFrameIndex(0);
+        setReviewStatusValue(payload.entry.reviewStatus);
+        setReviewNotesValue(payload.entry.reviewNotes);
         setStatus("ready");
       } catch (error) {
         if (cancelled) {
@@ -189,6 +197,8 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
     setMaze(mazePayload);
     setFrames(buildReplayFrames(mazePayload, payload.replayTrace));
     setSelectedFrameIndex(0);
+    setReviewStatusValue(payload.entry.reviewStatus);
+    setReviewNotesValue(payload.entry.reviewNotes);
   }
 
   async function handleRequeue() {
@@ -211,6 +221,33 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
       setRequeueStatus("error");
       setRequeueMessage(
         error instanceof Error ? error.message : "Unable to requeue this run."
+      );
+    }
+  }
+
+  async function handleReviewSave() {
+    if (!detail) {
+      return;
+    }
+
+    setReviewFormStatus("submitting");
+    setReviewFormMessage("");
+
+    try {
+      const routeParams = await params;
+      const result = await updateRunReview(routeParams.id, {
+        reviewStatus: reviewStatusValue,
+        reviewNotes: reviewNotesValue
+      });
+      await refreshDetail(routeParams.id);
+      setReviewFormStatus("success");
+      setReviewFormMessage(
+        `Review saved as ${result.reviewStatus}${result.reviewedAt ? ` at ${formatAcceptedAt(result.reviewedAt)}` : ""}.`
+      );
+    } catch (error) {
+      setReviewFormStatus("error");
+      setReviewFormMessage(
+        error instanceof Error ? error.message : "Unable to save this review."
       );
     }
   }
@@ -386,7 +423,75 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                   <dt>Worker error</dt>
                   <dd>{detail.entry.verificationError ?? "None"}</dd>
                 </div>
+                <div className="metadata-row">
+                  <dt>Review status</dt>
+                  <dd>{detail.entry.reviewStatus}</dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Reviewed at</dt>
+                  <dd>{formatOptionalTimestamp(detail.entry.reviewedAt)}</dd>
+                </div>
               </dl>
+            </section>
+
+            <section className="maze-summary" aria-labelledby="review-moderation-title">
+              <div className="review-header">
+                <div>
+                  <h2 id="review-moderation-title" className="section-title">
+                    Moderator review
+                  </h2>
+                  <p className="assistive-copy">
+                    Record a human decision and any follow-up notes for this run.
+                  </p>
+                </div>
+              </div>
+
+              <div className="filter-grid">
+                <label className="auth-field" htmlFor="review-status">
+                  <span>Review status</span>
+                  <select
+                    id="review-status"
+                    value={reviewStatusValue}
+                    onChange={(event) => setReviewStatusValue(event.target.value)}
+                  >
+                    <option value="unreviewed">Unreviewed</option>
+                    <option value="reviewed_clean">Reviewed clean</option>
+                    <option value="confirmed_suspicious">Confirmed suspicious</option>
+                  </select>
+                </label>
+
+                <label className="auth-field auth-field-full" htmlFor="review-notes">
+                  <span>Review notes</span>
+                  <textarea
+                    id="review-notes"
+                    value={reviewNotesValue}
+                    onChange={(event) => setReviewNotesValue(event.target.value)}
+                    rows={5}
+                    placeholder="Add any human review notes or follow-up context."
+                  />
+                </label>
+              </div>
+
+              <div className="actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleReviewSave}
+                  disabled={reviewFormStatus === "submitting"}
+                >
+                  {reviewFormStatus === "submitting" ? "Saving..." : "Save review"}
+                </button>
+              </div>
+              {reviewFormMessage && (
+                <p
+                  className={`body-copy status-copy ${
+                    reviewFormStatus === "error" ? "error-copy" : "success-copy"
+                  }`}
+                  aria-live="polite"
+                >
+                  {reviewFormMessage}
+                </p>
+              )}
             </section>
 
             <section className="maze-summary" aria-labelledby="review-simulation-title">

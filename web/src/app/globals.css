@@ -247,7 +247,23 @@ h1 {
   font: inherit;
 }
 
+.auth-field textarea {
+  min-height: 120px;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.85);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
 .auth-field select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.auth-field textarea:focus {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -263,6 +279,10 @@ h1 {
 .checkbox-field input {
   width: 18px;
   height: 18px;
+}
+
+.auth-field-full {
+  grid-column: 1 / -1;
 }
 
 .review-row {

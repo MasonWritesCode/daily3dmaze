@@ -94,6 +94,9 @@ type recentRunReviewEntry struct {
 	VerifiedAt            *string  `json:"verifiedAt"`
 	VerificationAttempts  int      `json:"verificationAttempts"`
 	VerificationError     *string  `json:"verificationError"`
+	ReviewStatus          string   `json:"reviewStatus"`
+	ReviewNotes           string   `json:"reviewNotes"`
+	ReviewedAt            *string  `json:"reviewedAt"`
 	IsStalePending        bool     `json:"isStalePending"`
 	AcceptedAt            string   `json:"acceptedAt"`
 }
@@ -126,6 +129,18 @@ type requeueRunReviewResponse struct {
 	RunID                int64  `json:"runId"`
 	VerificationStatus   string `json:"verificationStatus"`
 	VerificationAttempts int    `json:"verificationAttempts"`
+}
+
+type updateRunReviewRequest struct {
+	ReviewStatus string `json:"reviewStatus"`
+	ReviewNotes  string `json:"reviewNotes"`
+}
+
+type updateRunReviewResponse struct {
+	RunID        int64   `json:"runId"`
+	ReviewStatus string  `json:"reviewStatus"`
+	ReviewNotes  string  `json:"reviewNotes"`
+	ReviewedAt   *string `json:"reviewedAt"`
 }
 
 type app struct {
@@ -504,6 +519,58 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasSuffix(pathSuffix, "/review") {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		runID, err := parseRunReviewID(strings.TrimSuffix(pathSuffix, "/review"))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var request updateRunReviewRequest
+		if err := decodeJSONBody(w, r, &request); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if err := validateRunReviewUpdate(request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		reviewedAt, err := a.updateRunReview(runID, request)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, "run review not found", http.StatusNotFound)
+				return
+			}
+
+			http.Error(w, "failed to update run review", http.StatusInternalServerError)
+			return
+		}
+
+		var reviewedAtValue *string
+		if !reviewedAt.IsZero() {
+			value := reviewedAt.UTC().Format(time.RFC3339)
+			reviewedAtValue = &value
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(updateRunReviewResponse{
+			RunID:        runID,
+			ReviewStatus: request.ReviewStatus,
+			ReviewNotes:  strings.TrimSpace(request.ReviewNotes),
+			ReviewedAt:   reviewedAtValue,
+		}); err != nil {
+			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		}
+		return
+	}
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -553,6 +620,9 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			runs.verified_at,
 			runs.verification_attempts,
 			runs.verification_error,
+			runs.review_status,
+			runs.review_notes,
+			runs.reviewed_at,
 			runs.accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
@@ -573,6 +643,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 		var verificationStartedAt sql.NullTime
 		var verifiedAt sql.NullTime
 		var verificationError sql.NullString
+		var reviewedAt sql.NullTime
 		var suspicionReasonsJSON []byte
 		var verificationNotesJSON []byte
 		if err := rows.Scan(
@@ -590,6 +661,9 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			&verifiedAt,
 			&entry.VerificationAttempts,
 			&verificationError,
+			&entry.ReviewStatus,
+			&entry.ReviewNotes,
+			&reviewedAt,
 			&acceptedAt,
 		); err != nil {
 			return nil, err
@@ -612,6 +686,10 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 		if verificationError.Valid && strings.TrimSpace(verificationError.String) != "" {
 			value := verificationError.String
 			entry.VerificationError = &value
+		}
+		if reviewedAt.Valid {
+			value := reviewedAt.Time.UTC().Format(time.RFC3339)
+			entry.ReviewedAt = &value
 		}
 		entry.IsStalePending = isStalePendingReview(
 			entry.VerificationStatus,
@@ -711,6 +789,54 @@ func (a app) requeueRunReview(runID int64) (int, error) {
 	}
 
 	return attempts, nil
+}
+
+func validateRunReviewUpdate(request updateRunReviewRequest) error {
+	switch request.ReviewStatus {
+	case "unreviewed", "reviewed_clean", "confirmed_suspicious":
+	default:
+		return errors.New("reviewStatus must be unreviewed, reviewed_clean, or confirmed_suspicious")
+	}
+
+	if len(strings.TrimSpace(request.ReviewNotes)) > 2000 {
+		return errors.New("reviewNotes must be 2000 characters or fewer")
+	}
+
+	return nil
+}
+
+func (a app) updateRunReview(runID int64, request updateRunReviewRequest) (time.Time, error) {
+	if a.db == nil {
+		return time.Time{}, errors.New("database unavailable")
+	}
+
+	reviewedAt := a.currentTime()
+	if request.ReviewStatus == "unreviewed" {
+		reviewedAt = time.Time{}
+	}
+
+	const query = `
+		UPDATE runs
+		SET
+			review_status = $2,
+			review_notes = $3,
+			reviewed_at = $4
+		WHERE id = $1
+		RETURNING id
+	`
+
+	var returnedID int64
+	if err := a.db.QueryRow(
+		query,
+		runID,
+		request.ReviewStatus,
+		strings.TrimSpace(request.ReviewNotes),
+		sql.NullTime{Time: reviewedAt, Valid: !reviewedAt.IsZero()},
+	).Scan(&returnedID); err != nil {
+		return time.Time{}, err
+	}
+
+	return reviewedAt, nil
 }
 
 func (a app) recomputeStoredRunVerifications() (int, int, error) {
@@ -847,6 +973,9 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 			runs.verified_at,
 			runs.verification_attempts,
 			runs.verification_error,
+			runs.review_status,
+			runs.review_notes,
+			runs.reviewed_at,
 			runs.replay_trace_json,
 			runs.accepted_at
 		FROM runs
@@ -860,6 +989,7 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		verificationStartedAt sql.NullTime
 		verifiedAt            sql.NullTime
 		verificationError     sql.NullString
+		reviewedAt            sql.NullTime
 		suspicionReasonsJSON  []byte
 		verificationNotesJSON []byte
 		replayTraceJSON       []byte
@@ -879,6 +1009,9 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		&verifiedAt,
 		&detail.Entry.VerificationAttempts,
 		&verificationError,
+		&detail.Entry.ReviewStatus,
+		&detail.Entry.ReviewNotes,
+		&reviewedAt,
 		&replayTraceJSON,
 		&acceptedAt,
 	); err != nil {
@@ -907,6 +1040,10 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 	if verificationError.Valid && strings.TrimSpace(verificationError.String) != "" {
 		value := verificationError.String
 		detail.Entry.VerificationError = &value
+	}
+	if reviewedAt.Valid {
+		value := reviewedAt.Time.UTC().Format(time.RFC3339)
+		detail.Entry.ReviewedAt = &value
 	}
 	detail.Entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
 	challengeDate, err := time.Parse(dateLayoutISO, detail.Entry.Date)
