@@ -55,16 +55,98 @@ function getVerificationTone(status: string): string {
   return "low";
 }
 
-function formatReviewStatus(status: string): string {
+function getLocalizedRoleLabel(
+  role: string | undefined,
+  labels: {
+    user: string;
+    moderator: string;
+    admin: string;
+  }
+): string {
+  switch (role) {
+    case "user":
+      return labels.user;
+    case "moderator":
+      return labels.moderator;
+    case "admin":
+      return labels.admin;
+    default:
+      return role ?? "";
+  }
+}
+
+function getLocalizedVerificationStatus(
+  status: string,
+  labels: {
+    pending: string;
+    verified: string;
+    suspicious: string;
+    invalid: string;
+  }
+): string {
+  switch (status) {
+    case "pending":
+      return labels.pending;
+    case "verified":
+      return labels.verified;
+    case "suspicious":
+      return labels.suspicious;
+    case "invalid":
+      return labels.invalid;
+    default:
+      return status;
+  }
+}
+
+function getLocalizedReviewStatus(
+  status: string,
+  labels: {
+    unreviewed: string;
+    reviewedClean: string;
+    confirmedSuspicious: string;
+  }
+): string {
   if (status === "reviewed_clean") {
-    return "Reviewed clean";
+    return labels.reviewedClean;
   }
 
   if (status === "confirmed_suspicious") {
-    return "Confirmed suspicious";
+    return labels.confirmedSuspicious;
   }
 
-  return "Unreviewed";
+  return labels.unreviewed;
+}
+
+function getLocalizedSuspicionReason(
+  reason: string,
+  labels: {
+    replayLengthMismatch: string;
+    timestampDrift: string;
+    highActionDensity: string;
+    rapidRepeatedTurns: string;
+    blockedMoveAttempts: string;
+    replayDoesNotReachExit: string;
+    actionsAfterExit: string;
+  }
+): string {
+  switch (reason) {
+    case "replay_length_mismatch":
+      return labels.replayLengthMismatch;
+    case "timestamp_drift":
+      return labels.timestampDrift;
+    case "high_action_density":
+      return labels.highActionDensity;
+    case "rapid_repeated_turns":
+      return labels.rapidRepeatedTurns;
+    case "blocked_move_attempts":
+      return labels.blockedMoveAttempts;
+    case "replay_does_not_reach_exit":
+      return labels.replayDoesNotReachExit;
+    case "actions_after_exit":
+      return labels.actionsAfterExit;
+    default:
+      return reason;
+  }
 }
 
 function getReviewTone(status: string): string {
@@ -296,7 +378,9 @@ export default function AdminReviewsPage() {
               {uiText.forbiddenTitle}
             </h2>
             <p className="body-copy">
-              {uiText.forbiddenBodyPrefix} <code>{user.role}</code>. {uiText.forbiddenBodySuffix}
+              {uiText.forbiddenBodyPrefix}{" "}
+              <code>{getLocalizedRoleLabel(user.role, messages.adminReviewDetail.roleLabels)}</code>.{" "}
+              {uiText.forbiddenBodySuffix}
             </p>
           </section>
         )}
@@ -451,14 +535,14 @@ export default function AdminReviewsPage() {
               <p id={resultsCountId} className="assistive-copy" aria-live="polite">
                 {uiText.resultsShown
                   .replace("{count}", formatCount(sortedEntries.length))
-                  .replace("{suffix}", sortedEntries.length === 1 ? "" : "s")}
+                  .replace("{suffix}", sortedEntries.length === 1 ? "" : "es")}
               </p>
             </section>
 
             {sortedEntries.length === 0 ? (
               <p className="body-copy">{uiText.noMatches}</p>
             ) : (
-              <div className="review-list" role="list" aria-label="Recent run reviews">
+              <div className="review-list" role="list" aria-label={uiText.sections.recentSubmissions}>
                 <div className="review-row review-row-header" role="listitem" aria-hidden="true">
                   <span>{uiText.table.verification}</span>
                   <span>{uiText.table.score}</span>
@@ -486,11 +570,14 @@ export default function AdminReviewsPage() {
                             entry.verificationStatus
                           )}`}
                         >
-                          {entry.verificationStatus}
+                          {getLocalizedVerificationStatus(
+                            entry.verificationStatus,
+                            uiText.statuses.verification
+                          )}
                         </span>
                         <div className="review-detail-stack">
                           <span className="assistive-copy">
-                            Attempts: {formatCount(entry.verificationAttempts)}
+                            {uiText.attemptsLabel}: {formatCount(entry.verificationAttempts)}
                           </span>
                           {entry.isStalePending && (
                             <span className="reason-chip">{uiText.stalePending}</span>
@@ -503,7 +590,7 @@ export default function AdminReviewsPage() {
                         </div>
                       </div>
                       <div>
-                        <span className="sr-only">Suspicion score </span>
+                        <span className="sr-only">{uiText.table.score} </span>
                         <span className={`score-badge score-badge-${tone}`}>
                           {formatCount(entry.suspicionScore)}
                         </span>
@@ -527,7 +614,7 @@ export default function AdminReviewsPage() {
                       <div>{entry.moveCount}</div>
                       <div className="review-challenge">
                         <span className={`score-badge score-badge-${getReviewTone(entry.reviewStatus)}`}>
-                          {formatReviewStatus(entry.reviewStatus)}
+                          {getLocalizedReviewStatus(entry.reviewStatus, uiText.statuses.review)}
                         </span>
                         <span>
                           {uiText.reviewed}: {entry.reviewedAt ? formatDateTime(entry.reviewedAt) : uiText.notRecorded}
@@ -536,11 +623,11 @@ export default function AdminReviewsPage() {
                           {uiText.reviewer}: {entry.reviewedByUsername ?? uiText.notRecorded}
                         </span>
                       </div>
-                      <div className="reason-list" aria-label="Suspicion reasons">
+                      <div className="reason-list" aria-label={uiText.table.reasons}>
                         {entry.suspicionReasons.length > 0 ? (
                           entry.suspicionReasons.map((reason) => (
                             <span key={reason} className="reason-chip">
-                              {reason}
+                              {getLocalizedSuspicionReason(reason, uiText.statuses.reasons)}
                             </span>
                           ))
                         ) : (

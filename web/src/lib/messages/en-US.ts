@@ -43,6 +43,12 @@ export const enUSMessages = {
       openPlay: "Play today's challenge",
       backHome: "Return to desktop"
     },
+    defaultChallengeTitle: "Daily Maze",
+    submissionCount: {
+      one: "{count} run",
+      other: "{count} runs"
+    },
+    bestRunSummary: "{player} in {elapsed} with {moves} moves",
     anonymous: "Anonymous",
     bestRunNoSubmissions: "No submissions yet"
   },
@@ -72,6 +78,7 @@ export const enUSMessages = {
       backToHistory: "Back to history",
       openPlay: "Play today's challenge"
     },
+    defaultChallengeTitle: "Daily Maze",
     anonymous: "Anonymous"
   },
   profile: {
@@ -184,7 +191,35 @@ export const enUSMessages = {
     finished: "Finished",
     attemptsLabel: "Attempts",
     recomputeMessage: "Recomputed {updated} runs and skipped {skipped}.",
-    recomputeError: "Unable to recompute run reviews."
+    recomputeError: "Unable to recompute run reviews.",
+    statuses: {
+      verification: {
+        pending: "Pending",
+        verified: "Verified",
+        suspicious: "Suspicious",
+        invalid: "Invalid"
+      },
+      review: {
+        unreviewed: "Unreviewed",
+        reviewedClean: "Reviewed clean",
+        confirmedSuspicious: "Confirmed suspicious"
+      },
+      reasons: {
+        replayLengthMismatch: "Replay length mismatch",
+        timestampDrift: "Timestamp drift",
+        highActionDensity: "High action density",
+        rapidRepeatedTurns: "Rapid repeated turns",
+        blockedMoveAttempts: "Blocked move attempts",
+        replayDoesNotReachExit: "Replay does not reach the exit",
+        actionsAfterExit: "Actions after exit"
+      },
+      notes: {
+        simulationNeverReachedExit: "Simulation never reached the exit",
+        simulationDetectedBlockedMoves: "Simulation detected blocked moves",
+        simulationDetectedActionsAfterExit: "Simulation detected actions after exit",
+        simulationMatchesExpectedOutcome: "Simulation matches the expected outcome"
+      }
+    }
   },
   adminReviewDetail: {
     eyebrow: "Internal tooling",
@@ -199,6 +234,11 @@ export const enUSMessages = {
     forbiddenBodyPrefix: "Your current role is",
     forbiddenBodySuffix:
       "Only moderator and admin accounts can inspect individual run reviews.",
+    roleLabels: {
+      user: "User",
+      moderator: "Moderator",
+      admin: "Admin"
+    },
     sections: {
       submissionOverview: "Submission overview",
       moderatorReview: "Moderator review",
@@ -247,7 +287,41 @@ export const enUSMessages = {
       reviewedClean: "Reviewed clean",
       confirmedSuspicious: "Confirmed suspicious"
     },
+    statuses: {
+      verification: {
+        pending: "Pending",
+        verified: "Verified",
+        suspicious: "Suspicious",
+        invalid: "Invalid"
+      },
+      review: {
+        unreviewed: "Unreviewed",
+        reviewedClean: "Reviewed clean",
+        confirmedSuspicious: "Confirmed suspicious"
+      },
+      reasons: {
+        replayLengthMismatch: "Replay length mismatch",
+        timestampDrift: "Timestamp drift",
+        highActionDensity: "High action density",
+        rapidRepeatedTurns: "Rapid repeated turns",
+        blockedMoveAttempts: "Blocked move attempts",
+        replayDoesNotReachExit: "Replay does not reach the exit",
+        actionsAfterExit: "Actions after exit"
+      },
+      notes: {
+        simulationNeverReachedExit: "Simulation never reached the exit",
+        simulationDetectedBlockedMoves: "Simulation detected blocked moves",
+        simulationDetectedActionsAfterExit: "Simulation detected actions after exit",
+        simulationMatchesExpectedOutcome: "Simulation matches the expected outcome"
+      }
+    },
     comparison: {
+      intro: "Cross-check the frontend replay reconstruction against the backend simulation result.",
+      ariaLabel: "Replay comparison",
+      check: "Check",
+      frontendReconstruction: "Frontend reconstruction",
+      backendSimulation: "Backend simulation",
+      status: "Status",
       finalPosition: "Final position",
       finalFacing: "Final facing",
       exitReached: "Exit reached",
@@ -258,12 +332,19 @@ export const enUSMessages = {
       unavailable: "Simulation unavailable"
     },
     simulation: {
+      intro: "Deterministic backend replay of the submitted trace against the canonical maze for this day.",
       reachedExit: "Reached exit",
+      didNotFinish: "Did not finish",
+      unavailable: "Simulation unavailable",
+      unavailableBody:
+        "This run does not have a server-side simulation payload yet. That can happen for older stored reviews or while local services are out of sync.",
       blockedMoves: "Blocked moves",
       actionsAfterExit: "Actions after exit",
       firstExitStep: "First exit step",
       finalPosition: "Final position",
-      finalFacing: "Final facing"
+      finalFacing: "Final facing",
+      unknown: "Unknown",
+      never: "Never"
     },
     replay: {
       anonymous: "Anonymous",
@@ -272,15 +353,30 @@ export const enUSMessages = {
       notAvailable: "Not available",
       viewingRunAs: "Reviewing run",
       asUser: "as",
+      visualizerIntro: "Step through the stored trace against the original maze layout.",
+      frameProgress: "Frame {current} of {total}",
       stepLabel: "Step",
       elapsedLabel: "Elapsed",
       selectedStep: "Selected step",
+      action: "Action",
+      position: "Position",
+      facing: "Facing",
+      exitReached: "Exit reached",
+      snapshotAriaLabel: "Replay snapshot in the maze grid",
+      traceEmpty: "No replay trace is stored for this run.",
+      traceAriaLabel: "Replay trace events",
       requeueMessage:
         "Run {id} requeued as {status}. Attempts remain at {attempts}.",
       requeueError: "Unable to requeue this run.",
       reviewSaved: "Review saved as {status}{reviewedAt}.",
       reviewSavedAt: " at {value}",
-      reviewSaveError: "Unable to save this review."
+      reviewSaveError: "Unable to save this review.",
+      actions: {
+        moveForward: "Move forward",
+        moveBackward: "Move backward",
+        turnLeft: "Turn left",
+        turnRight: "Turn right"
+      }
     }
   },
   adminUsers: {
@@ -298,6 +394,7 @@ export const enUSMessages = {
     searchLabel: "Search users",
     searchPlaceholder: "Search by username, role, or status",
     listLabel: "Managed users",
+    signedInAs: "Signed in as",
     resultsShown: "{count} user{suffix} shown",
     actions: {
       reviewQueue: "Review queue",
@@ -317,6 +414,9 @@ export const enUSMessages = {
       admin: "Admin",
       moderator: "Moderator",
       standardUser: "User"
+    },
+    selectorLabels: {
+      roleForUser: "Role for {username}"
     },
     rowMessages: {
       roleUpdated: "Role updated to {role}.",
@@ -362,6 +462,12 @@ export const enUSMessages = {
       facing: "Facing",
       controls: "Controls"
     },
+    directions: {
+      north: "North",
+      east: "East",
+      south: "South",
+      west: "West"
+    },
     actions: {
       resetRun: "Reset run",
       backHome: "Return to desktop",
@@ -374,10 +480,16 @@ export const enUSMessages = {
     },
     auth: {
       heading: "Identity",
+      modeLegend: "Authentication mode",
       username: "Username",
       password: "Password",
       signedInAs: "Signed in as",
       role: "Role",
+      roles: {
+        user: "User",
+        moderator: "Moderator",
+        admin: "Admin"
+      },
       signingIn: "Signing in...",
       creatingAccount: "Creating account...",
       loginSuccess: "Signed in successfully.",
@@ -415,9 +527,17 @@ export const enUSMessages = {
       submissionError: "The run finished locally, but submission to the API failed.",
       debugViewLabel: "Daily maze debug view",
       summaryHeading: "Challenge window",
+      currentRunStatus: "Current run status",
+      statusBar: "Application status bar",
       completionMessage: "Maze complete in {elapsed}.",
       submissionAccepted:
         "Run accepted by the API at {acceptedAt} and queued for verification as {status}."
+    },
+    verification: {
+      pending: "pending",
+      verified: "verified",
+      suspicious: "suspicious",
+      invalid: "invalid"
     }
   },
   locale: {

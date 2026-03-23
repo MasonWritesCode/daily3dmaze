@@ -46,10 +46,14 @@ export default function HistoryPage() {
     };
   }, []);
 
+  function getDisplayTitle(title: string): string {
+    return title === "Daily Maze" ? uiText.defaultChallengeTitle : title;
+  }
+
   return (
     <main className="page-shell">
       <div className="content-card">
-        <p className="eyebrow">History</p>
+        <p className="eyebrow">{uiText.eyebrow}</p>
         <h1>{uiText.title}</h1>
         <p className="body-copy">{uiText.intro}</p>
 
@@ -85,12 +89,15 @@ export default function HistoryPage() {
                       </p>
                       <p className="body-copy history-title">
                         <Link href={`/history/${entry.date}`} className="inline-link">
-                          {entry.title}
+                          {getDisplayTitle(entry.title)}
                         </Link>
                       </p>
                     </div>
                     <span className="history-chip">
-                      {formatCount(entry.submissionCount)} run{entry.submissionCount === 1 ? "" : "s"}
+                      {(entry.submissionCount === 1
+                        ? uiText.submissionCount.one
+                        : uiText.submissionCount.other
+                      ).replace("{count}", formatCount(entry.submissionCount))}
                     </span>
                   </div>
                   <dl className="metadata-list">
@@ -111,18 +118,36 @@ export default function HistoryPage() {
                       <dd>
                         {entry.bestRun ? (
                           <>
-                            {entry.bestRun.username ? (
-                              <Link
-                                href={`/profile/${entry.bestRun.username}`}
-                                className="inline-link"
-                              >
-                                {entry.bestRun.username}
-                              </Link>
-                            ) : (
-                              uiText.anonymous
-                            )}{" "}
-                            in {formatElapsedTime(entry.bestRun.elapsedTimeMs)} with{" "}
-                            {formatCount(entry.bestRun.moveCount)} moves
+                            {uiText.bestRunSummary
+                              .replace(
+                                "{player}",
+                                entry.bestRun.username ?? uiText.anonymous
+                              )
+                              .replace(
+                                "{elapsed}",
+                                formatElapsedTime(entry.bestRun.elapsedTimeMs)
+                              )
+                              .replace(
+                                "{moves}",
+                                formatCount(entry.bestRun.moveCount)
+                              )
+                              .split(entry.bestRun.username ?? uiText.anonymous)
+                              .map((segment, index, segments) => (
+                                <span key={`${entry.date}-best-run-${index}`}>
+                                  {segment}
+                                  {index < segments.length - 1 &&
+                                    (entry.bestRun?.username ? (
+                                      <Link
+                                        href={`/profile/${entry.bestRun.username}`}
+                                        className="inline-link"
+                                      >
+                                        {entry.bestRun.username}
+                                      </Link>
+                                    ) : (
+                                      uiText.anonymous
+                                    ))}
+                                </span>
+                              ))}
                           </>
                         ) : (
                           uiText.bestRunNoSubmissions

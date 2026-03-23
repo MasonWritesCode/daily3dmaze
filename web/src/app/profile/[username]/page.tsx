@@ -174,7 +174,7 @@ export default function ProfilePage() {
 
         <div className="actions">
           <Link href="/play" className="secondary-link">
-            Return to challenge
+            {uiText.actions.backToPlay}
           </Link>
         </div>
       </div>

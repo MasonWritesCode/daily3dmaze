@@ -79,6 +79,72 @@ interface CollapsiblePanelProps {
   children: ReactNode;
 }
 
+function getLocalizedDirectionLabel(
+  directionName: string | undefined,
+  directions: {
+    north: string;
+    east: string;
+    south: string;
+    west: string;
+  }
+): string {
+  switch (directionName) {
+    case "North":
+      return directions.north;
+    case "East":
+      return directions.east;
+    case "South":
+      return directions.south;
+    case "West":
+      return directions.west;
+    default:
+      return directionName ?? "";
+  }
+}
+
+function getLocalizedRoleLabel(
+  role: string | undefined,
+  labels: {
+    user: string;
+    moderator: string;
+    admin: string;
+  }
+): string {
+  switch (role) {
+    case "user":
+      return labels.user;
+    case "moderator":
+      return labels.moderator;
+    case "admin":
+      return labels.admin;
+    default:
+      return role ?? "";
+  }
+}
+
+function getLocalizedVerificationLabel(
+  status: string | undefined,
+  labels: {
+    pending: string;
+    verified: string;
+    suspicious: string;
+    invalid: string;
+  }
+): string {
+  switch (status) {
+    case "pending":
+      return labels.pending;
+    case "verified":
+      return labels.verified;
+    case "suspicious":
+      return labels.suspicious;
+    case "invalid":
+      return labels.invalid;
+    default:
+      return status ?? "";
+  }
+}
+
 function CollapsiblePanel({ title, defaultOpen = false, children }: CollapsiblePanelProps) {
   return (
     <details className="play-secondary-details" open={defaultOpen}>
@@ -605,7 +671,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       </h2>
       <div className="play-focus-layout">
         <div className="play-focus-sidebar">
-          <dl className="gameplay-hud" aria-label="Current run status">
+          <dl className="gameplay-hud" aria-label={uiText.gameplay.currentRunStatus}>
             <div className="gameplay-hud-item gameplay-hud-item-primary">
               <dt>{uiText.labels.time}</dt>
               <dd>{elapsedTime}</dd>
@@ -616,7 +682,12 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
             </div>
             <div className="gameplay-hud-item">
               <dt>{uiText.labels.facing}</dt>
-              <dd>{DIRECTION_ORDER[directionIndex].name}</dd>
+              <dd>
+                {getLocalizedDirectionLabel(
+                  DIRECTION_ORDER[directionIndex].name,
+                  uiText.directions
+                )}
+              </dd>
             </div>
           </dl>
           <p className="gameplay-controls" aria-label={uiText.labels.controls}>
@@ -649,7 +720,13 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
               <p className="body-copy status-copy success-copy">
                 {uiText.gameplay.submissionAccepted
                   .replace("{acceptedAt}", submissionSummary.acceptedAt)
-                  .replace("{status}", submissionSummary.verificationStatus)}
+                  .replace(
+                    "{status}",
+                    getLocalizedVerificationLabel(
+                      submissionSummary.verificationStatus,
+                      uiText.verification
+                    )
+                  )}
               </p>
             )}
             {submissionStatus === "error" && (
@@ -811,7 +888,9 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
             <Link href={`/profile/${user.username}`} className="inline-link">
               <code>{user.username}</code>
             </Link>
-            {" "}({uiText.auth.role}: <code>{user.role}</code>)
+            {" "}(
+            {uiText.auth.role}:{" "}
+            <code>{getLocalizedRoleLabel(user.role, uiText.auth.roles)}</code>)
           </p>
           <div className="actions">
             {roleAllows(user.role, ROLE_MODERATOR) && (
@@ -832,8 +911,8 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
       ) : (
         <form className="auth-form" onSubmit={handleSubmit} aria-describedby={helperId}>
           <fieldset className="auth-toggle-group">
-            <legend className="sr-only">Authentication mode</legend>
-            <div className="auth-toggle" role="tablist" aria-label="Authentication mode">
+            <legend className="sr-only">{uiText.auth.modeLegend}</legend>
+            <div className="auth-toggle" role="tablist" aria-label={uiText.auth.modeLegend}>
               <button
                 type="button"
                 className={mode === "login" ? "secondary-button is-active" : "secondary-button"}
@@ -1160,7 +1239,7 @@ function PlayPageContent() {
             {uiText.actions.backHome}
           </Link>
         </div>
-        <div className="window-footer" aria-label="Application status bar">
+        <div className="window-footer" aria-label={uiText.gameplay.statusBar}>
           <span>{uiText.systemBar}</span>
           <span>
             {archiveDate

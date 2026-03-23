@@ -56,6 +56,10 @@ export default function HistoryDayPage() {
     };
   }, [date]);
 
+  function getDisplayTitle(title: string): string {
+    return title === "Daily Maze" ? uiText.defaultChallengeTitle : title;
+  }
+
   return (
     <main className="page-shell">
       <div className="content-card">
@@ -87,7 +91,7 @@ export default function HistoryDayPage() {
                 </div>
                 <div className="metadata-row">
                   <dt>{uiText.labels.title}</dt>
-                  <dd>{payload.challenge.title}</dd>
+                  <dd>{getDisplayTitle(payload.challenge.title)}</dd>
                 </div>
                 <div className="metadata-row">
                   <dt>{uiText.labels.seed}</dt>

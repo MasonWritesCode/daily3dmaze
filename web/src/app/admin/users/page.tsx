@@ -20,6 +20,25 @@ import { useLocale } from "../../../lib/locale";
 type PageStatus = "loading" | "ready" | "error";
 type RowStatus = "idle" | "submitting" | "success" | "error";
 
+function getLocalizedAdminRoleLabel(
+  role: string,
+  labels: {
+    admin: string;
+    moderator: string;
+    standardUser: string;
+  }
+): string {
+  if (role === ROLE_ADMIN) {
+    return labels.admin;
+  }
+
+  if (role === ROLE_MODERATOR) {
+    return labels.moderator;
+  }
+
+  return labels.standardUser;
+}
+
 export default function AdminUsersPage() {
   const { formatCount, formatDateTime, messages } = useLocale();
   const uiText = messages.adminUsers;
@@ -114,7 +133,10 @@ export default function AdminUsersPage() {
       setRowStatuses((current) => ({ ...current, [entry.username]: "success" }));
       setRowMessages((current) => ({
         ...current,
-        [entry.username]: uiText.rowMessages.roleUpdated.replace("{role}", result.role)
+        [entry.username]: uiText.rowMessages.roleUpdated.replace(
+          "{role}",
+          getLocalizedAdminRoleLabel(result.role, uiText.labels)
+        )
       }));
     } catch (error) {
       setRowStatuses((current) => ({ ...current, [entry.username]: "error" }));
@@ -195,7 +217,9 @@ export default function AdminUsersPage() {
               {uiText.forbiddenTitle}
             </h2>
             <p className="body-copy">
-              {uiText.forbiddenBodyPrefix} <code>{user.role}</code>. {uiText.forbiddenBodySuffix}
+              {uiText.forbiddenBodyPrefix}{" "}
+              <code>{getLocalizedAdminRoleLabel(user.role, uiText.labels)}</code>.{" "}
+              {uiText.forbiddenBodySuffix}
             </p>
           </section>
         )}
@@ -208,7 +232,7 @@ export default function AdminUsersPage() {
                   {uiText.usersTitle}
                 </h2>
                 <p className="assistive-copy">
-                  Signed in as <strong>{user.username}</strong>.
+                  {uiText.signedInAs} <strong>{user.username}</strong>.
                 </p>
               </div>
             </div>
@@ -261,7 +285,7 @@ export default function AdminUsersPage() {
                   </span>
                   <span className="admin-user-role-cell">
                     <label className="sr-only" htmlFor={`role-${entry.username}`}>
-                      Role for {entry.username}
+                      {uiText.selectorLabels.roleForUser.replace("{username}", entry.username)}
                     </label>
                     <select
                       id={`role-${entry.username}`}
@@ -273,9 +297,9 @@ export default function AdminUsersPage() {
                         }))
                       }
                     >
-                      <option value={ROLE_USER}>User</option>
-                      <option value={ROLE_MODERATOR}>Moderator</option>
-                      <option value={ROLE_ADMIN}>Admin</option>
+                      <option value={ROLE_USER}>{uiText.labels.standardUser}</option>
+                      <option value={ROLE_MODERATOR}>{uiText.labels.moderator}</option>
+                      <option value={ROLE_ADMIN}>{uiText.labels.admin}</option>
                     </select>
                   </span>
                   <span className="review-detail-stack admin-user-status-cell">
