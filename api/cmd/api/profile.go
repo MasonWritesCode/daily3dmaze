@@ -97,7 +97,7 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 			AVG(runs.elapsed_time_ms),
 			MAX(runs.accepted_at)
 		FROM users
-		LEFT JOIN runs ON runs.user_id = users.id
+		LEFT JOIN runs ON runs.user_id = users.id AND runs.verification_status = 'verified'
 		WHERE users.username = $1
 		GROUP BY users.id, users.username, users.created_at
 	`
@@ -144,7 +144,7 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 	const streakDatesQuery = `
 		SELECT DISTINCT run_date::text
 		FROM runs
-		WHERE user_id = $1
+		WHERE user_id = $1 AND verification_status = 'verified'
 		ORDER BY run_date ASC
 	`
 
@@ -173,7 +173,7 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 	const recentRunsQuery = `
 		SELECT run_date::text, seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
-		WHERE user_id = $1
+		WHERE user_id = $1 AND verification_status = 'verified'
 		ORDER BY accepted_at DESC
 		LIMIT 10
 	`

@@ -48,6 +48,10 @@ function getSuspicionTone(score: number): string {
 }
 
 function getVerificationTone(status: string): string {
+  if (status === "pending") {
+    return "pending";
+  }
+
   if (status === "invalid") {
     return "high";
   }

@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -243,11 +241,10 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	replayValidation := evaluateReplayTrace(request)
-	suspicionScore := replayValidation.Score
-	suspicionReasons := replayValidation.ReasonStrings()
-	verificationStatus := replayValidation.VerificationStatus
-	verificationNotes := replayValidation.VerificationNotes
+	suspicionScore := 0
+	suspicionReasons := []string{}
+	verificationStatus := VerificationStatusPending
+	verificationNotes := []string{"queued_for_async_verification"}
 
 	acceptedAt := time.Now().UTC()
 	var userID *int64
@@ -317,157 +314,6 @@ func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
-}
-
-func generateDailyMaze(now time.Time) dailyMazeResponse {
-	challengeDate := now.Format(dateLayoutISO)
-	seed := "daily3dmaze:" + challengeDate
-	size := generateMazeSize(seed)
-	grid, start, exit := generateMazeLayout(seed, size)
-
-	return dailyMazeResponse{
-		Date:  challengeDate,
-		Title: "Daily Maze",
-		Seed:  seed,
-		Size:  size,
-		Start: start,
-		Exit:  exit,
-		Grid:  grid,
-	}
-}
-
-func generateMazeSize(seed string) mazeSize {
-	value := hashSeed(seed)
-
-	// Keep early daily challenges compact while still varying by date.
-	baseWidth := 13
-	baseHeight := 13
-
-	return mazeSize{
-		Width:  baseWidth + int(value%5)*2,
-		Height: baseHeight + int((value/5)%5)*2,
-	}
-}
-
-func generateMazeLayout(seed string, size mazeSize) ([]string, mazePoint, mazePoint) {
-	grid := make([][]byte, size.Height)
-	for y := range grid {
-		grid[y] = make([]byte, size.Width)
-		for x := range grid[y] {
-			grid[y][x] = '#'
-		}
-	}
-
-	start := mazePoint{X: 1, Y: 1}
-	grid[start.Y][start.X] = ' '
-
-	rng := rand.New(rand.NewSource(int64(hashSeed(seed))))
-	stack := []mazePoint{start}
-	directions := []mazePoint{
-		{X: 0, Y: -2},
-		{X: 2, Y: 0},
-		{X: 0, Y: 2},
-		{X: -2, Y: 0},
-	}
-
-	for len(stack) > 0 {
-		current := stack[len(stack)-1]
-		perm := rng.Perm(len(directions))
-		carved := false
-
-		for _, index := range perm {
-			direction := directions[index]
-			next := mazePoint{
-				X: current.X + direction.X,
-				Y: current.Y + direction.Y,
-			}
-
-			if next.X <= 0 || next.X >= size.Width-1 || next.Y <= 0 || next.Y >= size.Height-1 {
-				continue
-			}
-
-			if grid[next.Y][next.X] != '#' {
-				continue
-			}
-
-			wall := mazePoint{
-				X: current.X + direction.X/2,
-				Y: current.Y + direction.Y/2,
-			}
-
-			grid[wall.Y][wall.X] = ' '
-			grid[next.Y][next.X] = ' '
-			stack = append(stack, next)
-			carved = true
-			break
-		}
-
-		if carved {
-			continue
-		}
-
-		stack = stack[:len(stack)-1]
-	}
-
-	exit := findFarthestOpenCell(grid, start)
-	rows := make([]string, len(grid))
-	for y, row := range grid {
-		rows[y] = string(row)
-	}
-
-	return rows, start, exit
-}
-
-func findFarthestOpenCell(grid [][]byte, start mazePoint) mazePoint {
-	height := len(grid)
-	width := len(grid[0])
-	directions := []mazePoint{
-		{X: 1, Y: 0},
-		{X: 0, Y: 1},
-		{X: -1, Y: 0},
-		{X: 0, Y: -1},
-	}
-
-	visited := make([][]bool, height)
-	for y := range visited {
-		visited[y] = make([]bool, width)
-	}
-
-	queue := []mazePoint{start}
-	visited[start.Y][start.X] = true
-	farthest := start
-
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		farthest = current
-
-		for _, direction := range directions {
-			next := mazePoint{
-				X: current.X + direction.X,
-				Y: current.Y + direction.Y,
-			}
-
-			if next.X < 0 || next.X >= width || next.Y < 0 || next.Y >= height {
-				continue
-			}
-
-			if visited[next.Y][next.X] || grid[next.Y][next.X] == '#' {
-				continue
-			}
-
-			visited[next.Y][next.X] = true
-			queue = append(queue, next)
-		}
-	}
-
-	return farthest
-}
-
-func hashSeed(seed string) uint32 {
-	hash := fnv.New32a()
-	_, _ = hash.Write([]byte(seed))
-	return hash.Sum32()
 }
 
 func openDatabase() (*sql.DB, error) {
@@ -877,7 +723,7 @@ func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
 		SELECT run_date::text, COALESCE(users.username, ''), seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
-		WHERE run_date = $1::date
+		WHERE run_date = $1::date AND verification_status = 'verified'
 		ORDER BY elapsed_time_ms ASC, move_count ASC, accepted_at ASC
 		LIMIT 10
 	`

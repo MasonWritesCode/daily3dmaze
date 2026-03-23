@@ -61,6 +61,7 @@ func TestHistoryHandlerReturnsRecentEntries(t *testing.T) {
 			FROM runs
 			LEFT JOIN users ON users.id = runs.user_id
 			WHERE runs.run_date >= $1::date AND runs.run_date <= $2::date
+				AND runs.verification_status = 'verified'
 		)
 		SELECT run_date, submission_count, username, move_count, elapsed_time_ms, accepted_at
 		FROM ranked_runs
@@ -127,6 +128,7 @@ func TestHistoryHandlerEncodesResponse(t *testing.T) {
 			FROM runs
 			LEFT JOIN users ON users.id = runs.user_id
 			WHERE runs.run_date >= $1::date AND runs.run_date <= $2::date
+				AND runs.verification_status = 'verified'
 		)
 		SELECT run_date, submission_count, username, move_count, elapsed_time_ms, accepted_at
 		FROM ranked_runs
@@ -174,7 +176,7 @@ func TestHistoryDayHandlerReturnsChallengeAndLeaderboard(t *testing.T) {
 		SELECT run_date::text, COALESCE(users.username, ''), seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
-		WHERE run_date = $1::date
+		WHERE run_date = $1::date AND verification_status = 'verified'
 		ORDER BY elapsed_time_ms ASC, move_count ASC, accepted_at ASC
 		LIMIT 10
 	`)).

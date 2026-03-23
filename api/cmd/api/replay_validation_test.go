@@ -15,6 +15,7 @@ func TestEvaluateReplayTrace(t *testing.T) {
 		name            string
 		request         runSubmissionRequest
 		wantScore       int
+		wantStatus      VerificationStatus
 		expectedReasons []ReplaySuspicionReason
 	}{
 		{
@@ -27,6 +28,7 @@ func TestEvaluateReplayTrace(t *testing.T) {
 				ReplayTrace:   validTrace,
 			},
 			wantScore:       0,
+			wantStatus:      VerificationStatusVerified,
 			expectedReasons: nil,
 		},
 		{
@@ -43,7 +45,8 @@ func TestEvaluateReplayTrace(t *testing.T) {
 					{ElapsedTimeMs: 30, Action: "turn_left"},
 				},
 			},
-			wantScore: 100,
+			wantScore:  100,
+			wantStatus: VerificationStatusInvalid,
 			expectedReasons: []ReplaySuspicionReason{
 				ReasonReplayLengthMismatch,
 				ReasonVeryHighActionDensity,
@@ -60,7 +63,8 @@ func TestEvaluateReplayTrace(t *testing.T) {
 				ElapsedTimeMs: validTrace[len(validTrace)-1].ElapsedTimeMs + 600,
 				ReplayTrace:   validTrace,
 			},
-			wantScore: 15,
+			wantScore:  15,
+			wantStatus: VerificationStatusVerified,
 			expectedReasons: []ReplaySuspicionReason{
 				ReasonTimestampDrift,
 			},
@@ -76,6 +80,9 @@ func TestEvaluateReplayTrace(t *testing.T) {
 
 			if result.Score != testCase.wantScore {
 				t.Fatalf("expected score %d, got %d", testCase.wantScore, result.Score)
+			}
+			if result.VerificationStatus != testCase.wantStatus {
+				t.Fatalf("expected verification status %q, got %q", testCase.wantStatus, result.VerificationStatus)
 			}
 
 			if len(result.Reasons) != len(testCase.expectedReasons) {
@@ -116,67 +123,6 @@ func TestReplayValidationResultReasonStrings(t *testing.T) {
 	}
 }
 
-func TestDeriveVerificationOutcome(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name         string
-		result       ReplayValidationResult
-		wantStatus   VerificationStatus
-		expectedNote string
-	}{
-		{
-			name: "verified run gets a clean note",
-			result: ReplayValidationResult{
-				Score: 0,
-				Simulation: ReplaySimulationResult{
-					ReachedExit: true,
-				},
-			},
-			wantStatus:   VerificationStatusVerified,
-			expectedNote: "simulation_matches_expected_outcome",
-		},
-		{
-			name: "blocked moves become suspicious",
-			result: ReplayValidationResult{
-				Score: 10,
-				Simulation: ReplaySimulationResult{
-					ReachedExit:      true,
-					BlockedMoveCount: 2,
-				},
-			},
-			wantStatus:   VerificationStatusSuspicious,
-			expectedNote: "simulation_detected_blocked_moves",
-		},
-		{
-			name: "missing exit is invalid",
-			result: ReplayValidationResult{
-				Score: 60,
-				Simulation: ReplaySimulationResult{
-					ReachedExit: false,
-				},
-			},
-			wantStatus:   VerificationStatusInvalid,
-			expectedNote: "simulation_never_reached_exit",
-		},
-	}
-
-	for _, testCase := range testCases {
-		testCase := testCase
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			gotStatus, gotNotes := deriveVerificationOutcome(testCase.result)
-			if gotStatus != testCase.wantStatus {
-				t.Fatalf("expected status %q, got %q", testCase.wantStatus, gotStatus)
-			}
-			if !containsString(gotNotes, testCase.expectedNote) {
-				t.Fatalf("expected notes %v to contain %q", gotNotes, testCase.expectedNote)
-			}
-		})
-	}
-}
-
 func TestSimulateReplayTrace(t *testing.T) {
 	t.Parallel()
 
@@ -214,7 +160,7 @@ func TestSimulateReplayTrace(t *testing.T) {
 	if result.BlockedMoveCount != 0 {
 		t.Fatalf("expected no blocked moves, got %d", result.BlockedMoveCount)
 	}
-	if result.FinalPosition != (mazePoint{X: 3, Y: 1}) {
+	if result.FinalPosition.X != 3 || result.FinalPosition.Y != 1 {
 		t.Fatalf("expected final position (3,1), got %+v", result.FinalPosition)
 	}
 }
@@ -272,7 +218,7 @@ func containsString(values []string, target string) bool {
 
 func buildReplayTraceToExit(challenge dailyMazeResponse) []replayTraceEvent {
 	path := shortestPathToExit(challenge)
-	directionIndex := getStartingDirectionIndexForMaze(challenge)
+	directionIndex := getStartingDirectionIndexLocal(challenge)
 	elapsed := 0
 	trace := make([]replayTraceEvent, 0, len(path)*2)
 
@@ -284,7 +230,7 @@ func buildReplayTraceToExit(challenge dailyMazeResponse) []replayTraceEvent {
 			Y: next.Y - current.Y,
 		}
 		targetDirectionIndex := 0
-		for candidateIndex, direction := range directionOrder {
+		for candidateIndex, direction := range replayTestDirectionOrder {
 			if direction == targetDirection {
 				targetDirectionIndex = candidateIndex
 				break
@@ -292,8 +238,8 @@ func buildReplayTraceToExit(challenge dailyMazeResponse) []replayTraceEvent {
 		}
 
 		for directionIndex != targetDirectionIndex {
-			rightTurns := (targetDirectionIndex - directionIndex + len(directionOrder)) % len(directionOrder)
-			leftTurns := (directionIndex - targetDirectionIndex + len(directionOrder)) % len(directionOrder)
+			rightTurns := (targetDirectionIndex - directionIndex + len(replayTestDirectionOrder)) % len(replayTestDirectionOrder)
+			leftTurns := (directionIndex - targetDirectionIndex + len(replayTestDirectionOrder)) % len(replayTestDirectionOrder)
 
 			elapsed += 120
 			if rightTurns <= leftTurns {
@@ -301,13 +247,13 @@ func buildReplayTraceToExit(challenge dailyMazeResponse) []replayTraceEvent {
 					ElapsedTimeMs: elapsed,
 					Action:        "turn_right",
 				})
-				directionIndex = (directionIndex + 1) % len(directionOrder)
+				directionIndex = (directionIndex + 1) % len(replayTestDirectionOrder)
 			} else {
 				trace = append(trace, replayTraceEvent{
 					ElapsedTimeMs: elapsed,
 					Action:        "turn_left",
 				})
-				directionIndex = (directionIndex + len(directionOrder) - 1) % len(directionOrder)
+				directionIndex = (directionIndex + len(replayTestDirectionOrder) - 1) % len(replayTestDirectionOrder)
 			}
 		}
 
@@ -335,12 +281,12 @@ func shortestPathToExit(challenge dailyMazeResponse) []mazePoint {
 			break
 		}
 
-		for _, direction := range directionOrder {
+		for _, direction := range replayTestDirectionOrder {
 			next := mazePoint{
 				X: current.X + direction.X,
 				Y: current.Y + direction.Y,
 			}
-			if visited[next] || !isWalkableReplayCell(next, challenge.Grid) {
+			if visited[next] || !isWalkableReplayCellLocal(next, challenge.Grid) {
 				continue
 			}
 
@@ -360,4 +306,56 @@ func shortestPathToExit(challenge dailyMazeResponse) []mazePoint {
 	}
 
 	return path
+}
+
+var replayTestDirectionOrder = []mazePoint{
+	{X: 0, Y: -1},
+	{X: 1, Y: 0},
+	{X: 0, Y: 1},
+	{X: -1, Y: 0},
+}
+
+func getStartingDirectionIndexLocal(challenge dailyMazeResponse) int {
+	exitDelta := mazePoint{
+		X: challenge.Exit.X - challenge.Start.X,
+		Y: challenge.Exit.Y - challenge.Start.Y,
+	}
+
+	openDirectionIndexes := make([]int, 0, len(replayTestDirectionOrder))
+	for index, direction := range replayTestDirectionOrder {
+		nextPosition := mazePoint{
+			X: challenge.Start.X + direction.X,
+			Y: challenge.Start.Y + direction.Y,
+		}
+		if isWalkableReplayCellLocal(nextPosition, challenge.Grid) {
+			openDirectionIndexes = append(openDirectionIndexes, index)
+		}
+	}
+
+	if len(openDirectionIndexes) == 0 {
+		return 0
+	}
+
+	bestIndex := openDirectionIndexes[0]
+	bestScore := replayTestDirectionOrder[bestIndex].X*exitDelta.X + replayTestDirectionOrder[bestIndex].Y*exitDelta.Y
+	for _, index := range openDirectionIndexes[1:] {
+		score := replayTestDirectionOrder[index].X*exitDelta.X + replayTestDirectionOrder[index].Y*exitDelta.Y
+		if score > bestScore || (score == bestScore && index < bestIndex) {
+			bestIndex = index
+			bestScore = score
+		}
+	}
+
+	return bestIndex
+}
+
+func isWalkableReplayCellLocal(position mazePoint, grid []string) bool {
+	if position.Y < 0 || position.Y >= len(grid) {
+		return false
+	}
+	row := grid[position.Y]
+	if position.X < 0 || position.X >= len(row) {
+		return false
+	}
+	return row[position.X] != '#'
 }

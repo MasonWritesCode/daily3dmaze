@@ -36,6 +36,10 @@ function getSuspicionTone(score: number): string {
 }
 
 function getVerificationTone(status: string): string {
+  if (status === "pending") {
+    return "pending";
+  }
+
   if (status === "invalid") {
     return "high";
   }
@@ -104,7 +108,13 @@ export default function AdminReviewsPage() {
   const sortedEntries = useMemo(() => {
     return [...entries].sort((left, right) => {
       const statusWeight = (status: string) =>
-        status === "invalid" ? 3 : status === "suspicious" ? 2 : 1;
+        status === "pending"
+          ? 4
+          : status === "invalid"
+            ? 3
+            : status === "suspicious"
+              ? 2
+              : 1;
       const leftStatusWeight = statusWeight(left.verificationStatus);
       const rightStatusWeight = statusWeight(right.verificationStatus);
       if (rightStatusWeight !== leftStatusWeight) {

@@ -527,7 +527,9 @@ function MazeDetails({ maze, onRunSubmitted }: MazeDetailsProps) {
       )}
       {submissionStatus === "submitted" && submissionSummary && (
         <p className="body-copy status-copy success-copy" aria-live="polite">
-          Run accepted by the API at <code>{submissionSummary.acceptedAt}</code>.
+          Run accepted by the API at <code>{submissionSummary.acceptedAt}</code> and
+          queued for verification as{" "}
+          <code>{submissionSummary.verificationStatus}</code>.
         </p>
       )}
       {submissionStatus === "error" && (

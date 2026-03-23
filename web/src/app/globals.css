@@ -253,6 +253,11 @@ h1 {
   color: #86efac;
 }
 
+.score-badge-pending {
+  background: rgba(125, 211, 252, 0.14);
+  color: #7dd3fc;
+}
+
 .score-badge-medium {
   background: rgba(253, 224, 71, 0.14);
   color: #fde047;

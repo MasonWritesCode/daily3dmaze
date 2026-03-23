@@ -167,6 +167,7 @@ func (a app) loadHistory(limit int, now time.Time) ([]historyEntry, error) {
 			FROM runs
 			LEFT JOIN users ON users.id = runs.user_id
 			WHERE runs.run_date >= $1::date AND runs.run_date <= $2::date
+				AND runs.verification_status = 'verified'
 		)
 		SELECT run_date, submission_count, username, move_count, elapsed_time_ms, accepted_at
 		FROM ranked_runs

@@ -53,7 +53,7 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 			AVG(runs.elapsed_time_ms),
 			MAX(runs.accepted_at)
 		FROM users
-		LEFT JOIN runs ON runs.user_id = users.id
+		LEFT JOIN runs ON runs.user_id = users.id AND runs.verification_status = 'verified'
 		WHERE users.username = $1
 		GROUP BY users.id, users.username, users.created_at
 	`)).
@@ -66,7 +66,7 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		SELECT DISTINCT run_date::text
 		FROM runs
-		WHERE user_id = $1
+		WHERE user_id = $1 AND verification_status = 'verified'
 		ORDER BY run_date ASC
 	`)).
 		WithArgs(int64(7)).
@@ -79,7 +79,7 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`
 		SELECT run_date::text, seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
-		WHERE user_id = $1
+		WHERE user_id = $1 AND verification_status = 'verified'
 		ORDER BY accepted_at DESC
 		LIMIT 10
 	`)).
