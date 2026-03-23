@@ -257,6 +257,40 @@ h1 {
   color: #fca5a5;
 }
 
+.comparison-list {
+  display: grid;
+  gap: 10px;
+}
+
+.comparison-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr 120px;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.6);
+  color: var(--muted);
+}
+
+.comparison-row-header {
+  color: var(--text);
+  font-weight: 600;
+  background: transparent;
+}
+
+.comparison-status {
+  font-weight: 600;
+}
+
+.comparison-status-match {
+  color: #86efac;
+}
+
+.comparison-status-mismatch {
+  color: #fca5a5;
+}
+
 .trace-list {
   display: grid;
   gap: 10px;
@@ -525,6 +559,7 @@ h1 {
 
   .review-header,
   .review-row,
+  .comparison-row,
   .trace-row {
     grid-template-columns: 1fr;
   }

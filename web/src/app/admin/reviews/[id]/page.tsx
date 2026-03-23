@@ -111,10 +111,44 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
   }, [params]);
 
   const selectedFrame = frames[selectedFrameIndex] ?? null;
+  const reconstructedFinalFrame = frames[frames.length - 1] ?? null;
   const gridRows =
     maze && selectedFrame
       ? renderGridRows(maze, selectedFrame.playerPosition, selectedFrame.directionIndex)
       : [];
+  const comparisonItems =
+    detail && reconstructedFinalFrame
+      ? [
+          {
+            label: "Final position",
+            frontend: `(${reconstructedFinalFrame.playerPosition.x}, ${reconstructedFinalFrame.playerPosition.y})`,
+            backend: `(${detail.simulation.finalPosition.x}, ${detail.simulation.finalPosition.y})`,
+            matches:
+              reconstructedFinalFrame.playerPosition.x === detail.simulation.finalPosition.x &&
+              reconstructedFinalFrame.playerPosition.y === detail.simulation.finalPosition.y
+          },
+          {
+            label: "Final facing",
+            frontend:
+              DIRECTION_ORDER[reconstructedFinalFrame.directionIndex]?.name ?? "Unknown",
+            backend:
+              DIRECTION_ORDER[detail.simulation.finalDirectionIndex]?.name ?? "Unknown",
+            matches:
+              reconstructedFinalFrame.directionIndex ===
+              detail.simulation.finalDirectionIndex
+          },
+          {
+            label: "Exit reached",
+            frontend: reconstructedFinalFrame.reachedExit ? "Yes" : "No",
+            backend: detail.simulation.reachedExit ? "Yes" : "No",
+            matches:
+              reconstructedFinalFrame.reachedExit === detail.simulation.reachedExit
+          }
+        ]
+      : [];
+  const allComparisonItemsMatch =
+    comparisonItems.length > 0 &&
+    comparisonItems.every((comparisonItem) => comparisonItem.matches);
 
   return (
     <main className="page-shell">
@@ -287,6 +321,56 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                 </div>
               </dl>
             </section>
+
+            {reconstructedFinalFrame && (
+              <section className="maze-summary" aria-labelledby="review-reconciliation-title">
+                <div className="review-header">
+                  <div>
+                    <h2 id="review-reconciliation-title" className="section-title">
+                      Reconstruction comparison
+                    </h2>
+                    <p className="assistive-copy">
+                      Cross-check the frontend replay reconstruction against the backend
+                      simulation result.
+                    </p>
+                  </div>
+                  <span
+                    className={`score-badge score-badge-${
+                      allComparisonItemsMatch ? "low" : "high"
+                    }`}
+                  >
+                    {allComparisonItemsMatch ? "Match" : "Mismatch"}
+                  </span>
+                </div>
+
+                <div className="comparison-list" role="list" aria-label="Replay comparison">
+                  <div
+                    className="comparison-row comparison-row-header"
+                    role="listitem"
+                    aria-hidden="true"
+                  >
+                    <span>Check</span>
+                    <span>Frontend reconstruction</span>
+                    <span>Backend simulation</span>
+                    <span>Status</span>
+                  </div>
+                  {comparisonItems.map((comparisonItem) => (
+                    <div key={comparisonItem.label} className="comparison-row" role="listitem">
+                      <span>{comparisonItem.label}</span>
+                      <span>{comparisonItem.frontend}</span>
+                      <span>{comparisonItem.backend}</span>
+                      <span
+                        className={`comparison-status comparison-status-${
+                          comparisonItem.matches ? "match" : "mismatch"
+                        }`}
+                      >
+                        {comparisonItem.matches ? "Match" : "Mismatch"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             {maze && selectedFrame && (
               <section className="maze-summary" aria-labelledby="review-visualizer-title">
