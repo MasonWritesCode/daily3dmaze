@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -79,6 +80,7 @@ type leaderboardResponse struct {
 }
 
 type recentRunReviewEntry struct {
+	ID               int64    `json:"id"`
 	Date             string   `json:"date"`
 	Seed             string   `json:"seed"`
 	Username         string   `json:"username"`
@@ -91,6 +93,11 @@ type recentRunReviewEntry struct {
 
 type recentRunReviewsResponse struct {
 	Entries []recentRunReviewEntry `json:"entries"`
+}
+
+type runReviewDetailResponse struct {
+	Entry       recentRunReviewEntry `json:"entry"`
+	ReplayTrace []replayTraceEvent   `json:"replayTrace"`
 }
 
 type app struct {
@@ -138,6 +145,7 @@ func main() {
 	mux.HandleFunc("/api/history/day", application.historyDayHandler)
 	mux.HandleFunc("/api/runs", application.runSubmissionHandler)
 	mux.HandleFunc("/api/admin/run-reviews", application.recentRunReviewsHandler)
+	mux.HandleFunc("/api/admin/run-reviews/", application.runReviewDetailHandler)
 	mux.HandleFunc("/api/leaderboard", application.leaderboardHandler)
 
 	addr := ":" + port
@@ -524,6 +532,45 @@ func (a app) recentRunReviewsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, err := a.currentUserFromRequest(r); err != nil {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	runID, err := parseRunReviewID(strings.TrimPrefix(r.URL.Path, "/api/admin/run-reviews/"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	detail, err := a.loadRunReviewDetail(runID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "run review not found", http.StatusNotFound)
+			return
+		}
+
+		http.Error(w, "failed to load run review", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(detail); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 	if a.db == nil {
 		return nil, errors.New("database unavailable")
@@ -531,6 +578,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 
 	const query = `
 		SELECT
+			runs.id,
 			runs.run_date::text,
 			runs.seed,
 			COALESCE(users.username, ''),
@@ -557,6 +605,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 		var acceptedAt time.Time
 		var suspicionReasonsJSON []byte
 		if err := rows.Scan(
+			&entry.ID,
 			&entry.Date,
 			&entry.Seed,
 			&entry.Username,
@@ -581,6 +630,75 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 	}
 
 	return entries, nil
+}
+
+func parseRunReviewID(raw string) (int64, error) {
+	if raw == "" || strings.Contains(raw, "/") {
+		return 0, errors.New("run review id is required")
+	}
+
+	runID, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || runID <= 0 {
+		return 0, errors.New("run review id must be a positive integer")
+	}
+
+	return runID, nil
+}
+
+func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
+	if a.db == nil {
+		return runReviewDetailResponse{}, errors.New("database unavailable")
+	}
+
+	const query = `
+		SELECT
+			runs.id,
+			runs.run_date::text,
+			runs.seed,
+			COALESCE(users.username, ''),
+			runs.move_count,
+			runs.elapsed_time_ms,
+			runs.suspicion_score,
+			runs.suspicion_reasons_json,
+			runs.replay_trace_json,
+			runs.accepted_at
+		FROM runs
+		LEFT JOIN users ON users.id = runs.user_id
+		WHERE runs.id = $1
+	`
+
+	var (
+		detail               runReviewDetailResponse
+		acceptedAt           time.Time
+		suspicionReasonsJSON []byte
+		replayTraceJSON      []byte
+	)
+	if err := a.db.QueryRow(query, runID).Scan(
+		&detail.Entry.ID,
+		&detail.Entry.Date,
+		&detail.Entry.Seed,
+		&detail.Entry.Username,
+		&detail.Entry.MoveCount,
+		&detail.Entry.ElapsedTimeMs,
+		&detail.Entry.SuspicionScore,
+		&suspicionReasonsJSON,
+		&replayTraceJSON,
+		&acceptedAt,
+	); err != nil {
+		return runReviewDetailResponse{}, err
+	}
+
+	if err := json.Unmarshal(suspicionReasonsJSON, &detail.Entry.SuspicionReasons); err != nil {
+		return runReviewDetailResponse{}, err
+	}
+	if len(replayTraceJSON) > 0 {
+		if err := json.Unmarshal(replayTraceJSON, &detail.ReplayTrace); err != nil {
+			return runReviewDetailResponse{}, err
+		}
+	}
+	detail.Entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
+
+	return detail, nil
 }
 
 func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {

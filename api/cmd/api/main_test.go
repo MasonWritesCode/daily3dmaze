@@ -224,6 +224,42 @@ func TestRecentRunReviewsHandlerRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestRunReviewDetailHandlerRequiresAuthentication(t *testing.T) {
+	t.Parallel()
+
+	application := app{}
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/run-reviews/7", nil)
+	recorder := httptest.NewRecorder()
+
+	application.runReviewDetailHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, response.StatusCode)
+	}
+}
+
+func TestParseRunReviewID(t *testing.T) {
+	t.Parallel()
+
+	runID, err := parseRunReviewID("42")
+	if err != nil {
+		t.Fatalf("expected valid run id, got error: %v", err)
+	}
+	if runID != 42 {
+		t.Fatalf("expected run id 42, got %d", runID)
+	}
+
+	invalidValues := []string{"", "abc", "0", "-1", "42/extra"}
+	for _, invalidValue := range invalidValues {
+		if _, err := parseRunReviewID(invalidValue); err == nil {
+			t.Fatalf("expected invalid run id %q to fail", invalidValue)
+		}
+	}
+}
+
 func TestRateLimitKeyFromRequestPrefersForwardedHeaders(t *testing.T) {
 	t.Parallel()
 

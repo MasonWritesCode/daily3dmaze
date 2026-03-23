@@ -216,7 +216,12 @@ export default function AdminReviewsPage() {
                           <span className="assistive-copy">None</span>
                         )}
                       </div>
-                      <div>{formatAcceptedAt(entry.acceptedAt)}</div>
+                      <div className="review-challenge">
+                        <span>{formatAcceptedAt(entry.acceptedAt)}</span>
+                        <Link href={`/admin/reviews/${entry.id}`} className="inline-link">
+                          Inspect run
+                        </Link>
+                      </div>
                     </article>
                   );
                 })}

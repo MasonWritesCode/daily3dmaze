@@ -257,6 +257,28 @@ h1 {
   color: #fca5a5;
 }
 
+.trace-list {
+  display: grid;
+  gap: 10px;
+}
+
+.trace-row {
+  display: grid;
+  grid-template-columns: 96px 1.4fr 160px;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: rgba(13, 16, 21, 0.6);
+  color: var(--muted);
+}
+
+.trace-row-header {
+  color: var(--text);
+  font-weight: 600;
+  background: transparent;
+}
+
 .history-card-header {
   display: flex;
   justify-content: space-between;
@@ -472,7 +494,8 @@ h1 {
   }
 
   .review-header,
-  .review-row {
+  .review-row,
+  .trace-row {
     grid-template-columns: 1fr;
   }
 }

@@ -108,6 +108,7 @@ export interface HistoryDayResponse {
 }
 
 export interface RunReviewEntry {
+  id: number;
   date: string;
   seed: string;
   username: string;
@@ -120,6 +121,11 @@ export interface RunReviewEntry {
 
 export interface RunReviewsResponse {
   entries: RunReviewEntry[];
+}
+
+export interface RunReviewDetailResponse {
+  entry: RunReviewEntry;
+  replayTrace: ReplayTraceEvent[];
 }
 
 async function readTextError(response: Response, fallback: string): Promise<Error> {
@@ -290,4 +296,21 @@ export async function fetchRunReviews(): Promise<RunReviewsResponse> {
   }
 
   return (await response.json()) as RunReviewsResponse;
+}
+
+export async function fetchRunReviewDetail(
+  runID: string
+): Promise<RunReviewDetailResponse> {
+  const response = await fetch(`${adminRunReviewsEndpoint}/${encodeURIComponent(runID)}`, {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Run review detail request failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as RunReviewDetailResponse;
 }
