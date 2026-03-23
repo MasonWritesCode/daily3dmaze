@@ -47,6 +47,18 @@ function getSuspicionTone(score: number): string {
   return "low";
 }
 
+function getVerificationTone(status: string): string {
+  if (status === "invalid") {
+    return "high";
+  }
+
+  if (status === "suspicious") {
+    return "medium";
+  }
+
+  return "low";
+}
+
 export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -205,15 +217,19 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                   </p>
                 </div>
                 <span
-                  className={`score-badge score-badge-${getSuspicionTone(
-                    detail.entry.suspicionScore
+                  className={`score-badge score-badge-${getVerificationTone(
+                    detail.entry.verificationStatus
                   )}`}
                 >
-                  Score {detail.entry.suspicionScore}
+                  {detail.entry.verificationStatus}
                 </span>
               </div>
 
               <dl className="metadata-list">
+                <div className="metadata-row">
+                  <dt>Verification</dt>
+                  <dd>{detail.entry.verificationStatus}</dd>
+                </div>
                 <div className="metadata-row">
                   <dt>Player</dt>
                   <dd>
@@ -260,6 +276,20 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                       detail.entry.suspicionReasons.map((reason) => (
                         <span key={reason} className="reason-chip">
                           {reason}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="assistive-copy">None</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Verification notes</dt>
+                  <dd className="reason-list">
+                    {detail.entry.verificationNotes.length > 0 ? (
+                      detail.entry.verificationNotes.map((note) => (
+                        <span key={note} className="reason-chip">
+                          {note}
                         </span>
                       ))
                     ) : (

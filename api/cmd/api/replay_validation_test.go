@@ -116,6 +116,67 @@ func TestReplayValidationResultReasonStrings(t *testing.T) {
 	}
 }
 
+func TestDeriveVerificationOutcome(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name         string
+		result       ReplayValidationResult
+		wantStatus   VerificationStatus
+		expectedNote string
+	}{
+		{
+			name: "verified run gets a clean note",
+			result: ReplayValidationResult{
+				Score: 0,
+				Simulation: ReplaySimulationResult{
+					ReachedExit: true,
+				},
+			},
+			wantStatus:   VerificationStatusVerified,
+			expectedNote: "simulation_matches_expected_outcome",
+		},
+		{
+			name: "blocked moves become suspicious",
+			result: ReplayValidationResult{
+				Score: 10,
+				Simulation: ReplaySimulationResult{
+					ReachedExit:      true,
+					BlockedMoveCount: 2,
+				},
+			},
+			wantStatus:   VerificationStatusSuspicious,
+			expectedNote: "simulation_detected_blocked_moves",
+		},
+		{
+			name: "missing exit is invalid",
+			result: ReplayValidationResult{
+				Score: 60,
+				Simulation: ReplaySimulationResult{
+					ReachedExit: false,
+				},
+			},
+			wantStatus:   VerificationStatusInvalid,
+			expectedNote: "simulation_never_reached_exit",
+		},
+	}
+
+	for _, testCase := range testCases {
+		testCase := testCase
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			gotStatus, gotNotes := deriveVerificationOutcome(testCase.result)
+			if gotStatus != testCase.wantStatus {
+				t.Fatalf("expected status %q, got %q", testCase.wantStatus, gotStatus)
+			}
+			if !containsString(gotNotes, testCase.expectedNote) {
+				t.Fatalf("expected notes %v to contain %q", gotNotes, testCase.expectedNote)
+			}
+		})
+	}
+}
+
 func TestSimulateReplayTrace(t *testing.T) {
 	t.Parallel()
 
@@ -190,6 +251,16 @@ func TestSimulateReplayTraceCountsBlockedMoves(t *testing.T) {
 }
 
 func containsReplayReason(values []ReplaySuspicionReason, target ReplaySuspicionReason) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+
+	return false
+}
+
+func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
 			return true

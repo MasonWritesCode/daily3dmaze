@@ -3,6 +3,7 @@ package main
 import "time"
 
 type ReplaySuspicionReason string
+type VerificationStatus string
 
 const (
 	ReasonReplayLengthMismatch   ReplaySuspicionReason = "replay_length_mismatch"
@@ -13,12 +14,18 @@ const (
 	ReasonBlockedMoveAttempts    ReplaySuspicionReason = "blocked_move_attempts"
 	ReasonReplayDoesNotReachExit ReplaySuspicionReason = "replay_does_not_reach_exit"
 	ReasonActionsAfterExit       ReplaySuspicionReason = "actions_after_exit"
+
+	VerificationStatusVerified   VerificationStatus = "verified"
+	VerificationStatusSuspicious VerificationStatus = "suspicious"
+	VerificationStatusInvalid    VerificationStatus = "invalid"
 )
 
 type ReplayValidationResult struct {
-	Score      int
-	Reasons    []ReplaySuspicionReason
-	Simulation ReplaySimulationResult
+	Score              int
+	Reasons            []ReplaySuspicionReason
+	Simulation         ReplaySimulationResult
+	VerificationStatus VerificationStatus
+	VerificationNotes  []string
 }
 
 type ReplaySimulationResult struct {
@@ -108,6 +115,8 @@ func evaluateReplayTrace(request runSubmissionRequest) ReplayValidationResult {
 	if result.Score > 100 {
 		result.Score = 100
 	}
+
+	result.VerificationStatus, result.VerificationNotes = deriveVerificationOutcome(result)
 
 	return result
 }
@@ -233,4 +242,37 @@ func isWalkableReplayCell(position mazePoint, grid []string) bool {
 	}
 
 	return row[position.X] != '#'
+}
+
+func deriveVerificationOutcome(result ReplayValidationResult) (VerificationStatus, []string) {
+	notes := make([]string, 0, 4)
+
+	if !result.Simulation.ReachedExit {
+		notes = append(notes, "simulation_never_reached_exit")
+	}
+	if result.Simulation.BlockedMoveCount > 0 {
+		notes = append(notes, "simulation_detected_blocked_moves")
+	}
+	if result.Simulation.ActionsAfterExit > 0 {
+		notes = append(notes, "simulation_detected_actions_after_exit")
+	}
+	if result.Score >= 50 {
+		notes = append(notes, "high_suspicion_score")
+	} else if result.Score >= 20 {
+		notes = append(notes, "moderate_suspicion_score")
+	}
+
+	if !result.Simulation.ReachedExit {
+		return VerificationStatusInvalid, notes
+	}
+
+	if result.Simulation.BlockedMoveCount > 0 || result.Simulation.ActionsAfterExit > 0 || result.Score >= 20 {
+		return VerificationStatusSuspicious, notes
+	}
+
+	if len(notes) == 0 {
+		notes = append(notes, "simulation_matches_expected_outcome")
+	}
+
+	return VerificationStatusVerified, notes
 }

@@ -40,6 +40,8 @@ export interface RunSubmissionResponse extends RunSubmissionPayload {
   acceptedAt: string;
   suspicionScore: number;
   suspicionReasons: string[];
+  verificationStatus: string;
+  verificationNotes: string[];
 }
 
 export interface AuthUser {
@@ -112,6 +114,8 @@ export interface RunReviewEntry {
   elapsedTimeMs: number;
   suspicionScore: number;
   suspicionReasons: string[];
+  verificationStatus: string;
+  verificationNotes: string[];
   acceptedAt: string;
 }
 

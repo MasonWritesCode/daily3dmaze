@@ -33,6 +33,18 @@ function getSuspicionTone(score: number): string {
   return "low";
 }
 
+function getVerificationTone(status: string): string {
+  if (status === "invalid") {
+    return "high";
+  }
+
+  if (status === "suspicious") {
+    return "medium";
+  }
+
+  return "low";
+}
+
 export default function AdminReviewsPage() {
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -87,6 +99,14 @@ export default function AdminReviewsPage() {
 
   const sortedEntries = useMemo(() => {
     return [...entries].sort((left, right) => {
+      const statusWeight = (status: string) =>
+        status === "invalid" ? 3 : status === "suspicious" ? 2 : 1;
+      const leftStatusWeight = statusWeight(left.verificationStatus);
+      const rightStatusWeight = statusWeight(right.verificationStatus);
+      if (rightStatusWeight !== leftStatusWeight) {
+        return rightStatusWeight - leftStatusWeight;
+      }
+
       if (right.suspicionScore !== left.suspicionScore) {
         return right.suspicionScore - left.suspicionScore;
       }
@@ -164,6 +184,7 @@ export default function AdminReviewsPage() {
             ) : (
               <div className="review-list" role="list" aria-label="Recent run reviews">
                 <div className="review-row review-row-header" role="listitem" aria-hidden="true">
+                  <span>Verification</span>
                   <span>Score</span>
                   <span>Player</span>
                   <span>Challenge</span>
@@ -182,6 +203,15 @@ export default function AdminReviewsPage() {
                       className="review-row"
                       role="listitem"
                     >
+                      <div>
+                        <span
+                          className={`score-badge score-badge-${getVerificationTone(
+                            entry.verificationStatus
+                          )}`}
+                        >
+                          {entry.verificationStatus}
+                        </span>
+                      </div>
                       <div>
                         <span className="sr-only">Suspicion score </span>
                         <span className={`score-badge score-badge-${tone}`}>

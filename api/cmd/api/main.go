@@ -54,14 +54,16 @@ type replayTraceEvent struct {
 }
 
 type runSubmissionResponse struct {
-	Status           string   `json:"status"`
-	Date             string   `json:"date"`
-	Seed             string   `json:"seed"`
-	MoveCount        int      `json:"moveCount"`
-	ElapsedTimeMs    int      `json:"elapsedTimeMs"`
-	AcceptedAt       string   `json:"acceptedAt"`
-	SuspicionScore   int      `json:"suspicionScore"`
-	SuspicionReasons []string `json:"suspicionReasons"`
+	Status             string   `json:"status"`
+	Date               string   `json:"date"`
+	Seed               string   `json:"seed"`
+	MoveCount          int      `json:"moveCount"`
+	ElapsedTimeMs      int      `json:"elapsedTimeMs"`
+	AcceptedAt         string   `json:"acceptedAt"`
+	SuspicionScore     int      `json:"suspicionScore"`
+	SuspicionReasons   []string `json:"suspicionReasons"`
+	VerificationStatus string   `json:"verificationStatus"`
+	VerificationNotes  []string `json:"verificationNotes"`
 }
 
 type leaderboardEntry struct {
@@ -80,15 +82,17 @@ type leaderboardResponse struct {
 }
 
 type recentRunReviewEntry struct {
-	ID               int64    `json:"id"`
-	Date             string   `json:"date"`
-	Seed             string   `json:"seed"`
-	Username         string   `json:"username"`
-	MoveCount        int      `json:"moveCount"`
-	ElapsedTimeMs    int      `json:"elapsedTimeMs"`
-	SuspicionScore   int      `json:"suspicionScore"`
-	SuspicionReasons []string `json:"suspicionReasons"`
-	AcceptedAt       string   `json:"acceptedAt"`
+	ID                 int64    `json:"id"`
+	Date               string   `json:"date"`
+	Seed               string   `json:"seed"`
+	Username           string   `json:"username"`
+	MoveCount          int      `json:"moveCount"`
+	ElapsedTimeMs      int      `json:"elapsedTimeMs"`
+	SuspicionScore     int      `json:"suspicionScore"`
+	SuspicionReasons   []string `json:"suspicionReasons"`
+	VerificationStatus string   `json:"verificationStatus"`
+	VerificationNotes  []string `json:"verificationNotes"`
+	AcceptedAt         string   `json:"acceptedAt"`
 }
 
 type recentRunReviewsResponse struct {
@@ -236,6 +240,8 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 	replayValidation := evaluateReplayTrace(request)
 	suspicionScore := replayValidation.Score
 	suspicionReasons := replayValidation.ReasonStrings()
+	verificationStatus := replayValidation.VerificationStatus
+	verificationNotes := replayValidation.VerificationNotes
 
 	acceptedAt := time.Now().UTC()
 	var userID *int64
@@ -243,20 +249,22 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		userID = &user.ID
 	}
 
-	if err := a.insertRun(request, userID, suspicionScore, suspicionReasons, acceptedAt); err != nil {
+	if err := a.insertRun(request, userID, suspicionScore, suspicionReasons, verificationStatus, verificationNotes, acceptedAt); err != nil {
 		http.Error(w, "failed to persist run", http.StatusInternalServerError)
 		return
 	}
 
 	response := runSubmissionResponse{
-		Status:           "accepted",
-		Date:             request.Date,
-		Seed:             request.Seed,
-		MoveCount:        request.MoveCount,
-		ElapsedTimeMs:    request.ElapsedTimeMs,
-		AcceptedAt:       acceptedAt.Format(time.RFC3339),
-		SuspicionScore:   suspicionScore,
-		SuspicionReasons: suspicionReasons,
+		Status:             "accepted",
+		Date:               request.Date,
+		Seed:               request.Seed,
+		MoveCount:          request.MoveCount,
+		ElapsedTimeMs:      request.ElapsedTimeMs,
+		AcceptedAt:         acceptedAt.Format(time.RFC3339),
+		SuspicionScore:     suspicionScore,
+		SuspicionReasons:   suspicionReasons,
+		VerificationStatus: string(verificationStatus),
+		VerificationNotes:  verificationNotes,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -482,14 +490,14 @@ func openDatabase() (*sql.DB, error) {
 	return db, nil
 }
 
-func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionScore int, suspicionReasons []string, acceptedAt time.Time) error {
+func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionScore int, suspicionReasons []string, verificationStatus VerificationStatus, verificationNotes []string, acceptedAt time.Time) error {
 	if a.db == nil {
 		return errors.New("database unavailable")
 	}
 
 	const query = `
-		INSERT INTO runs (user_id, run_date, seed, move_count, elapsed_time_ms, replay_trace_json, suspicion_score, suspicion_reasons_json, accepted_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO runs (user_id, run_date, seed, move_count, elapsed_time_ms, replay_trace_json, suspicion_score, suspicion_reasons_json, verification_status, verification_notes_json, accepted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 
 	replayTraceJSON, err := json.Marshal(request.ReplayTrace)
@@ -500,8 +508,12 @@ func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionSco
 	if err != nil {
 		return err
 	}
+	verificationNotesJSON, err := json.Marshal(verificationNotes)
+	if err != nil {
+		return err
+	}
 
-	_, err = a.db.Exec(query, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, replayTraceJSON, suspicionScore, suspicionReasonsJSON, acceptedAt)
+	_, err = a.db.Exec(query, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, replayTraceJSON, suspicionScore, suspicionReasonsJSON, string(verificationStatus), verificationNotesJSON, acceptedAt)
 	return err
 }
 
@@ -587,6 +599,8 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			runs.elapsed_time_ms,
 			runs.suspicion_score,
 			runs.suspicion_reasons_json,
+			runs.verification_status,
+			runs.verification_notes_json,
 			runs.accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
@@ -605,6 +619,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 		var entry recentRunReviewEntry
 		var acceptedAt time.Time
 		var suspicionReasonsJSON []byte
+		var verificationNotesJSON []byte
 		if err := rows.Scan(
 			&entry.ID,
 			&entry.Date,
@@ -614,12 +629,17 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			&entry.ElapsedTimeMs,
 			&entry.SuspicionScore,
 			&suspicionReasonsJSON,
+			&entry.VerificationStatus,
+			&verificationNotesJSON,
 			&acceptedAt,
 		); err != nil {
 			return nil, err
 		}
 
 		if err := json.Unmarshal(suspicionReasonsJSON, &entry.SuspicionReasons); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(verificationNotesJSON, &entry.VerificationNotes); err != nil {
 			return nil, err
 		}
 		entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
@@ -661,6 +681,8 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 			runs.elapsed_time_ms,
 			runs.suspicion_score,
 			runs.suspicion_reasons_json,
+			runs.verification_status,
+			runs.verification_notes_json,
 			runs.replay_trace_json,
 			runs.accepted_at
 		FROM runs
@@ -669,10 +691,11 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 	`
 
 	var (
-		detail               runReviewDetailResponse
-		acceptedAt           time.Time
-		suspicionReasonsJSON []byte
-		replayTraceJSON      []byte
+		detail                runReviewDetailResponse
+		acceptedAt            time.Time
+		suspicionReasonsJSON  []byte
+		verificationNotesJSON []byte
+		replayTraceJSON       []byte
 	)
 	if err := a.db.QueryRow(query, runID).Scan(
 		&detail.Entry.ID,
@@ -683,6 +706,8 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		&detail.Entry.ElapsedTimeMs,
 		&detail.Entry.SuspicionScore,
 		&suspicionReasonsJSON,
+		&detail.Entry.VerificationStatus,
+		&verificationNotesJSON,
 		&replayTraceJSON,
 		&acceptedAt,
 	); err != nil {
@@ -690,6 +715,9 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 	}
 
 	if err := json.Unmarshal(suspicionReasonsJSON, &detail.Entry.SuspicionReasons); err != nil {
+		return runReviewDetailResponse{}, err
+	}
+	if err := json.Unmarshal(verificationNotesJSON, &detail.Entry.VerificationNotes); err != nil {
 		return runReviewDetailResponse{}, err
 	}
 	if len(replayTraceJSON) > 0 {
