@@ -236,6 +236,58 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               </dl>
             </section>
 
+            <section className="maze-summary" aria-labelledby="review-simulation-title">
+              <div className="review-header">
+                <div>
+                  <h2 id="review-simulation-title" className="section-title">
+                    Server-side simulation
+                  </h2>
+                  <p className="assistive-copy">
+                    Deterministic backend replay of the submitted trace against the
+                    canonical maze for this day.
+                  </p>
+                </div>
+                <span
+                  className={`score-badge score-badge-${
+                    detail.simulation.reachedExit ? "low" : "high"
+                  }`}
+                >
+                  {detail.simulation.reachedExit ? "Reached exit" : "Did not finish"}
+                </span>
+              </div>
+
+              <dl className="metadata-list">
+                <div className="metadata-row">
+                  <dt>Final position</dt>
+                  <dd>
+                    ({detail.simulation.finalPosition.x}, {detail.simulation.finalPosition.y})
+                  </dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Final facing</dt>
+                  <dd>
+                    {DIRECTION_ORDER[detail.simulation.finalDirectionIndex]?.name ?? "Unknown"}
+                  </dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>First exit step</dt>
+                  <dd>
+                    {detail.simulation.firstExitStep >= 0
+                      ? detail.simulation.firstExitStep
+                      : "Never"}
+                  </dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Blocked moves</dt>
+                  <dd>{detail.simulation.blockedMoveCount}</dd>
+                </div>
+                <div className="metadata-row">
+                  <dt>Actions after exit</dt>
+                  <dd>{detail.simulation.actionsAfterExit}</dd>
+                </div>
+              </dl>
+            </section>
+
             {maze && selectedFrame && (
               <section className="maze-summary" aria-labelledby="review-visualizer-title">
                 <div className="review-header">

@@ -96,8 +96,9 @@ type recentRunReviewsResponse struct {
 }
 
 type runReviewDetailResponse struct {
-	Entry       recentRunReviewEntry `json:"entry"`
-	ReplayTrace []replayTraceEvent   `json:"replayTrace"`
+	Entry       recentRunReviewEntry   `json:"entry"`
+	ReplayTrace []replayTraceEvent     `json:"replayTrace"`
+	Simulation  ReplaySimulationResult `json:"simulation"`
 }
 
 type app struct {
@@ -697,6 +698,11 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		}
 	}
 	detail.Entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
+	challengeDate, err := time.Parse(dateLayoutISO, detail.Entry.Date)
+	if err != nil {
+		return runReviewDetailResponse{}, err
+	}
+	detail.Simulation = simulateReplayTrace(generateDailyMaze(challengeDate.UTC()), detail.ReplayTrace)
 
 	return detail, nil
 }

@@ -1,18 +1,33 @@
 package main
 
+import "time"
+
 type ReplaySuspicionReason string
 
 const (
-	ReasonReplayLengthMismatch  ReplaySuspicionReason = "replay_length_mismatch"
-	ReasonTimestampDrift        ReplaySuspicionReason = "timestamp_drift"
-	ReasonVeryHighActionDensity ReplaySuspicionReason = "very_high_action_density"
-	ReasonHighActionDensity     ReplaySuspicionReason = "high_action_density"
-	ReasonRapidRepeatedTurns    ReplaySuspicionReason = "rapid_repeated_turns"
+	ReasonReplayLengthMismatch   ReplaySuspicionReason = "replay_length_mismatch"
+	ReasonTimestampDrift         ReplaySuspicionReason = "timestamp_drift"
+	ReasonVeryHighActionDensity  ReplaySuspicionReason = "very_high_action_density"
+	ReasonHighActionDensity      ReplaySuspicionReason = "high_action_density"
+	ReasonRapidRepeatedTurns     ReplaySuspicionReason = "rapid_repeated_turns"
+	ReasonBlockedMoveAttempts    ReplaySuspicionReason = "blocked_move_attempts"
+	ReasonReplayDoesNotReachExit ReplaySuspicionReason = "replay_does_not_reach_exit"
+	ReasonActionsAfterExit       ReplaySuspicionReason = "actions_after_exit"
 )
 
 type ReplayValidationResult struct {
-	Score   int
-	Reasons []ReplaySuspicionReason
+	Score      int
+	Reasons    []ReplaySuspicionReason
+	Simulation ReplaySimulationResult
+}
+
+type ReplaySimulationResult struct {
+	FinalPosition       mazePoint `json:"finalPosition"`
+	FinalDirectionIndex int       `json:"finalDirectionIndex"`
+	ReachedExit         bool      `json:"reachedExit"`
+	FirstExitStep       int       `json:"firstExitStep"`
+	BlockedMoveCount    int       `json:"blockedMoveCount"`
+	ActionsAfterExit    int       `json:"actionsAfterExit"`
 }
 
 func (result ReplayValidationResult) ReasonStrings() []string {
@@ -70,6 +85,26 @@ func evaluateReplayTrace(request runSubmissionRequest) ReplayValidationResult {
 		result.Reasons = append(result.Reasons, ReasonRapidRepeatedTurns)
 	}
 
+	if challengeDate, err := time.Parse(dateLayoutISO, request.Date); err == nil {
+		challenge := generateDailyMaze(challengeDate.UTC())
+		result.Simulation = simulateReplayTrace(challenge, request.ReplayTrace)
+
+		if result.Simulation.BlockedMoveCount > 0 {
+			result.Score += minInt(20, result.Simulation.BlockedMoveCount*5)
+			result.Reasons = append(result.Reasons, ReasonBlockedMoveAttempts)
+		}
+
+		if !result.Simulation.ReachedExit {
+			result.Score += 40
+			result.Reasons = append(result.Reasons, ReasonReplayDoesNotReachExit)
+		}
+
+		if result.Simulation.ActionsAfterExit > 0 {
+			result.Score += minInt(20, result.Simulation.ActionsAfterExit*5)
+			result.Reasons = append(result.Reasons, ReasonActionsAfterExit)
+		}
+	}
+
 	if result.Score > 100 {
 		result.Score = 100
 	}
@@ -83,4 +118,119 @@ func minInt(left, right int) int {
 	}
 
 	return right
+}
+
+func simulateReplayTrace(challenge dailyMazeResponse, replayTrace []replayTraceEvent) ReplaySimulationResult {
+	directionIndex := getStartingDirectionIndexForMaze(challenge)
+	position := challenge.Start
+	result := ReplaySimulationResult{
+		FinalPosition:       position,
+		FinalDirectionIndex: directionIndex,
+		FirstExitStep:       -1,
+	}
+
+	for index, event := range replayTrace {
+		if result.ReachedExit {
+			result.ActionsAfterExit++
+		}
+
+		switch event.Action {
+		case "turn_left":
+			directionIndex = (directionIndex + len(directionOrder) - 1) % len(directionOrder)
+		case "turn_right":
+			directionIndex = (directionIndex + 1) % len(directionOrder)
+		case "move_forward":
+			nextPosition := attemptReplayMove(position, directionOrder[directionIndex], challenge.Grid)
+			if nextPosition == position {
+				result.BlockedMoveCount++
+			}
+			position = nextPosition
+		case "move_backward":
+			backwardDirection := mazePoint{
+				X: -directionOrder[directionIndex].X,
+				Y: -directionOrder[directionIndex].Y,
+			}
+			nextPosition := attemptReplayMove(position, backwardDirection, challenge.Grid)
+			if nextPosition == position {
+				result.BlockedMoveCount++
+			}
+			position = nextPosition
+		}
+
+		if !result.ReachedExit && position == challenge.Exit {
+			result.ReachedExit = true
+			result.FirstExitStep = index + 1
+		}
+	}
+
+	result.FinalPosition = position
+	result.FinalDirectionIndex = directionIndex
+
+	return result
+}
+
+var directionOrder = []mazePoint{
+	{X: 0, Y: -1},
+	{X: 1, Y: 0},
+	{X: 0, Y: 1},
+	{X: -1, Y: 0},
+}
+
+func getStartingDirectionIndexForMaze(challenge dailyMazeResponse) int {
+	exitDelta := mazePoint{
+		X: challenge.Exit.X - challenge.Start.X,
+		Y: challenge.Exit.Y - challenge.Start.Y,
+	}
+
+	openDirectionIndexes := make([]int, 0, len(directionOrder))
+	for index, direction := range directionOrder {
+		nextPosition := mazePoint{
+			X: challenge.Start.X + direction.X,
+			Y: challenge.Start.Y + direction.Y,
+		}
+		if isWalkableReplayCell(nextPosition, challenge.Grid) {
+			openDirectionIndexes = append(openDirectionIndexes, index)
+		}
+	}
+
+	if len(openDirectionIndexes) == 0 {
+		return 0
+	}
+
+	bestIndex := openDirectionIndexes[0]
+	bestScore := directionOrder[bestIndex].X*exitDelta.X + directionOrder[bestIndex].Y*exitDelta.Y
+	for _, index := range openDirectionIndexes[1:] {
+		score := directionOrder[index].X*exitDelta.X + directionOrder[index].Y*exitDelta.Y
+		if score > bestScore || (score == bestScore && index < bestIndex) {
+			bestIndex = index
+			bestScore = score
+		}
+	}
+
+	return bestIndex
+}
+
+func attemptReplayMove(position, direction mazePoint, grid []string) mazePoint {
+	nextPosition := mazePoint{
+		X: position.X + direction.X,
+		Y: position.Y + direction.Y,
+	}
+	if !isWalkableReplayCell(nextPosition, grid) {
+		return position
+	}
+
+	return nextPosition
+}
+
+func isWalkableReplayCell(position mazePoint, grid []string) bool {
+	if position.Y < 0 || position.Y >= len(grid) {
+		return false
+	}
+
+	row := grid[position.Y]
+	if position.X < 0 || position.X >= len(row) {
+		return false
+	}
+
+	return row[position.X] != '#'
 }

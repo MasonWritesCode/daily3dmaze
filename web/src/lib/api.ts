@@ -122,6 +122,17 @@ export interface RunReviewsResponse {
 export interface RunReviewDetailResponse {
   entry: RunReviewEntry;
   replayTrace: ReplayTraceEvent[];
+  simulation: {
+    finalPosition: {
+      x: number;
+      y: number;
+    };
+    finalDirectionIndex: number;
+    reachedExit: boolean;
+    firstExitStep: number;
+    blockedMoveCount: number;
+    actionsAfterExit: number;
+  };
 }
 
 async function readTextError(response: Response, fallback: string): Promise<Error> {

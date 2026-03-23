@@ -1,9 +1,15 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestEvaluateReplayTrace(t *testing.T) {
 	t.Parallel()
+
+	challenge := generateDailyMaze(time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC))
+	validTrace := buildReplayTraceToExit(challenge)
 
 	testCases := []struct {
 		name            string
@@ -12,16 +18,13 @@ func TestEvaluateReplayTrace(t *testing.T) {
 		expectedReasons []ReplaySuspicionReason
 	}{
 		{
-			name: "low risk trace stays clean",
+			name: "valid replay to exit stays clean",
 			request: runSubmissionRequest{
 				Date:          "2026-03-21",
 				Seed:          "daily3dmaze:2026-03-21",
-				MoveCount:     2,
-				ElapsedTimeMs: 1500,
-				ReplayTrace: []replayTraceEvent{
-					{ElapsedTimeMs: 400, Action: "move_forward"},
-					{ElapsedTimeMs: 1400, Action: "turn_right"},
-				},
+				MoveCount:     len(validTrace),
+				ElapsedTimeMs: validTrace[len(validTrace)-1].ElapsedTimeMs,
+				ReplayTrace:   validTrace,
 			},
 			wantScore:       0,
 			expectedReasons: nil,
@@ -40,11 +43,12 @@ func TestEvaluateReplayTrace(t *testing.T) {
 					{ElapsedTimeMs: 30, Action: "turn_left"},
 				},
 			},
-			wantScore: 70,
+			wantScore: 100,
 			expectedReasons: []ReplaySuspicionReason{
 				ReasonReplayLengthMismatch,
 				ReasonVeryHighActionDensity,
 				ReasonRapidRepeatedTurns,
+				ReasonReplayDoesNotReachExit,
 			},
 		},
 		{
@@ -52,12 +56,9 @@ func TestEvaluateReplayTrace(t *testing.T) {
 			request: runSubmissionRequest{
 				Date:          "2026-03-21",
 				Seed:          "daily3dmaze:2026-03-21",
-				MoveCount:     2,
-				ElapsedTimeMs: 2000,
-				ReplayTrace: []replayTraceEvent{
-					{ElapsedTimeMs: 300, Action: "move_forward"},
-					{ElapsedTimeMs: 1200, Action: "turn_right"},
-				},
+				MoveCount:     len(validTrace),
+				ElapsedTimeMs: validTrace[len(validTrace)-1].ElapsedTimeMs + 600,
+				ReplayTrace:   validTrace,
 			},
 			wantScore: 15,
 			expectedReasons: []ReplaySuspicionReason{
@@ -115,6 +116,79 @@ func TestReplayValidationResultReasonStrings(t *testing.T) {
 	}
 }
 
+func TestSimulateReplayTrace(t *testing.T) {
+	t.Parallel()
+
+	challenge := dailyMazeResponse{
+		Date:  "2026-03-21",
+		Title: "Daily Maze",
+		Seed:  "daily3dmaze:2026-03-21",
+		Size:  mazeSize{Width: 5, Height: 5},
+		Start: mazePoint{X: 1, Y: 1},
+		Exit:  mazePoint{X: 3, Y: 1},
+		Grid: []string{
+			"#####",
+			"#   #",
+			"#####",
+			"#####",
+			"#####",
+		},
+	}
+
+	result := simulateReplayTrace(challenge, []replayTraceEvent{
+		{ElapsedTimeMs: 100, Action: "move_forward"},
+		{ElapsedTimeMs: 200, Action: "move_forward"},
+		{ElapsedTimeMs: 300, Action: "turn_right"},
+	})
+
+	if !result.ReachedExit {
+		t.Fatal("expected replay to reach exit")
+	}
+	if result.FirstExitStep != 2 {
+		t.Fatalf("expected first exit step 2, got %d", result.FirstExitStep)
+	}
+	if result.ActionsAfterExit != 1 {
+		t.Fatalf("expected 1 action after exit, got %d", result.ActionsAfterExit)
+	}
+	if result.BlockedMoveCount != 0 {
+		t.Fatalf("expected no blocked moves, got %d", result.BlockedMoveCount)
+	}
+	if result.FinalPosition != (mazePoint{X: 3, Y: 1}) {
+		t.Fatalf("expected final position (3,1), got %+v", result.FinalPosition)
+	}
+}
+
+func TestSimulateReplayTraceCountsBlockedMoves(t *testing.T) {
+	t.Parallel()
+
+	challenge := dailyMazeResponse{
+		Date:  "2026-03-21",
+		Title: "Daily Maze",
+		Seed:  "daily3dmaze:2026-03-21",
+		Size:  mazeSize{Width: 5, Height: 5},
+		Start: mazePoint{X: 1, Y: 1},
+		Exit:  mazePoint{X: 3, Y: 1},
+		Grid: []string{
+			"#####",
+			"# # #",
+			"#####",
+			"#####",
+			"#####",
+		},
+	}
+
+	result := simulateReplayTrace(challenge, []replayTraceEvent{
+		{ElapsedTimeMs: 100, Action: "move_forward"},
+	})
+
+	if result.BlockedMoveCount != 1 {
+		t.Fatalf("expected blocked move count 1, got %d", result.BlockedMoveCount)
+	}
+	if result.ReachedExit {
+		t.Fatal("expected blocked replay not to reach exit")
+	}
+}
+
 func containsReplayReason(values []ReplaySuspicionReason, target ReplaySuspicionReason) bool {
 	for _, value := range values {
 		if value == target {
@@ -123,4 +197,96 @@ func containsReplayReason(values []ReplaySuspicionReason, target ReplaySuspicion
 	}
 
 	return false
+}
+
+func buildReplayTraceToExit(challenge dailyMazeResponse) []replayTraceEvent {
+	path := shortestPathToExit(challenge)
+	directionIndex := getStartingDirectionIndexForMaze(challenge)
+	elapsed := 0
+	trace := make([]replayTraceEvent, 0, len(path)*2)
+
+	for index := 1; index < len(path); index++ {
+		current := path[index-1]
+		next := path[index]
+		targetDirection := mazePoint{
+			X: next.X - current.X,
+			Y: next.Y - current.Y,
+		}
+		targetDirectionIndex := 0
+		for candidateIndex, direction := range directionOrder {
+			if direction == targetDirection {
+				targetDirectionIndex = candidateIndex
+				break
+			}
+		}
+
+		for directionIndex != targetDirectionIndex {
+			rightTurns := (targetDirectionIndex - directionIndex + len(directionOrder)) % len(directionOrder)
+			leftTurns := (directionIndex - targetDirectionIndex + len(directionOrder)) % len(directionOrder)
+
+			elapsed += 120
+			if rightTurns <= leftTurns {
+				trace = append(trace, replayTraceEvent{
+					ElapsedTimeMs: elapsed,
+					Action:        "turn_right",
+				})
+				directionIndex = (directionIndex + 1) % len(directionOrder)
+			} else {
+				trace = append(trace, replayTraceEvent{
+					ElapsedTimeMs: elapsed,
+					Action:        "turn_left",
+				})
+				directionIndex = (directionIndex + len(directionOrder) - 1) % len(directionOrder)
+			}
+		}
+
+		elapsed += 220
+		trace = append(trace, replayTraceEvent{
+			ElapsedTimeMs: elapsed,
+			Action:        "move_forward",
+		})
+	}
+
+	return trace
+}
+
+func shortestPathToExit(challenge dailyMazeResponse) []mazePoint {
+	queue := []mazePoint{challenge.Start}
+	visited := map[mazePoint]bool{
+		challenge.Start: true,
+	}
+	previous := map[mazePoint]mazePoint{}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if current == challenge.Exit {
+			break
+		}
+
+		for _, direction := range directionOrder {
+			next := mazePoint{
+				X: current.X + direction.X,
+				Y: current.Y + direction.Y,
+			}
+			if visited[next] || !isWalkableReplayCell(next, challenge.Grid) {
+				continue
+			}
+
+			visited[next] = true
+			previous[next] = current
+			queue = append(queue, next)
+		}
+	}
+
+	path := []mazePoint{challenge.Exit}
+	for path[len(path)-1] != challenge.Start {
+		path = append(path, previous[path[len(path)-1]])
+	}
+
+	for left, right := 0, len(path)-1; left < right; left, right = left+1, right-1 {
+		path[left], path[right] = path[right], path[left]
+	}
+
+	return path
 }
