@@ -107,7 +107,7 @@ export interface HistoryDayResponse {
 }
 
 export interface RunReviewEntry {
-  id: number;
+  publicId: string;
   date: string;
   seed: string;
   username: string;
@@ -148,7 +148,7 @@ export interface RecomputeRunReviewsResponse {
 }
 
 export interface RequeueRunReviewResponse {
-  runId: number;
+  runPublicId: string;
   verificationStatus: string;
   verificationAttempts: number;
 }
@@ -159,7 +159,7 @@ export interface UpdateRunReviewPayload {
 }
 
 export interface UpdateRunReviewResponse {
-  runId: number;
+  runPublicId: string;
   reviewStatus: string;
   reviewNotes: string;
   reviewedAt: string | null;
@@ -353,9 +353,9 @@ export async function fetchRunReviews(): Promise<RunReviewsResponse> {
 }
 
 export async function fetchRunReviewDetail(
-  runID: string
+  runPublicID: string
 ): Promise<RunReviewDetailResponse> {
-  const response = await fetch(`${adminRunReviewsEndpoint}/${encodeURIComponent(runID)}`, {
+  const response = await fetch(`${adminRunReviewsEndpoint}/${encodeURIComponent(runPublicID)}`, {
     credentials: "include"
   });
 
@@ -386,10 +386,10 @@ export async function recomputeRunReviews(): Promise<RecomputeRunReviewsResponse
 }
 
 export async function requeueRunReview(
-  runID: string
+  runPublicID: string
 ): Promise<RequeueRunReviewResponse> {
   const response = await fetch(
-    `${adminRunReviewsEndpoint}/${encodeURIComponent(runID)}/requeue`,
+    `${adminRunReviewsEndpoint}/${encodeURIComponent(runPublicID)}/requeue`,
     {
       method: "POST",
       credentials: "include"
@@ -407,11 +407,11 @@ export async function requeueRunReview(
 }
 
 export async function updateRunReview(
-  runID: string,
+  runPublicID: string,
   payload: UpdateRunReviewPayload
 ): Promise<UpdateRunReviewResponse> {
   const response = await fetch(
-    `${adminRunReviewsEndpoint}/${encodeURIComponent(runID)}/review`,
+    `${adminRunReviewsEndpoint}/${encodeURIComponent(runPublicID)}/review`,
     {
       method: "POST",
       credentials: "include",

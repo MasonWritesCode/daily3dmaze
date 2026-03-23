@@ -536,9 +536,9 @@ export default function AdminReviewsPage() {
                           Started: {formatOptionalTimestamp(entry.verificationStartedAt)}
                         </span>
                         <span>Finished: {formatOptionalTimestamp(entry.verifiedAt)}</span>
-                        <Link href={`/admin/reviews/${entry.id}`} className="inline-link">
-                          Inspect run
-                        </Link>
+                      <Link href={`/admin/reviews/${entry.publicId}`} className="inline-link">
+                        Inspect run
+                      </Link>
                       </div>
                     </article>
                   );

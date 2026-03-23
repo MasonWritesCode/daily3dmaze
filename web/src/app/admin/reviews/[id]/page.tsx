@@ -215,7 +215,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
       await refreshDetail(routeParams.id);
       setRequeueStatus("success");
       setRequeueMessage(
-        `Run ${result.runId} requeued as ${result.verificationStatus}. Attempts remain at ${result.verificationAttempts}.`
+        `Run ${result.runPublicId} requeued as ${result.verificationStatus}. Attempts remain at ${result.verificationAttempts}.`
       );
     } catch (error) {
       setRequeueStatus("error");
@@ -302,7 +302,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                     Submission overview
                   </h2>
                   <p className="assistive-copy">
-                    Reviewing run <code>{detail.entry.id}</code> as{" "}
+                    Reviewing run <code>{detail.entry.publicId}</code> as{" "}
                     <strong>{user.username}</strong>.
                   </p>
                 </div>

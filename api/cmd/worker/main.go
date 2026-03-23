@@ -150,7 +150,6 @@ func claimNextPendingRun(db *sql.DB) (storedRun, error) {
 	if err != nil {
 		return storedRun{}, err
 	}
-	defer rows.Close()
 
 	now := workerNow().UTC()
 	var (
@@ -186,6 +185,11 @@ func claimNextPendingRun(db *sql.DB) (storedRun, error) {
 	}
 
 	if err := rows.Err(); err != nil {
+		rows.Close()
+		return storedRun{}, err
+	}
+
+	if err := rows.Close(); err != nil {
 		return storedRun{}, err
 	}
 

@@ -268,7 +268,7 @@ func TestRunReviewDetailHandlerRequiresAuthentication(t *testing.T) {
 	t.Parallel()
 
 	application := app{}
-	request := httptest.NewRequest(http.MethodGet, "/api/admin/run-reviews/7", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/run-reviews/run_0123456789abcdef0123456789abcdef", nil)
 	recorder := httptest.NewRecorder()
 
 	application.runReviewDetailHandler(recorder, request)
@@ -285,7 +285,7 @@ func TestRequeueRunReviewHandlerRequiresAuthentication(t *testing.T) {
 	t.Parallel()
 
 	application := app{}
-	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/7/requeue", nil)
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/run_0123456789abcdef0123456789abcdef/requeue", nil)
 	recorder := httptest.NewRecorder()
 
 	application.runReviewDetailHandler(recorder, request)
@@ -302,7 +302,7 @@ func TestUpdateRunReviewHandlerRequiresAuthentication(t *testing.T) {
 	t.Parallel()
 
 	application := app{}
-	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/7/review", strings.NewReader(`{"reviewStatus":"reviewed_clean","reviewNotes":"looks good"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/run_0123456789abcdef0123456789abcdef/review", strings.NewReader(`{"reviewStatus":"reviewed_clean","reviewNotes":"looks good"}`))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 
@@ -368,21 +368,21 @@ func TestRecomputeRunReviewsHandlerRequiresAdminRole(t *testing.T) {
 	}
 }
 
-func TestParseRunReviewID(t *testing.T) {
+func TestParseRunReviewPublicID(t *testing.T) {
 	t.Parallel()
 
-	runID, err := parseRunReviewID("42")
+	runID, err := parseRunReviewPublicID("run_0123456789abcdef0123456789abcdef")
 	if err != nil {
-		t.Fatalf("expected valid run id, got error: %v", err)
+		t.Fatalf("expected valid run public id, got error: %v", err)
 	}
-	if runID != 42 {
-		t.Fatalf("expected run id 42, got %d", runID)
+	if runID != "run_0123456789abcdef0123456789abcdef" {
+		t.Fatalf("unexpected run public id %q", runID)
 	}
 
-	invalidValues := []string{"", "abc", "0", "-1", "42/extra"}
+	invalidValues := []string{"", "abc", "run_0", "RUN_0123456789abcdef0123456789abcdef", "run_0123456789abcdef0123456789abcdeg", "run_0123456789abcdef0123456789abcdef/extra"}
 	for _, invalidValue := range invalidValues {
-		if _, err := parseRunReviewID(invalidValue); err == nil {
-			t.Fatalf("expected invalid run id %q to fail", invalidValue)
+		if _, err := parseRunReviewPublicID(invalidValue); err == nil {
+			t.Fatalf("expected invalid run public id %q to fail", invalidValue)
 		}
 	}
 }
@@ -463,13 +463,13 @@ func TestRequeueRunReview(t *testing.T) {
 			verification_started_at = NULL,
 			verified_at = NULL,
 			verification_error = NULL
-		WHERE id = $1
+		WHERE public_id = $1
 		RETURNING verification_attempts
 	`)).
-		WithArgs(int64(7), string(VerificationStatusPending), []byte(`["manually_requeued_for_verification"]`)).
+		WithArgs("run_0123456789abcdef0123456789abcdef", string(VerificationStatusPending), []byte(`["manually_requeued_for_verification"]`)).
 		WillReturnRows(sqlmock.NewRows([]string{"verification_attempts"}).AddRow(3))
 
-	attempts, err := application.requeueRunReview(7)
+	attempts, err := application.requeueRunReview("run_0123456789abcdef0123456789abcdef")
 	if err != nil {
 		t.Fatalf("requeue run review: %v", err)
 	}
@@ -575,16 +575,16 @@ func TestUpdateRunReview(t *testing.T) {
 			review_notes = $3,
 			reviewed_at = $4,
 			reviewed_by_user_id = $5
-		WHERE id = $1
+		WHERE public_id = $1
 		RETURNING id
 	`)).
-		WithArgs(int64(7), "confirmed_suspicious", "tool-assisted run; needs follow-up", sql.NullTime{
+		WithArgs("run_0123456789abcdef0123456789abcdef", "confirmed_suspicious", "tool-assisted run; needs follow-up", sql.NullTime{
 			Time:  now,
 			Valid: true,
 		}, int64(12)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
 
-	reviewedAt, err := application.updateRunReview(7, currentUser{ID: 12, Username: "mod_mason"}, updateRunReviewRequest{
+	reviewedAt, err := application.updateRunReview("run_0123456789abcdef0123456789abcdef", currentUser{ID: 12, Username: "mod_mason"}, updateRunReviewRequest{
 		ReviewStatus: "confirmed_suspicious",
 		ReviewNotes:  " tool-assisted run; needs follow-up ",
 	})

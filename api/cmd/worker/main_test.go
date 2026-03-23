@@ -2,8 +2,12 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"regexp"
 	"testing"
 	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
 )
 
 func TestCalculateRetryDelay(t *testing.T) {
@@ -74,5 +78,91 @@ func TestIsRunReadyForRetry(t *testing.T) {
 		Valid:  true,
 	}) {
 		t.Fatal("expected failed run after retry backoff window to be claimable")
+	}
+}
+
+func TestClaimNextPendingRun(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+	workerNow = func() time.Time { return now }
+	t.Cleanup(func() {
+		workerNow = time.Now
+	})
+
+	trace := []map[string]any{
+		{
+			"elapsedTimeMs": 120,
+			"action":        "move_forward",
+		},
+	}
+	traceJSON, err := json.Marshal(trace)
+	if err != nil {
+		t.Fatalf("marshal trace: %v", err)
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, run_date::text, seed, move_count, elapsed_time_ms, replay_trace_json, verification_started_at, verification_attempts, verification_error
+		FROM runs
+		WHERE verification_status = 'pending'
+		ORDER BY accepted_at ASC
+		LIMIT 25
+		FOR UPDATE SKIP LOCKED
+	`)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id",
+			"run_date",
+			"seed",
+			"move_count",
+			"elapsed_time_ms",
+			"replay_trace_json",
+			"verification_started_at",
+			"verification_attempts",
+			"verification_error",
+		}).AddRow(
+			int64(7),
+			"2026-03-21",
+			"daily3dmaze:2026-03-21",
+			1,
+			120,
+			traceJSON,
+			nil,
+			0,
+			nil,
+		))
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE runs
+		SET
+			verification_started_at = $2,
+			verification_attempts = verification_attempts + 1,
+			verification_error = NULL
+		WHERE id = $1
+	`)).
+		WithArgs(int64(7), now.UTC()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	run, err := claimNextPendingRun(db)
+	if err != nil {
+		t.Fatalf("claim next pending run: %v", err)
+	}
+
+	if run.ID != 7 {
+		t.Fatalf("expected run id 7, got %d", run.ID)
+	}
+
+	if len(run.Request.ReplayTrace) != 1 {
+		t.Fatalf("expected replay trace length 1, got %d", len(run.Request.ReplayTrace))
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }

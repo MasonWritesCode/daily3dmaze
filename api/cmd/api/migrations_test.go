@@ -179,6 +179,29 @@ CREATE INDEX IF NOT EXISTS oauth_accounts_user_id_idx
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`)).
+		WithArgs("000012_add_public_id_to_runs.sql").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`ALTER TABLE runs
+	ADD COLUMN IF NOT EXISTS public_id TEXT;
+
+UPDATE runs
+SET public_id = 'run_' || md5(id::text || clock_timestamp()::text || random()::text)
+WHERE public_id IS NULL OR public_id = '';
+
+ALTER TABLE runs
+	ALTER COLUMN public_id SET NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS runs_public_id_idx
+	ON runs (public_id);`)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO schema_migrations (version) VALUES ($1)`)).
+		WithArgs("000012_add_public_id_to_runs.sql").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
 	if err := runMigrations(db); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}

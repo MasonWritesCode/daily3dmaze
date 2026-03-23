@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -10,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -80,7 +80,7 @@ type leaderboardResponse struct {
 }
 
 type recentRunReviewEntry struct {
-	ID                    int64    `json:"id"`
+	PublicID              string   `json:"publicId"`
 	Date                  string   `json:"date"`
 	Seed                  string   `json:"seed"`
 	Username              string   `json:"username"`
@@ -127,7 +127,7 @@ type recomputeRunReviewsResponse struct {
 }
 
 type requeueRunReviewResponse struct {
-	RunID                int64  `json:"runId"`
+	RunPublicID          string `json:"runPublicId"`
 	VerificationStatus   string `json:"verificationStatus"`
 	VerificationAttempts int    `json:"verificationAttempts"`
 }
@@ -138,7 +138,7 @@ type updateRunReviewRequest struct {
 }
 
 type updateRunReviewResponse struct {
-	RunID              int64   `json:"runId"`
+	RunPublicID        string  `json:"runPublicId"`
 	ReviewStatus       string  `json:"reviewStatus"`
 	ReviewNotes        string  `json:"reviewNotes"`
 	ReviewedAt         *string `json:"reviewedAt"`
@@ -395,8 +395,8 @@ func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionSco
 	}
 
 	const query = `
-		INSERT INTO runs (user_id, run_date, seed, move_count, elapsed_time_ms, replay_trace_json, suspicion_score, suspicion_reasons_json, verification_status, verification_notes_json, accepted_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO runs (public_id, user_id, run_date, seed, move_count, elapsed_time_ms, replay_trace_json, suspicion_score, suspicion_reasons_json, verification_status, verification_notes_json, accepted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 
 	replayTraceJSON, err := json.Marshal(request.ReplayTrace)
@@ -412,7 +412,12 @@ func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionSco
 		return err
 	}
 
-	_, err = a.db.Exec(query, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, replayTraceJSON, suspicionScore, suspicionReasonsJSON, string(verificationStatus), verificationNotesJSON, acceptedAt)
+	publicID, err := newRunPublicID()
+	if err != nil {
+		return err
+	}
+
+	_, err = a.db.Exec(query, publicID, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, replayTraceJSON, suspicionScore, suspicionReasonsJSON, string(verificationStatus), verificationNotesJSON, acceptedAt)
 	return err
 }
 
@@ -517,13 +522,13 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		runID, err := parseRunReviewID(strings.TrimSuffix(pathSuffix, "/requeue"))
+		runPublicID, err := parseRunReviewPublicID(strings.TrimSuffix(pathSuffix, "/requeue"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		attempts, err := a.requeueRunReview(runID)
+		attempts, err := a.requeueRunReview(runPublicID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				http.Error(w, "run review not found", http.StatusNotFound)
@@ -536,7 +541,7 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(requeueRunReviewResponse{
-			RunID:                runID,
+			RunPublicID:          runPublicID,
 			VerificationStatus:   string(VerificationStatusPending),
 			VerificationAttempts: attempts,
 		}); err != nil {
@@ -551,7 +556,7 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		runID, err := parseRunReviewID(strings.TrimSuffix(pathSuffix, "/review"))
+		runPublicID, err := parseRunReviewPublicID(strings.TrimSuffix(pathSuffix, "/review"))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -568,7 +573,7 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		reviewedAt, err := a.updateRunReview(runID, reviewer, request)
+		reviewedAt, err := a.updateRunReview(runPublicID, reviewer, request)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				http.Error(w, "run review not found", http.StatusNotFound)
@@ -587,7 +592,7 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(updateRunReviewResponse{
-			RunID:        runID,
+			RunPublicID:  runPublicID,
 			ReviewStatus: request.ReviewStatus,
 			ReviewNotes:  strings.TrimSpace(request.ReviewNotes),
 			ReviewedAt:   reviewedAtValue,
@@ -609,13 +614,13 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	runID, err := parseRunReviewID(pathSuffix)
+	runPublicID, err := parseRunReviewPublicID(pathSuffix)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	detail, err := a.loadRunReviewDetail(runID)
+	detail, err := a.loadRunReviewDetail(runPublicID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			http.Error(w, "run review not found", http.StatusNotFound)
@@ -639,7 +644,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 
 	const query = `
 		SELECT
-			runs.id,
+			runs.public_id,
 			runs.run_date::text,
 			runs.seed,
 			COALESCE(users.username, ''),
@@ -683,7 +688,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 		var suspicionReasonsJSON []byte
 		var verificationNotesJSON []byte
 		if err := rows.Scan(
-			&entry.ID,
+			&entry.PublicID,
 			&entry.Date,
 			&entry.Seed,
 			&entry.Username,
@@ -802,7 +807,7 @@ func isStalePendingReview(
 	return acceptedAt.Before(staleThreshold)
 }
 
-func (a app) requeueRunReview(runID int64) (int, error) {
+func (a app) requeueRunReview(runPublicID string) (int, error) {
 	if a.db == nil {
 		return 0, errors.New("database unavailable")
 	}
@@ -815,7 +820,7 @@ func (a app) requeueRunReview(runID int64) (int, error) {
 			verification_started_at = NULL,
 			verified_at = NULL,
 			verification_error = NULL
-		WHERE id = $1
+		WHERE public_id = $1
 		RETURNING verification_attempts
 	`
 
@@ -825,7 +830,7 @@ func (a app) requeueRunReview(runID int64) (int, error) {
 	}
 
 	var attempts int
-	if err := a.db.QueryRow(query, runID, string(VerificationStatusPending), notesJSON).Scan(&attempts); err != nil {
+	if err := a.db.QueryRow(query, runPublicID, string(VerificationStatusPending), notesJSON).Scan(&attempts); err != nil {
 		return 0, err
 	}
 
@@ -846,7 +851,7 @@ func validateRunReviewUpdate(request updateRunReviewRequest) error {
 	return nil
 }
 
-func (a app) updateRunReview(runID int64, reviewer currentUser, request updateRunReviewRequest) (time.Time, error) {
+func (a app) updateRunReview(runPublicID string, reviewer currentUser, request updateRunReviewRequest) (time.Time, error) {
 	if a.db == nil {
 		return time.Time{}, errors.New("database unavailable")
 	}
@@ -866,14 +871,14 @@ func (a app) updateRunReview(runID int64, reviewer currentUser, request updateRu
 			review_notes = $3,
 			reviewed_at = $4,
 			reviewed_by_user_id = $5
-		WHERE id = $1
+		WHERE public_id = $1
 		RETURNING id
 	`
 
 	var returnedID int64
 	if err := a.db.QueryRow(
 		query,
-		runID,
+		runPublicID,
 		request.ReviewStatus,
 		strings.TrimSpace(request.ReviewNotes),
 		sql.NullTime{Time: reviewedAt, Valid: !reviewedAt.IsZero()},
@@ -985,27 +990,36 @@ func (a app) recomputeStoredRunVerifications() (int, int, error) {
 	return updatedCount, skippedCount, nil
 }
 
-func parseRunReviewID(raw string) (int64, error) {
+func parseRunReviewPublicID(raw string) (string, error) {
 	if raw == "" || strings.Contains(raw, "/") {
-		return 0, errors.New("run review id is required")
+		return "", errors.New("run review public id is required")
 	}
 
-	runID, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || runID <= 0 {
-		return 0, errors.New("run review id must be a positive integer")
+	if !strings.HasPrefix(raw, "run_") {
+		return "", errors.New("run review public id must start with run_")
 	}
 
-	return runID, nil
+	if len(raw) != 36 {
+		return "", errors.New("run review public id must be 36 characters")
+	}
+
+	for _, r := range raw[4:] {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return "", errors.New("run review public id must use lowercase hexadecimal characters")
+		}
+	}
+
+	return raw, nil
 }
 
-func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
+func (a app) loadRunReviewDetail(runPublicID string) (runReviewDetailResponse, error) {
 	if a.db == nil {
 		return runReviewDetailResponse{}, errors.New("database unavailable")
 	}
 
 	const query = `
 		SELECT
-			runs.id,
+			runs.public_id,
 			runs.run_date::text,
 			runs.seed,
 			COALESCE(users.username, ''),
@@ -1028,7 +1042,7 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
 		LEFT JOIN users AS review_users ON review_users.id = runs.reviewed_by_user_id
-		WHERE runs.id = $1
+		WHERE runs.public_id = $1
 	`
 
 	var (
@@ -1043,8 +1057,8 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 		verificationNotesJSON []byte
 		replayTraceJSON       []byte
 	)
-	if err := a.db.QueryRow(query, runID).Scan(
-		&detail.Entry.ID,
+	if err := a.db.QueryRow(query, runPublicID).Scan(
+		&detail.Entry.PublicID,
 		&detail.Entry.Date,
 		&detail.Entry.Seed,
 		&detail.Entry.Username,
@@ -1107,6 +1121,15 @@ func (a app) loadRunReviewDetail(runID int64) (runReviewDetailResponse, error) {
 	detail.Simulation = simulateReplayTrace(generateDailyMaze(challengeDate.UTC()), detail.ReplayTrace)
 
 	return detail, nil
+}
+
+func newRunPublicID() (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+
+	return "run_" + fmt.Sprintf("%x", bytes), nil
 }
 
 func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
