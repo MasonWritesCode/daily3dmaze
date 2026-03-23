@@ -105,6 +105,11 @@ type runReviewDetailResponse struct {
 	Simulation  ReplaySimulationResult `json:"simulation"`
 }
 
+type recomputeRunReviewsResponse struct {
+	UpdatedCount int `json:"updatedCount"`
+	SkippedCount int `json:"skippedCount"`
+}
+
 type app struct {
 	db          *sql.DB
 	authLimiter *authRateLimiter
@@ -150,6 +155,7 @@ func main() {
 	mux.HandleFunc("/api/history/day", application.historyDayHandler)
 	mux.HandleFunc("/api/runs", application.runSubmissionHandler)
 	mux.HandleFunc("/api/admin/run-reviews", application.recentRunReviewsHandler)
+	mux.HandleFunc("/api/admin/run-reviews/recompute", application.recomputeRunReviewsHandler)
 	mux.HandleFunc("/api/admin/run-reviews/", application.runReviewDetailHandler)
 	mux.HandleFunc("/api/leaderboard", application.leaderboardHandler)
 
@@ -545,6 +551,37 @@ func (a app) recentRunReviewsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a app) recomputeRunReviewsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if _, err := a.currentUserFromRequest(r); err != nil {
+		http.Error(w, "not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	updatedCount, skippedCount, err := a.recomputeStoredRunVerifications()
+	if err != nil {
+		http.Error(w, "failed to recompute run verifications", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(recomputeRunReviewsResponse{
+		UpdatedCount: updatedCount,
+		SkippedCount: skippedCount,
+	}); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -651,6 +688,102 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 	}
 
 	return entries, nil
+}
+
+func (a app) recomputeStoredRunVerifications() (int, int, error) {
+	if a.db == nil {
+		return 0, 0, errors.New("database unavailable")
+	}
+
+	const selectQuery = `
+		SELECT id, run_date::text, seed, move_count, elapsed_time_ms, replay_trace_json
+		FROM runs
+		ORDER BY id ASC
+	`
+
+	rows, err := a.db.Query(selectQuery)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+
+	type storedRun struct {
+		id              int64
+		request         runSubmissionRequest
+		replayTraceJSON []byte
+	}
+
+	runs := make([]storedRun, 0, 32)
+	for rows.Next() {
+		var run storedRun
+		if err := rows.Scan(
+			&run.id,
+			&run.request.Date,
+			&run.request.Seed,
+			&run.request.MoveCount,
+			&run.request.ElapsedTimeMs,
+			&run.replayTraceJSON,
+		); err != nil {
+			return 0, 0, err
+		}
+		runs = append(runs, run)
+	}
+
+	if err := rows.Err(); err != nil {
+		return 0, 0, err
+	}
+
+	const updateQuery = `
+		UPDATE runs
+		SET
+			suspicion_score = $2,
+			suspicion_reasons_json = $3,
+			verification_status = $4,
+			verification_notes_json = $5
+		WHERE id = $1
+	`
+
+	updatedCount := 0
+	skippedCount := 0
+	for _, run := range runs {
+		if len(run.replayTraceJSON) == 0 {
+			skippedCount++
+			continue
+		}
+
+		if err := json.Unmarshal(run.replayTraceJSON, &run.request.ReplayTrace); err != nil {
+			return updatedCount, skippedCount, err
+		}
+		if len(run.request.ReplayTrace) == 0 {
+			skippedCount++
+			continue
+		}
+
+		replayValidation := evaluateReplayTrace(run.request)
+		suspicionReasonsJSON, err := json.Marshal(replayValidation.ReasonStrings())
+		if err != nil {
+			return updatedCount, skippedCount, err
+		}
+		verificationNotesJSON, err := json.Marshal(replayValidation.VerificationNotes)
+		if err != nil {
+			return updatedCount, skippedCount, err
+		}
+
+		if _, err := a.db.Exec(
+			updateQuery,
+			run.id,
+			replayValidation.Score,
+			suspicionReasonsJSON,
+			string(replayValidation.VerificationStatus),
+			verificationNotesJSON,
+		); err != nil {
+			return updatedCount, skippedCount, err
+		}
+
+		updatedCount++
+	}
+
+	return updatedCount, skippedCount, nil
 }
 
 func parseRunReviewID(raw string) (int64, error) {

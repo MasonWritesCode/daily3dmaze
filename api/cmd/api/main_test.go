@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"testing"
 	"time"
+
+	"github.com/DATA-DOG/go-sqlmock"
 )
 
 func TestValidateRunSubmission(t *testing.T) {
@@ -241,6 +244,23 @@ func TestRunReviewDetailHandlerRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestRecomputeRunReviewsHandlerRequiresAuthentication(t *testing.T) {
+	t.Parallel()
+
+	application := app{}
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/recompute", nil)
+	recorder := httptest.NewRecorder()
+
+	application.recomputeRunReviewsHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, response.StatusCode)
+	}
+}
+
 func TestParseRunReviewID(t *testing.T) {
 	t.Parallel()
 
@@ -257,6 +277,60 @@ func TestParseRunReviewID(t *testing.T) {
 		if _, err := parseRunReviewID(invalidValue); err == nil {
 			t.Fatalf("expected invalid run id %q to fail", invalidValue)
 		}
+	}
+}
+
+func TestRecomputeStoredRunVerifications(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	challenge := generateDailyMaze(time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC))
+	validTrace := buildReplayTraceToExit(challenge)
+	validTraceJSON, err := json.Marshal(validTrace)
+	if err != nil {
+		t.Fatalf("marshal valid trace: %v", err)
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, run_date::text, seed, move_count, elapsed_time_ms, replay_trace_json
+		FROM runs
+		ORDER BY id ASC
+	`)).
+		WillReturnRows(
+			sqlmock.NewRows([]string{"id", "run_date", "seed", "move_count", "elapsed_time_ms", "replay_trace_json"}).
+				AddRow(7, "2026-03-21", "daily3dmaze:2026-03-21", countReplayMovementActions(validTrace), validTrace[len(validTrace)-1].ElapsedTimeMs, validTraceJSON).
+				AddRow(8, "2026-03-21", "daily3dmaze:2026-03-21", 1, 1000, nil),
+		)
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE runs
+		SET
+			suspicion_score = $2,
+			suspicion_reasons_json = $3,
+			verification_status = $4,
+			verification_notes_json = $5
+		WHERE id = $1
+	`)).
+		WithArgs(int64(7), 0, []byte("[]"), string(VerificationStatusVerified), []byte(`["simulation_matches_expected_outcome"]`)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	updatedCount, skippedCount, err := application.recomputeStoredRunVerifications()
+	if err != nil {
+		t.Fatalf("recompute stored run verifications: %v", err)
+	}
+
+	if updatedCount != 1 || skippedCount != 1 {
+		t.Fatalf("expected updated=1 skipped=1, got updated=%d skipped=%d", updatedCount, skippedCount)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }
 

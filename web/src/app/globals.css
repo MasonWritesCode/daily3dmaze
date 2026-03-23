@@ -186,6 +186,12 @@ h1 {
   margin-bottom: 16px;
 }
 
+.review-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
 .review-list {
   display: grid;
   gap: 10px;
@@ -562,5 +568,9 @@ h1 {
   .comparison-row,
   .trace-row {
     grid-template-columns: 1fr;
+  }
+
+  .review-actions {
+    justify-items: start;
   }
 }

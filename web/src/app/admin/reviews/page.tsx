@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   fetchCurrentUser,
+  recomputeRunReviews,
   fetchRunReviews,
   type AuthUser,
   type RunReviewEntry
@@ -12,6 +13,7 @@ import {
 import { formatElapsedTime } from "../../../lib/game/maze";
 
 type PageStatus = "loading" | "ready" | "error";
+type RecomputeStatus = "idle" | "submitting" | "success" | "error";
 
 function formatAcceptedAt(value: string): string {
   const date = new Date(value);
@@ -50,6 +52,8 @@ export default function AdminReviewsPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [entries, setEntries] = useState<RunReviewEntry[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [recomputeStatus, setRecomputeStatus] = useState<RecomputeStatus>("idle");
+  const [recomputeMessage, setRecomputeMessage] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -115,6 +119,26 @@ export default function AdminReviewsPage() {
     });
   }, [entries]);
 
+  async function handleRecompute() {
+    setRecomputeStatus("submitting");
+    setRecomputeMessage("");
+
+    try {
+      const recomputeResult = await recomputeRunReviews();
+      const payload = await fetchRunReviews();
+      setEntries(payload.entries);
+      setRecomputeStatus("success");
+      setRecomputeMessage(
+        `Recomputed ${recomputeResult.updatedCount} runs and skipped ${recomputeResult.skippedCount}.`
+      );
+    } catch (error) {
+      setRecomputeStatus("error");
+      setRecomputeMessage(
+        error instanceof Error ? error.message : "Unable to recompute run reviews."
+      );
+    }
+  }
+
   return (
     <main className="page-shell">
       <div className="content-card content-card-wide">
@@ -174,10 +198,32 @@ export default function AdminReviewsPage() {
                   Signed in as <strong>{user.username}</strong>.
                 </p>
               </div>
-              <p className="assistive-copy">
-                Highest suspicion scores are shown first.
-              </p>
+              <div className="review-actions">
+                <p className="assistive-copy">
+                  Highest verification risk and suspicion scores are shown first.
+                </p>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleRecompute}
+                  disabled={recomputeStatus === "submitting"}
+                >
+                  {recomputeStatus === "submitting"
+                    ? "Recomputing..."
+                    : "Recompute verification"}
+                </button>
+              </div>
             </div>
+            {recomputeMessage && (
+              <p
+                className={`body-copy status-copy ${
+                  recomputeStatus === "error" ? "error-copy" : "success-copy"
+                }`}
+                aria-live="polite"
+              >
+                {recomputeMessage}
+              </p>
+            )}
 
             {sortedEntries.length === 0 ? (
               <p className="body-copy">No run reviews are available yet.</p>
