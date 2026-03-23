@@ -72,6 +72,7 @@ export default function AdminUsersPage() {
   const [roleValues, setRoleValues] = useState<Record<string, string>>({});
   const [rowStatuses, setRowStatuses] = useState<Record<string, RowStatus>>({});
   const [rowMessages, setRowMessages] = useState<Record<string, string>>({});
+  const resultsCountId = "admin-user-results";
 
   useEffect(() => {
     let cancelled = false;
@@ -262,10 +263,11 @@ export default function AdminUsersPage() {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder={uiText.searchPlaceholder}
+                aria-describedby={resultsCountId}
               />
             </label>
 
-            <p className="assistive-copy" aria-live="polite">
+            <p id={resultsCountId} className="assistive-copy" aria-live="polite">
               {filteredEntries.length} user{filteredEntries.length === 1 ? "" : "s"} shown
             </p>
 

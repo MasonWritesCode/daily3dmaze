@@ -109,6 +109,7 @@ export default function AdminReviewsPage() {
   const [showOnlyStalePending, setShowOnlyStalePending] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortMode, setSortMode] = useState<SortMode>("risk");
+  const resultsCountId = "review-filter-results";
 
   useEffect(() => {
     let cancelled = false;
@@ -393,74 +394,84 @@ export default function AdminReviewsPage() {
               <h3 id="review-filter-title" className="section-title">
                 Filters and sorting
               </h3>
-              <div className="filter-grid">
-                <label className="auth-field" htmlFor="verification-filter">
-                  <span>Verification state</span>
-                  <select
-                    id="verification-filter"
-                    value={verificationFilter}
-                    onChange={(event) =>
-                      setVerificationFilter(event.target.value as VerificationFilter)
-                    }
-                  >
-                    <option value="all">All states</option>
-                    <option value="pending">Pending</option>
-                    <option value="verified">Verified</option>
-                    <option value="suspicious">Suspicious</option>
-                    <option value="invalid">Invalid</option>
-                  </select>
-                </label>
+              <fieldset className="filter-fieldset">
+                <legend className="sr-only">Review filters and sorting controls</legend>
+                <div className="filter-grid">
+                  <label className="auth-field" htmlFor="verification-filter">
+                    <span>Verification state</span>
+                    <select
+                      id="verification-filter"
+                      value={verificationFilter}
+                      onChange={(event) =>
+                        setVerificationFilter(event.target.value as VerificationFilter)
+                      }
+                      aria-describedby={resultsCountId}
+                    >
+                      <option value="all">All states</option>
+                      <option value="pending">Pending</option>
+                      <option value="verified">Verified</option>
+                      <option value="suspicious">Suspicious</option>
+                      <option value="invalid">Invalid</option>
+                    </select>
+                  </label>
 
-                <label className="auth-field" htmlFor="review-search">
-                  <span>Search</span>
-                  <input
-                    id="review-search"
-                    type="search"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Username, date, or seed"
-                  />
-                </label>
+                  <label className="auth-field" htmlFor="review-search">
+                    <span>Search</span>
+                    <input
+                      id="review-search"
+                      type="search"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Username, date, or seed"
+                      aria-describedby={resultsCountId}
+                    />
+                  </label>
 
-                <label className="auth-field" htmlFor="review-status-filter">
-                  <span>Moderator status</span>
-                  <select
-                    id="review-status-filter"
-                    value={reviewStatusFilter}
-                    onChange={(event) =>
-                      setReviewStatusFilter(event.target.value as ReviewStatusFilter)
-                    }
-                  >
-                    <option value="all">All review states</option>
-                    <option value="unreviewed">Unreviewed</option>
-                    <option value="reviewed_clean">Reviewed clean</option>
-                    <option value="confirmed_suspicious">Confirmed suspicious</option>
-                  </select>
-                </label>
+                  <label className="auth-field" htmlFor="review-status-filter">
+                    <span>Moderator status</span>
+                    <select
+                      id="review-status-filter"
+                      value={reviewStatusFilter}
+                      onChange={(event) =>
+                        setReviewStatusFilter(event.target.value as ReviewStatusFilter)
+                      }
+                      aria-describedby={resultsCountId}
+                    >
+                      <option value="all">All review states</option>
+                      <option value="unreviewed">Unreviewed</option>
+                      <option value="reviewed_clean">Reviewed clean</option>
+                      <option value="confirmed_suspicious">Confirmed suspicious</option>
+                    </select>
+                  </label>
 
-                <label className="auth-field" htmlFor="review-sort">
-                  <span>Sort by</span>
-                  <select
-                    id="review-sort"
-                    value={sortMode}
-                    onChange={(event) => setSortMode(event.target.value as SortMode)}
-                  >
-                    <option value="risk">Highest risk</option>
-                    <option value="newest">Newest first</option>
-                    <option value="oldest-pending">Oldest pending first</option>
-                  </select>
-                </label>
+                  <label className="auth-field" htmlFor="review-sort">
+                    <span>Sort by</span>
+                    <select
+                      id="review-sort"
+                      value={sortMode}
+                      onChange={(event) => setSortMode(event.target.value as SortMode)}
+                      aria-describedby={resultsCountId}
+                    >
+                      <option value="risk">Highest risk</option>
+                      <option value="newest">Newest first</option>
+                      <option value="oldest-pending">Oldest pending first</option>
+                    </select>
+                  </label>
 
-                <label className="checkbox-field" htmlFor="stale-pending-only">
-                  <input
-                    id="stale-pending-only"
-                    type="checkbox"
-                    checked={showOnlyStalePending}
-                    onChange={(event) => setShowOnlyStalePending(event.target.checked)}
-                  />
-                  <span>Show only stale pending runs</span>
-                </label>
-              </div>
+                  <label className="checkbox-field" htmlFor="stale-pending-only">
+                    <input
+                      id="stale-pending-only"
+                      type="checkbox"
+                      checked={showOnlyStalePending}
+                      onChange={(event) => setShowOnlyStalePending(event.target.checked)}
+                    />
+                    <span>Show only stale pending runs</span>
+                  </label>
+                </div>
+              </fieldset>
+              <p id={resultsCountId} className="assistive-copy" aria-live="polite">
+                Showing {sortedEntries.length} run review{sortedEntries.length === 1 ? "" : "s"}.
+              </p>
             </section>
 
             {sortedEntries.length === 0 ? (

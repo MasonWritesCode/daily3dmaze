@@ -352,6 +352,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                     requeueStatus === "error" ? "error-copy" : "success-copy"
                   }`}
                   aria-live="polite"
+                  role={requeueStatus === "error" ? "alert" : "status"}
                 >
                   {requeueMessage}
                 </p>
@@ -472,48 +473,58 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                 </div>
               </div>
 
-              <div className="filter-grid">
-                <label className="auth-field" htmlFor="review-status">
-                  <span>Review status</span>
-                  <select
-                    id="review-status"
-                    value={reviewStatusValue}
-                    onChange={(event) => setReviewStatusValue(event.target.value)}
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleReviewSave();
+                }}
+              >
+                <fieldset className="filter-fieldset">
+                  <legend className="sr-only">Moderator review controls</legend>
+                  <div className="filter-grid">
+                    <label className="auth-field" htmlFor="review-status">
+                      <span>Review status</span>
+                      <select
+                        id="review-status"
+                        value={reviewStatusValue}
+                        onChange={(event) => setReviewStatusValue(event.target.value)}
+                      >
+                        <option value="unreviewed">Unreviewed</option>
+                        <option value="reviewed_clean">Reviewed clean</option>
+                        <option value="confirmed_suspicious">Confirmed suspicious</option>
+                      </select>
+                    </label>
+
+                    <label className="auth-field auth-field-full" htmlFor="review-notes">
+                      <span>Review notes</span>
+                      <textarea
+                        id="review-notes"
+                        value={reviewNotesValue}
+                        onChange={(event) => setReviewNotesValue(event.target.value)}
+                        rows={5}
+                        placeholder="Add any human review notes or follow-up context."
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+
+                <div className="actions">
+                  <button
+                    type="submit"
+                    className="secondary-button"
+                    disabled={reviewFormStatus === "submitting"}
                   >
-                    <option value="unreviewed">Unreviewed</option>
-                    <option value="reviewed_clean">Reviewed clean</option>
-                    <option value="confirmed_suspicious">Confirmed suspicious</option>
-                  </select>
-                </label>
-
-                <label className="auth-field auth-field-full" htmlFor="review-notes">
-                  <span>Review notes</span>
-                  <textarea
-                    id="review-notes"
-                    value={reviewNotesValue}
-                    onChange={(event) => setReviewNotesValue(event.target.value)}
-                    rows={5}
-                    placeholder="Add any human review notes or follow-up context."
-                  />
-                </label>
-              </div>
-
-              <div className="actions">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={handleReviewSave}
-                  disabled={reviewFormStatus === "submitting"}
-                >
-                  {reviewFormStatus === "submitting" ? "Saving..." : "Save review"}
-                </button>
-              </div>
+                    {reviewFormStatus === "submitting" ? "Saving..." : "Save review"}
+                  </button>
+                </div>
+              </form>
               {reviewFormMessage && (
                 <p
                   className={`body-copy status-copy ${
                     reviewFormStatus === "error" ? "error-copy" : "success-copy"
                   }`}
                   aria-live="polite"
+                  role={reviewFormStatus === "error" ? "alert" : "status"}
                 >
                   {reviewFormMessage}
                 </p>
