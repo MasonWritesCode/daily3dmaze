@@ -20,41 +20,9 @@ import { useLocale } from "../../../lib/locale";
 type PageStatus = "loading" | "ready" | "error";
 type RowStatus = "idle" | "submitting" | "success" | "error";
 
-const uiText = {
-  eyebrow: "Internal tooling",
-  title: "User management",
-  intro: "Admins can grant or revoke moderator access and ban or unban accounts.",
-  loading: "Loading users...",
-  error: "Unable to load admin users.",
-  authRequiredTitle: "Sign in required",
-  authRequiredBody: "Admin user management requires an authenticated session.",
-  forbiddenTitle: "Admin access required",
-  usersTitle: "Accounts",
-  searchLabel: "Search users",
-  searchPlaceholder: "Search by username, role, or status",
-  listLabel: "Managed users",
-  actions: {
-    backToReviews: "Back to reviews",
-    backToPlay: "Return to challenge",
-    saveRole: "Save role",
-    ban: "Ban",
-    unban: "Unban"
-  },
-  labels: {
-    user: "User",
-    role: "Role",
-    status: "Status",
-    created: "Created",
-    actions: "Actions",
-    active: "active",
-    banned: "banned",
-    admin: "Admin",
-    moderator: "Moderator"
-  }
-} as const;
-
 export default function AdminUsersPage() {
-  const { formatCount, formatDateTime } = useLocale();
+  const { formatCount, formatDateTime, messages } = useLocale();
+  const uiText = messages.adminUsers;
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [entries, setEntries] = useState<AdminUserEntry[]>([]);
@@ -146,14 +114,14 @@ export default function AdminUsersPage() {
       setRowStatuses((current) => ({ ...current, [entry.username]: "success" }));
       setRowMessages((current) => ({
         ...current,
-        [entry.username]: `Role updated to ${result.role}.`
+        [entry.username]: uiText.rowMessages.roleUpdated.replace("{role}", result.role)
       }));
     } catch (error) {
       setRowStatuses((current) => ({ ...current, [entry.username]: "error" }));
       setRowMessages((current) => ({
         ...current,
         [entry.username]:
-          error instanceof Error ? error.message : "Unable to update user role."
+          error instanceof Error ? error.message : uiText.rowMessages.roleError
       }));
     }
   }
@@ -172,15 +140,15 @@ export default function AdminUsersPage() {
       setRowMessages((current) => ({
         ...current,
         [entry.username]: result.isBanned
-          ? "User banned and active sessions cleared."
-          : "User unbanned."
+          ? uiText.rowMessages.userBanned
+          : uiText.rowMessages.userUnbanned
       }));
     } catch (error) {
       setRowStatuses((current) => ({ ...current, [entry.username]: "error" }));
       setRowMessages((current) => ({
         ...current,
         [entry.username]:
-          error instanceof Error ? error.message : "Unable to update ban state."
+          error instanceof Error ? error.message : uiText.rowMessages.banError
       }));
     }
   }
@@ -188,12 +156,12 @@ export default function AdminUsersPage() {
   return (
     <main className="page-shell">
       <div className="content-card content-card-wide">
-        <p className="eyebrow">Internal tooling</p>
+        <p className="eyebrow">{uiText.eyebrow}</p>
         <h1>{uiText.title}</h1>
         <p className="body-copy">{uiText.intro}</p>
         <div className="actions">
           <Link href="/admin/reviews" className="primary-link">
-            Review queue
+            {uiText.actions.reviewQueue}
           </Link>
           <Link href="/play" className="secondary-link">
             {uiText.actions.backToPlay}
@@ -227,8 +195,7 @@ export default function AdminUsersPage() {
               {uiText.forbiddenTitle}
             </h2>
             <p className="body-copy">
-              Your current role is <code>{user.role}</code>. Only admins can manage
-              user roles and bans.
+              {uiText.forbiddenBodyPrefix} <code>{user.role}</code>. {uiText.forbiddenBodySuffix}
             </p>
           </section>
         )}
@@ -259,7 +226,9 @@ export default function AdminUsersPage() {
             </label>
 
             <p id={resultsCountId} className="assistive-copy" aria-live="polite">
-              {formatCount(filteredEntries.length)} user{filteredEntries.length === 1 ? "" : "s"} shown
+              {uiText.resultsShown
+                .replace("{count}", formatCount(filteredEntries.length))
+                .replace("{suffix}", filteredEntries.length === 1 ? "" : "s")}
             </p>
 
             <div className="review-list" role="list" aria-label={uiText.listLabel}>
@@ -287,7 +256,7 @@ export default function AdminUsersPage() {
                         ? uiText.labels.admin
                         : entry.role === ROLE_MODERATOR
                           ? uiText.labels.moderator
-                          : uiText.labels.user}
+                          : uiText.labels.standardUser}
                     </span>
                   </span>
                   <span className="admin-user-role-cell">
@@ -319,7 +288,10 @@ export default function AdminUsersPage() {
                     </span>
                     {entry.isBanned && (
                       <span className="assistive-copy">
-                        Since {entry.bannedAt ? formatDateTime(entry.bannedAt) : "Not recorded"}
+                        {uiText.timestamps.since}{" "}
+                        {entry.bannedAt
+                          ? formatDateTime(entry.bannedAt)
+                          : uiText.timestamps.notRecorded}
                       </span>
                     )}
                   </span>

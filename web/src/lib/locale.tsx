@@ -4,15 +4,18 @@ import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { createFormatters, type LocaleFormatters } from "./i18n";
+import { enUSMessages, type AppMessages } from "./messages";
 
 interface LocaleContextValue extends LocaleFormatters {
   locale: string;
+  messages: AppMessages;
 }
 
 const defaultLocale = "en-US";
 
 const LocaleContext = createContext<LocaleContextValue>({
   locale: defaultLocale,
+  messages: enUSMessages,
   ...createFormatters(defaultLocale)
 });
 
@@ -32,6 +35,7 @@ export function LocaleProvider({ children }: LocaleProviderProps) {
   const value = useMemo(
     () => ({
       locale,
+      messages: enUSMessages,
       ...createFormatters(locale)
     }),
     [locale]

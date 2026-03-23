@@ -80,7 +80,8 @@ function getReviewTone(status: string): string {
 }
 
 export default function AdminReviewsPage() {
-  const { formatCount, formatDateTime } = useLocale();
+  const { formatCount, formatDateTime, messages } = useLocale();
+  const uiText = messages.adminReviews;
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [entries, setEntries] = useState<RunReviewEntry[]>([]);
@@ -236,12 +237,14 @@ export default function AdminReviewsPage() {
       setEntries(payload.entries);
       setRecomputeStatus("success");
       setRecomputeMessage(
-        `Recomputed ${recomputeResult.updatedCount} runs and skipped ${recomputeResult.skippedCount}.`
+        uiText.recomputeMessage
+          .replace("{updated}", formatCount(recomputeResult.updatedCount))
+          .replace("{skipped}", formatCount(recomputeResult.skippedCount))
       );
     } catch (error) {
       setRecomputeStatus("error");
       setRecomputeMessage(
-        error instanceof Error ? error.message : "Unable to recompute run reviews."
+        error instanceof Error ? error.message : uiText.recomputeError
       );
     }
   }
@@ -249,25 +252,21 @@ export default function AdminReviewsPage() {
   return (
     <main className="page-shell">
       <div className="content-card content-card-wide">
-        <p className="eyebrow">Internal tooling</p>
-        <h1>Suspicious run reviews</h1>
-        <p className="body-copy">
-          Review recent submissions with their replay heuristic score and the exact
-          rules that fired. This page is read-only on purpose so we can inspect the
-          signal quality before adding moderation actions.
-        </p>
+        <p className="eyebrow">{uiText.eyebrow}</p>
+        <h1>{uiText.title}</h1>
+        <p className="body-copy">{uiText.intro}</p>
         <div className="actions">
           <Link href="/play" className="primary-link">
-            Return to challenge
+            {uiText.actions.returnToChallenge}
           </Link>
           <Link href="/history" className="secondary-link">
-            Challenge archive
+            {uiText.actions.challengeArchive}
           </Link>
         </div>
 
         {status === "loading" && (
           <p className="status-copy" aria-live="polite">
-            Loading recent run reviews...
+            {uiText.loading}
           </p>
         )}
 
@@ -280,15 +279,12 @@ export default function AdminReviewsPage() {
         {status === "ready" && !user && (
           <section className="maze-summary" aria-labelledby="reviews-auth-title">
             <h2 id="reviews-auth-title" className="section-title">
-              Sign in required
+              {uiText.authRequiredTitle}
             </h2>
-            <p className="body-copy">
-              Internal review pages require an authenticated session. Sign in from the
-              play page, then come back here.
-            </p>
+            <p className="body-copy">{uiText.authRequiredBody}</p>
             <div className="actions">
               <Link href="/play" className="primary-link">
-                Go to sign-in
+                {uiText.actions.goToSignIn}
               </Link>
             </div>
           </section>
@@ -297,11 +293,10 @@ export default function AdminReviewsPage() {
         {status === "ready" && user && !roleAllows(user.role, ROLE_MODERATOR) && (
           <section className="maze-summary" aria-labelledby="reviews-forbidden-title">
             <h2 id="reviews-forbidden-title" className="section-title">
-              Moderator access required
+              {uiText.forbiddenTitle}
             </h2>
             <p className="body-copy">
-              Your current role is <code>{user.role}</code>. Only moderator and admin
-              accounts can access internal run reviews.
+              {uiText.forbiddenBodyPrefix} <code>{user.role}</code>. {uiText.forbiddenBodySuffix}
             </p>
           </section>
         )}
@@ -311,21 +306,19 @@ export default function AdminReviewsPage() {
             <div className="review-header">
               <div>
                 <h2 id="review-table-title" className="section-title">
-                  Recent submissions
+                  {uiText.sections.recentSubmissions}
                 </h2>
                 <p className="assistive-copy">
-                  Signed in as <strong>{user.username}</strong>.
+                  {uiText.signedInAs} <strong>{user.username}</strong>.
                 </p>
               </div>
               <div className="review-actions">
                 {roleAllows(user.role, ROLE_ADMIN) && (
                   <Link href="/admin/users" className="secondary-link">
-                    Manage users
+                    {uiText.actions.manageUsers}
                   </Link>
                 )}
-                <p className="assistive-copy">
-                  Highest verification risk and suspicion scores are shown first.
-                </p>
+                <p className="assistive-copy">{uiText.sortHint}</p>
                 {roleAllows(user.role, ROLE_ADMIN) && (
                   <button
                     type="button"
@@ -334,8 +327,8 @@ export default function AdminReviewsPage() {
                     disabled={recomputeStatus === "submitting"}
                   >
                     {recomputeStatus === "submitting"
-                      ? "Recomputing..."
-                      : "Recompute verification"}
+                      ? uiText.actions.recomputing
+                      : uiText.actions.recomputeVerification}
                   </button>
                 )}
               </div>
@@ -352,25 +345,25 @@ export default function AdminReviewsPage() {
             )}
 
             {summary && (
-              <div className="summary-grid" aria-label="Verification queue health">
+              <div className="summary-grid" aria-label={uiText.summary.queueHealthLabel}>
                 <article className="summary-card">
-                  <span className="summary-label">Pending</span>
+                  <span className="summary-label">{uiText.summary.pending}</span>
                   <strong className="summary-value">{formatCount(summary.pendingCount)}</strong>
                 </article>
                 <article className="summary-card">
-                  <span className="summary-label">Verified</span>
+                  <span className="summary-label">{uiText.summary.verified}</span>
                   <strong className="summary-value">{formatCount(summary.verifiedCount)}</strong>
                 </article>
                 <article className="summary-card">
-                  <span className="summary-label">Suspicious</span>
+                  <span className="summary-label">{uiText.summary.suspicious}</span>
                   <strong className="summary-value">{formatCount(summary.suspiciousCount)}</strong>
                 </article>
                 <article className="summary-card">
-                  <span className="summary-label">Invalid</span>
+                  <span className="summary-label">{uiText.summary.invalid}</span>
                   <strong className="summary-value">{formatCount(summary.invalidCount)}</strong>
                 </article>
                 <article className="summary-card">
-                  <span className="summary-label">Stale pending</span>
+                  <span className="summary-label">{uiText.summary.stalePending}</span>
                   <strong className="summary-value">{formatCount(summary.stalePendingCount)}</strong>
                 </article>
               </div>
@@ -378,13 +371,13 @@ export default function AdminReviewsPage() {
 
             <section className="filter-panel" aria-labelledby="review-filter-title">
               <h3 id="review-filter-title" className="section-title">
-                Filters and sorting
+                {uiText.sections.filters}
               </h3>
               <fieldset className="filter-fieldset">
-                <legend className="sr-only">Review filters and sorting controls</legend>
+                <legend className="sr-only">{uiText.filters.legend}</legend>
                 <div className="filter-grid">
                   <label className="auth-field" htmlFor="verification-filter">
-                    <span>Verification state</span>
+                    <span>{uiText.filters.verificationState}</span>
                     <select
                       id="verification-filter"
                       value={verificationFilter}
@@ -393,28 +386,28 @@ export default function AdminReviewsPage() {
                       }
                       aria-describedby={resultsCountId}
                     >
-                      <option value="all">All states</option>
-                      <option value="pending">Pending</option>
-                      <option value="verified">Verified</option>
-                      <option value="suspicious">Suspicious</option>
-                      <option value="invalid">Invalid</option>
+                      <option value="all">{uiText.filters.allStates}</option>
+                      <option value="pending">{uiText.filters.pending}</option>
+                      <option value="verified">{uiText.filters.verified}</option>
+                      <option value="suspicious">{uiText.filters.suspicious}</option>
+                      <option value="invalid">{uiText.filters.invalid}</option>
                     </select>
                   </label>
 
                   <label className="auth-field" htmlFor="review-search">
-                    <span>Search</span>
+                    <span>{uiText.filters.search}</span>
                     <input
                       id="review-search"
                       type="search"
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder="Username, date, or seed"
+                      placeholder={uiText.filters.searchPlaceholder}
                       aria-describedby={resultsCountId}
                     />
                   </label>
 
                   <label className="auth-field" htmlFor="review-status-filter">
-                    <span>Moderator status</span>
+                    <span>{uiText.filters.moderatorStatus}</span>
                     <select
                       id="review-status-filter"
                       value={reviewStatusFilter}
@@ -423,24 +416,24 @@ export default function AdminReviewsPage() {
                       }
                       aria-describedby={resultsCountId}
                     >
-                      <option value="all">All review states</option>
-                      <option value="unreviewed">Unreviewed</option>
-                      <option value="reviewed_clean">Reviewed clean</option>
-                      <option value="confirmed_suspicious">Confirmed suspicious</option>
+                      <option value="all">{uiText.filters.allReviewStates}</option>
+                      <option value="unreviewed">{uiText.filters.unreviewed}</option>
+                      <option value="reviewed_clean">{uiText.filters.reviewedClean}</option>
+                      <option value="confirmed_suspicious">{uiText.filters.confirmedSuspicious}</option>
                     </select>
                   </label>
 
                   <label className="auth-field" htmlFor="review-sort">
-                    <span>Sort by</span>
+                    <span>{uiText.filters.sortBy}</span>
                     <select
                       id="review-sort"
                       value={sortMode}
                       onChange={(event) => setSortMode(event.target.value as SortMode)}
                       aria-describedby={resultsCountId}
                     >
-                      <option value="risk">Highest risk</option>
-                      <option value="newest">Newest first</option>
-                      <option value="oldest-pending">Oldest pending first</option>
+                      <option value="risk">{uiText.filters.highestRisk}</option>
+                      <option value="newest">{uiText.filters.newestFirst}</option>
+                      <option value="oldest-pending">{uiText.filters.oldestPendingFirst}</option>
                     </select>
                   </label>
 
@@ -451,35 +444,35 @@ export default function AdminReviewsPage() {
                       checked={showOnlyStalePending}
                       onChange={(event) => setShowOnlyStalePending(event.target.checked)}
                     />
-                    <span>Show only stale pending runs</span>
+                    <span>{uiText.filters.staleOnly}</span>
                   </label>
                 </div>
               </fieldset>
               <p id={resultsCountId} className="assistive-copy" aria-live="polite">
-                Showing {formatCount(sortedEntries.length)} run review{sortedEntries.length === 1 ? "" : "s"}.
+                {uiText.resultsShown
+                  .replace("{count}", formatCount(sortedEntries.length))
+                  .replace("{suffix}", sortedEntries.length === 1 ? "" : "s")}
               </p>
             </section>
 
             {sortedEntries.length === 0 ? (
-              <p className="body-copy">
-                No run reviews match the current filters.
-              </p>
+              <p className="body-copy">{uiText.noMatches}</p>
             ) : (
               <div className="review-list" role="list" aria-label="Recent run reviews">
                 <div className="review-row review-row-header" role="listitem" aria-hidden="true">
-                  <span>Verification</span>
-                  <span>Score</span>
-                  <span>Player</span>
-                  <span>Challenge</span>
-                  <span>Time</span>
-                  <span>Moves</span>
-                  <span>Review</span>
-                  <span>Reasons</span>
-                  <span>Accepted</span>
+                  <span>{uiText.table.verification}</span>
+                  <span>{uiText.table.score}</span>
+                  <span>{uiText.table.player}</span>
+                  <span>{uiText.table.challenge}</span>
+                  <span>{uiText.table.time}</span>
+                  <span>{uiText.table.moves}</span>
+                  <span>{uiText.table.review}</span>
+                  <span>{uiText.table.reasons}</span>
+                  <span>{uiText.table.accepted}</span>
                 </div>
                 {sortedEntries.map((entry) => {
                   const tone = getSuspicionTone(entry.suspicionScore);
-                  const playerLabel = entry.username || "Anonymous";
+                  const playerLabel = entry.username || uiText.anonymous;
 
                   return (
                     <article
@@ -500,7 +493,7 @@ export default function AdminReviewsPage() {
                             Attempts: {formatCount(entry.verificationAttempts)}
                           </span>
                           {entry.isStalePending && (
-                            <span className="reason-chip">stale pending</span>
+                            <span className="reason-chip">{uiText.stalePending}</span>
                           )}
                           {entry.verificationError && (
                             <span className="review-error-copy">
@@ -537,10 +530,10 @@ export default function AdminReviewsPage() {
                           {formatReviewStatus(entry.reviewStatus)}
                         </span>
                         <span>
-                          Reviewed: {entry.reviewedAt ? formatDateTime(entry.reviewedAt) : "Not recorded"}
+                          {uiText.reviewed}: {entry.reviewedAt ? formatDateTime(entry.reviewedAt) : uiText.notRecorded}
                         </span>
                         <span>
-                          Reviewer: {entry.reviewedByUsername ?? "Not recorded"}
+                          {uiText.reviewer}: {entry.reviewedByUsername ?? uiText.notRecorded}
                         </span>
                       </div>
                       <div className="reason-list" aria-label="Suspicion reasons">
@@ -551,22 +544,22 @@ export default function AdminReviewsPage() {
                             </span>
                           ))
                         ) : (
-                          <span className="assistive-copy">None</span>
+                          <span className="assistive-copy">{uiText.none}</span>
                         )}
                       </div>
                       <div className="review-challenge">
                         <span>{formatDateTime(entry.acceptedAt)}</span>
                         <span>
-                          Started:{" "}
+                          {uiText.started}:{" "}
                           {entry.verificationStartedAt
                             ? formatDateTime(entry.verificationStartedAt)
-                            : "Not recorded"}
+                            : uiText.notRecorded}
                         </span>
                         <span>
-                          Finished: {entry.verifiedAt ? formatDateTime(entry.verifiedAt) : "Not recorded"}
+                          {uiText.finished}: {entry.verifiedAt ? formatDateTime(entry.verifiedAt) : uiText.notRecorded}
                         </span>
                         <Link href={`/admin/reviews/${entry.publicId}`} className="inline-link">
-                          Inspect run
+                          {uiText.actions.inspectRun}
                         </Link>
                       </div>
                     </article>

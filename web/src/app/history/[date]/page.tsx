@@ -9,38 +9,13 @@ import {
   type HistoryDayResponse
 } from "../../../lib/api";
 import { formatElapsedTime } from "../../../lib/game/maze";
+import { useLocale } from "../../../lib/locale";
 
 type PageStatus = "loading" | "success" | "error";
 
-const uiText = {
-  eyebrow: "Archive Day",
-  fallbackTitle: "Daily challenge detail",
-  loading: "Loading archived challenge...",
-  error: "Unable to load that archived challenge right now.",
-  detailsTitle: "Challenge details",
-  leaderboardTitle: "Leaderboard",
-  leaderboardEmpty: "No submissions for this challenge yet.",
-  leaderboardLabel: "Archived daily leaderboard",
-  labels: {
-    date: "Date",
-    title: "Title",
-    seed: "Seed",
-    size: "Maze size",
-    start: "Start",
-    exit: "Exit",
-    rank: "Rank",
-    player: "Player",
-    time: "Time",
-    moves: "Moves"
-  },
-  actions: {
-    play: "Play this challenge",
-    backToHistory: "Back to history",
-    openPlay: "Play today’s challenge"
-  }
-} as const;
-
 export default function HistoryDayPage() {
+  const { formatCount, messages } = useLocale();
+  const uiText = messages.historyDay;
   const params = useParams<{ date: string }>();
   const date = typeof params.date === "string" ? params.date : "";
   const [payload, setPayload] = useState<HistoryDayResponse | null>(null);
@@ -171,11 +146,11 @@ export default function HistoryDayPage() {
                             {entry.username}
                           </Link>
                         ) : (
-                          "Anonymous"
+                          uiText.anonymous
                         )}
                       </span>
                       <span>{formatElapsedTime(entry.elapsedTimeMs)}</span>
-                      <span>{entry.moveCount}</span>
+                      <span>{formatCount(entry.moveCount)}</span>
                     </div>
                   ))}
                 </div>

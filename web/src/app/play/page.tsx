@@ -35,6 +35,7 @@ import {
   normalizeAngle,
   renderGridRows
 } from "../../lib/game/maze";
+import { useLocale } from "../../lib/locale";
 
 type AsyncStatus = "idle" | "loading" | "success" | "error";
 type SubmissionStatus = "idle" | "submitting" | "submitted" | "error";
@@ -78,69 +79,6 @@ interface CollapsiblePanelProps {
   children: ReactNode;
 }
 
-const uiText = {
-  play: {
-    eyebrow: "daily3dmaze.exe",
-    title: "Daily 3D Maze",
-    systemBar: "Ready",
-    loadingMaze: "Loading daily maze...",
-    loadingLeaderboard: "Loading leaderboard...",
-    leaderboardError: "Unable to load the leaderboard right now.",
-    mazeError:
-      "Unable to load the daily maze metadata. Make sure the API is running on http://localhost:8080."
-  },
-  labels: {
-    date: "Date",
-    title: "Title",
-    seed: "Seed",
-    size: "Size",
-    start: "Start",
-    exit: "Exit",
-    moves: "Moves",
-    time: "Time",
-    facing: "Facing",
-    controls: "Controls"
-  },
-  actions: {
-    resetRun: "Reset run",
-    backHome: "Return to desktop",
-    fullscreen: "Fullscreen",
-    exitFullscreen: "Exit fullscreen",
-    logIn: "Log in",
-    createAccount: "Create account",
-    logOut: "Log out"
-  },
-  auth: {
-    heading: "Identity",
-    username: "Username",
-    password: "Password",
-    signedInAs: "Signed in as",
-    role: "Role",
-    signingIn: "Signing in...",
-    creatingAccount: "Creating account...",
-    loginSuccess: "Signed in successfully.",
-    registerSuccess: "Account created and signed in.",
-    continueWithGitHub: "Continue with GitHub"
-  },
-  leaderboard: {
-    heading: "Leaderboard",
-    empty: "No submitted runs for this day yet.",
-    ariaLabel: "Daily leaderboard",
-    rank: "Rank",
-    player: "Player",
-    elapsed: "Time",
-    moves: "Moves"
-  },
-  gameplay: {
-    controls: "W/S or Up/Down move · A/D or Left/Right turn · Swipe in the view on touch devices",
-    introStatus: "Find the exit and finish the run.",
-    submittingRun: "Submitting run to the API...",
-    submissionError: "The run finished locally, but submission to the API failed.",
-    debugViewLabel: "Daily maze debug view",
-    summaryHeading: "Challenge window"
-  }
-} as const;
-
 function CollapsiblePanel({ title, defaultOpen = false, children }: CollapsiblePanelProps) {
   return (
     <details className="play-secondary-details" open={defaultOpen}>
@@ -171,6 +109,8 @@ function shiftArchiveDate(date: string, days: number): string {
 }
 
 function ArchiveNavigator({ archiveDate }: ArchiveNavigatorProps) {
+  const { messages } = useLocale();
+  const uiText = messages.play;
   const previousDate = shiftArchiveDate(archiveDate, -1);
   const nextDate = shiftArchiveDate(archiveDate, 1);
   const todayDate = new Date().toISOString().slice(0, 10);
@@ -180,27 +120,25 @@ function ArchiveNavigator({ archiveDate }: ArchiveNavigatorProps) {
   return (
     <section className="maze-summary archive-nav" aria-labelledby="archive-nav-title">
       <h2 id="archive-nav-title" className="section-title">
-        Archive navigator
+        {uiText.archiveTitle}
       </h2>
-      <p className="body-copy">
-        Move through archived daily challenges without leaving the maze viewer.
-      </p>
+      <p className="body-copy">{uiText.archiveBody}</p>
       <div className="actions">
         <Link href={`/play?date=${previousDate}`} className="secondary-link">
-          Previous day
+          {uiText.archiveActions.previousDay}
         </Link>
         {canAdvance ? (
           <Link href={`/play?date=${nextDate}`} className="secondary-link">
-            Next day
+            {uiText.archiveActions.nextDay}
           </Link>
         ) : (
           <span className="secondary-link is-disabled" aria-disabled="true">
-            Next day
+            {uiText.archiveActions.nextDay}
           </span>
         )}
         {!isToday && (
           <Link href="/play" className="primary-link">
-            Jump to today
+            {uiText.archiveActions.jumpToToday}
           </Link>
         )}
       </div>
@@ -209,6 +147,8 @@ function ArchiveNavigator({ archiveDate }: ArchiveNavigatorProps) {
 }
 
 function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
+  const { messages } = useLocale();
+  const uiText = messages.play;
   const startingDirectionIndex = getStartingDirectionIndex(maze);
   const [playerPosition, setPlayerPosition] = useState<MazePoint>(maze.start);
   const [directionIndex, setDirectionIndex] = useState<number>(startingDirectionIndex);
@@ -699,7 +639,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
           <div className="play-status-stack" aria-live="polite">
             <p className={`body-copy status-copy ${hasFinished ? "success-copy" : ""}`}>
               {hasFinished
-                ? `Maze complete in ${elapsedTime}.`
+                ? uiText.gameplay.completionMessage.replace("{elapsed}", elapsedTime)
                 : uiText.gameplay.introStatus}
             </p>
             {submissionStatus === "submitting" && (
@@ -707,9 +647,9 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
             )}
             {submissionStatus === "submitted" && submissionSummary && (
               <p className="body-copy status-copy success-copy">
-                Run accepted by the API at <code>{submissionSummary.acceptedAt}</code> and
-                queued for verification as{" "}
-                <code>{submissionSummary.verificationStatus}</code>.
+                {uiText.gameplay.submissionAccepted
+                  .replace("{acceptedAt}", submissionSummary.acceptedAt)
+                  .replace("{status}", submissionSummary.verificationStatus)}
               </p>
             )}
             {submissionStatus === "error" && (
@@ -762,6 +702,8 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
 }
 
 function Leaderboard({ entries }: LeaderboardProps) {
+  const { formatCount, messages } = useLocale();
+  const uiText = messages.play;
   return (
     <section className="maze-summary" aria-labelledby="leaderboard-title">
       <h2 id="leaderboard-title" className="section-title">
@@ -785,11 +727,13 @@ function Leaderboard({ entries }: LeaderboardProps) {
                     {entry.username}
                   </Link>
                 ) : (
-                  "Anonymous"
+                  uiText.leaderboard.anonymous
                 )}
               </span>
               <span>{formatElapsedTime(entry.elapsedTimeMs)}</span>
-              <span>{entry.moveCount} moves</span>
+              <span>
+                {formatCount(entry.moveCount)} {uiText.leaderboard.moveSuffix}
+              </span>
             </div>
           ))}
         </div>
@@ -799,6 +743,8 @@ function Leaderboard({ entries }: LeaderboardProps) {
 }
 
 function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
+  const { messages } = useLocale();
+  const uiText = messages.play;
   const [mode, setMode] = useState<AuthMode>("login");
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -832,7 +778,9 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
       setPassword("");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Authentication failed");
+      setErrorMessage(
+        error instanceof Error ? error.message : uiText.authErrors.authenticationFailed
+      );
     }
   }
 
@@ -847,7 +795,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
       setPassword("");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Logout failed");
+      setErrorMessage(error instanceof Error ? error.message : uiText.authErrors.logoutFailed);
     }
   }
 
@@ -868,12 +816,12 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
           <div className="actions">
             {roleAllows(user.role, ROLE_MODERATOR) && (
               <Link href="/admin/reviews" className="secondary-link">
-                Internal reviews
+                {uiText.authLinks.internalReviews}
               </Link>
             )}
             {roleAllows(user.role, ROLE_ADMIN) && (
               <Link href="/admin/users" className="secondary-link">
-                Manage users
+                {uiText.authLinks.manageUsers}
               </Link>
             )}
             <button type="button" className="secondary-button" onClick={handleLogout}>
@@ -915,8 +863,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
             </div>
           </fieldset>
           <p id={helperId} className="assistive-copy">
-            Usernames support letters, numbers, underscores, and hyphens. Passwords
-            must be at least 10 characters long.
+            {uiText.authHelper}
           </p>
           <label className="auth-field">
             <span>{uiText.auth.username}</span>
@@ -976,6 +923,8 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
 }
 
 function PlayPageContent() {
+  const { messages } = useLocale();
+  const uiText = messages.play;
   const searchParams = useSearchParams();
   const archiveDate = searchParams.get("date") ?? "";
   const [maze, setMaze] = useState<DailyMaze | null>(null);
@@ -1101,16 +1050,16 @@ function PlayPageContent() {
   return (
     <main className="page-shell">
       <div className="content-card content-card-wide play-window">
-        <p className="eyebrow">{uiText.play.eyebrow}</p>
-        <h1 className="sr-only">{uiText.play.title}</h1>
+        <p className="eyebrow">{uiText.eyebrow}</p>
+        <h1 className="sr-only">{uiText.title}</h1>
         {archiveDate && (
           <p className="body-copy body-copy-strong">
-            Viewing archived challenge <code>{archiveDate}</code>.
+            {uiText.archiveViewing} <code>{archiveDate}</code>.
           </p>
         )}
         {archiveDate &&
           (isCompactLandscape ? (
-            <CollapsiblePanel title="Archive navigation">
+            <CollapsiblePanel title={uiText.archivePanelTitle}>
               <ArchiveNavigator archiveDate={archiveDate} />
             </CollapsiblePanel>
           ) : (
@@ -1119,7 +1068,7 @@ function PlayPageContent() {
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">
-            {uiText.play.loadingMaze}
+            {uiText.loadingMaze}
           </p>
         )}
 
@@ -1137,10 +1086,10 @@ function PlayPageContent() {
           <div className="play-side-panels">
             <div className="play-side-panel">
               {isCompactLandscape ? (
-                <CollapsiblePanel title="Leaderboard">
+                <CollapsiblePanel title={uiText.leaderboard.title}>
                   {leaderboardStatus === "loading" && (
                     <p className="body-copy status-copy" aria-live="polite">
-                      {uiText.play.loadingLeaderboard}
+                      {uiText.loadingLeaderboard}
                     </p>
                   )}
                   {leaderboardStatus !== "error" && (
@@ -1151,7 +1100,7 @@ function PlayPageContent() {
                 <>
                   {leaderboardStatus === "loading" && (
                     <p className="body-copy status-copy" aria-live="polite">
-                      {uiText.play.loadingLeaderboard}
+                      {uiText.loadingLeaderboard}
                     </p>
                   )}
                   {leaderboardStatus !== "error" && (
@@ -1165,7 +1114,7 @@ function PlayPageContent() {
               {authStatus !== "loading" &&
                 (isCompactLandscape ? (
                   <CollapsiblePanel
-                    title={user ? "Player panel" : "Sign in"}
+                    title={user ? uiText.authLinks.playerPanel : uiText.authLinks.signInPanel}
                     defaultOpen={false}
                   >
                     <AuthPanel
@@ -1193,27 +1142,31 @@ function PlayPageContent() {
 
         {status === "success" && maze && leaderboardStatus === "error" && (
           <p className="body-copy status-copy error-copy" aria-live="polite">
-            {uiText.play.leaderboardError}
+            {uiText.leaderboardError}
           </p>
         )}
 
         {status === "error" && (
           <p className="body-copy status-copy error-copy" aria-live="assertive">
-            {uiText.play.mazeError}
+            {uiText.mazeError}
           </p>
         )}
 
         <div className="actions">
           <Link href="/history" className="secondary-link">
-            Challenge archive
+            {uiText.actions.challengeArchive}
           </Link>
           <Link href="/" className="secondary-link">
             {uiText.actions.backHome}
           </Link>
         </div>
         <div className="window-footer" aria-label="Application status bar">
-          <span>{uiText.play.systemBar}</span>
-          <span>{archiveDate ? `Archive ${archiveDate}` : "Today"}</span>
+          <span>{uiText.systemBar}</span>
+          <span>
+            {archiveDate
+              ? `${uiText.archiveStatusPrefix} ${archiveDate}`
+              : uiText.archiveStatusToday}
+          </span>
         </div>
       </div>
     </main>
@@ -1221,15 +1174,17 @@ function PlayPageContent() {
 }
 
 export default function PlayPage() {
+  const { messages } = useLocale();
+  const uiText = messages.play;
   return (
     <Suspense
       fallback={
         <main className="page-shell">
           <div className="content-card content-card-wide play-window">
-            <p className="eyebrow">{uiText.play.eyebrow}</p>
-            <h1>{uiText.play.title}</h1>
+            <p className="eyebrow">{uiText.eyebrow}</p>
+            <h1>{uiText.title}</h1>
             <p className="body-copy status-copy" aria-live="polite">
-              {uiText.play.loadingMaze}
+              {uiText.loadingMaze}
             </p>
           </div>
         </main>

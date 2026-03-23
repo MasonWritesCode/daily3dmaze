@@ -13,34 +13,9 @@ import { useLocale } from "../../../lib/locale";
 
 type PageStatus = "loading" | "success" | "error";
 
-const uiText = {
-  eyebrow: "Profile",
-  fallbackTitle: "Player profile",
-  loading: "Loading profile...",
-  error: "Unable to load that profile right now.",
-  overviewTitle: "Overview",
-  recentRunsTitle: "Recent runs",
-  noRuns: "No attributed runs yet.",
-  actions: {
-    backToPlay: "Return to challenge"
-  },
-  labels: {
-    username: "Username",
-    joined: "Joined",
-    totalRuns: "Total runs",
-    daysPlayed: "Days played",
-    bestTime: "Best time",
-    averageTime: "Average time",
-    lastPlayed: "Last played",
-    currentStreak: "Current streak",
-    bestStreak: "Best streak",
-    recentRunsLabel: "Recent player runs"
-  },
-  emptyStats: "No completed runs yet"
-} as const;
-
 export default function ProfilePage() {
-  const { formatCount, formatDate, formatDateTime, formatDayCount } = useLocale();
+  const { formatCount, formatDate, formatDateTime, formatDayCount, messages } = useLocale();
+  const uiText = messages.profile;
   const params = useParams<{ username: string }>();
   const username = typeof params.username === "string" ? params.username.toLowerCase() : "";
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
@@ -85,7 +60,7 @@ export default function ProfilePage() {
     <main className="page-shell">
       <div className="content-card">
         <p className="eyebrow">{uiText.eyebrow}</p>
-        <h1>{username ? `${username}'s runs` : uiText.fallbackTitle}</h1>
+        <h1>{username ? `${username}${uiText.titleSuffix}` : uiText.fallbackTitle}</h1>
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">
@@ -172,10 +147,10 @@ export default function ProfilePage() {
                   aria-label={uiText.labels.recentRunsLabel}
                 >
                   <div className="leaderboard-row leaderboard-row-header" aria-hidden="true">
-                    <span>Date</span>
-                    <span>Seed</span>
-                    <span>Time</span>
-                    <span>Moves</span>
+                    <span>{uiText.labels.recentRunDate}</span>
+                    <span>{uiText.labels.recentRunSeed}</span>
+                    <span>{uiText.labels.recentRunTime}</span>
+                    <span>{uiText.labels.recentRunMoves}</span>
                   </div>
                   {profile.recentRuns.map((run) => (
                     <div

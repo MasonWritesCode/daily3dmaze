@@ -5,32 +5,13 @@ import { useEffect, useState } from "react";
 
 import { fetchHistory, type HistoryEntry } from "../../lib/api";
 import { formatElapsedTime } from "../../lib/game/maze";
+import { useLocale } from "../../lib/locale";
 
 type PageStatus = "loading" | "success" | "error";
 
-const uiText = {
-  eyebrow: "History",
-  title: "Daily challenge archive",
-  intro:
-    "Browse recent daily mazes, see how many runs each day received, and inspect the current best result for each challenge.",
-  loading: "Loading challenge history...",
-  error: "Unable to load the challenge history right now.",
-  sectionTitle: "Recent daily challenges",
-  listLabel: "Daily challenge history",
-  empty: "No archived challenges are available yet.",
-  labels: {
-    seed: "Seed",
-    size: "Maze size",
-    bestRun: "Best run"
-  },
-  actions: {
-    openPlay: "Play today’s challenge",
-    backHome: "Return to desktop"
-  },
-  bestRunNoSubmissions: "No submissions yet"
-} as const;
-
 export default function HistoryPage() {
+  const { formatCount, messages } = useLocale();
+  const uiText = messages.history;
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [status, setStatus] = useState<PageStatus>("loading");
 
@@ -109,7 +90,7 @@ export default function HistoryPage() {
                       </p>
                     </div>
                     <span className="history-chip">
-                      {entry.submissionCount} run{entry.submissionCount === 1 ? "" : "s"}
+                      {formatCount(entry.submissionCount)} run{entry.submissionCount === 1 ? "" : "s"}
                     </span>
                   </div>
                   <dl className="metadata-list">
@@ -138,10 +119,10 @@ export default function HistoryPage() {
                                 {entry.bestRun.username}
                               </Link>
                             ) : (
-                              "Anonymous"
+                              uiText.anonymous
                             )}{" "}
                             in {formatElapsedTime(entry.bestRun.elapsedTimeMs)} with{" "}
-                            {entry.bestRun.moveCount} moves
+                            {formatCount(entry.bestRun.moveCount)} moves
                           </>
                         ) : (
                           uiText.bestRunNoSubmissions

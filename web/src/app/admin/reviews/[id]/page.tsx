@@ -64,7 +64,8 @@ function getVerificationTone(status: string): string {
 }
 
 export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
-  const { formatCount, formatDateTime } = useLocale();
+  const { formatCount, formatDateTime, messages } = useLocale();
+  const uiText = messages.adminReviewDetail;
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [detail, setDetail] = useState<RunReviewDetailResponse | null>(null);
@@ -128,7 +129,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
 
         setStatus("error");
         setErrorMessage(
-          error instanceof Error ? error.message : "Unable to load this run review."
+          error instanceof Error ? error.message : uiText.error
         );
       }
     }
@@ -156,7 +157,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
     hasSimulation && reconstructedFinalFrame
       ? [
           {
-            label: "Final position",
+            label: uiText.comparison.finalPosition,
             frontend: `(${reconstructedFinalFrame.playerPosition.x}, ${reconstructedFinalFrame.playerPosition.y})`,
             backend: `(${simulation.finalPosition.x}, ${simulation.finalPosition.y})`,
             matches:
@@ -164,7 +165,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               reconstructedFinalFrame.playerPosition.y === simulation.finalPosition.y
           },
           {
-            label: "Final facing",
+            label: uiText.comparison.finalFacing,
             frontend:
               DIRECTION_ORDER[reconstructedFinalFrame.directionIndex]?.name ?? "Unknown",
             backend: DIRECTION_ORDER[simulation.finalDirectionIndex]?.name ?? "Unknown",
@@ -172,9 +173,9 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               reconstructedFinalFrame.directionIndex === simulation.finalDirectionIndex
           },
           {
-            label: "Exit reached",
-            frontend: reconstructedFinalFrame.reachedExit ? "Yes" : "No",
-            backend: simulation.reachedExit ? "Yes" : "No",
+            label: uiText.comparison.exitReached,
+            frontend: reconstructedFinalFrame.reachedExit ? uiText.comparison.yes : uiText.comparison.no,
+            backend: simulation.reachedExit ? uiText.comparison.yes : uiText.comparison.no,
             matches: reconstructedFinalFrame.reachedExit === simulation.reachedExit
           }
         ]
@@ -209,13 +210,15 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
       await refreshDetail(routeParams.id);
       setRequeueStatus("success");
       setRequeueMessage(
-        `Run ${result.runPublicId} requeued as ${result.verificationStatus}. Attempts remain at ${result.verificationAttempts}.`
-        
+        uiText.replay.requeueMessage
+          .replace("{id}", result.runPublicId)
+          .replace("{status}", result.verificationStatus)
+          .replace("{attempts}", String(result.verificationAttempts))
       );
     } catch (error) {
       setRequeueStatus("error");
       setRequeueMessage(
-        error instanceof Error ? error.message : "Unable to requeue this run."
+        error instanceof Error ? error.message : uiText.replay.requeueError
       );
     }
   }
@@ -237,12 +240,19 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
       await refreshDetail(routeParams.id);
       setReviewFormStatus("success");
       setReviewFormMessage(
-        `Review saved as ${result.reviewStatus}${result.reviewedAt ? ` at ${formatDateTime(result.reviewedAt)}` : ""}.`
+        uiText.replay.reviewSaved
+          .replace("{status}", result.reviewStatus)
+          .replace(
+            "{reviewedAt}",
+            result.reviewedAt
+              ? uiText.replay.reviewSavedAt.replace("{value}", formatDateTime(result.reviewedAt))
+              : ""
+          )
       );
     } catch (error) {
       setReviewFormStatus("error");
       setReviewFormMessage(
-        error instanceof Error ? error.message : "Unable to save this review."
+        error instanceof Error ? error.message : uiText.replay.reviewSaveError
       );
     }
   }
@@ -250,24 +260,21 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
   return (
     <main className="page-shell">
       <div className="content-card content-card-wide">
-        <p className="eyebrow">Internal tooling</p>
-        <h1>Run review detail</h1>
-        <p className="body-copy">
-          Inspect a single submission, including its replay trace, without mutating any
-          review state.
-        </p>
+        <p className="eyebrow">{uiText.eyebrow}</p>
+        <h1>{uiText.title}</h1>
+        <p className="body-copy">{uiText.intro}</p>
         <div className="actions">
           <Link href="/admin/reviews" className="primary-link">
-            Back to reviews
+            {uiText.actions.backToReviews}
           </Link>
           <Link href="/play" className="secondary-link">
-            Return to challenge
+            {uiText.actions.returnToChallenge}
           </Link>
         </div>
 
         {status === "loading" && (
           <p className="status-copy" aria-live="polite">
-            Loading run review detail...
+            {uiText.loading}
           </p>
         )}
 
@@ -280,22 +287,19 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
         {status === "ready" && !user && (
           <section className="maze-summary" aria-labelledby="review-detail-auth-title">
             <h2 id="review-detail-auth-title" className="section-title">
-              Sign in required
+              {uiText.authRequiredTitle}
             </h2>
-            <p className="body-copy">
-              Internal review detail pages require an authenticated session.
-            </p>
+            <p className="body-copy">{uiText.authRequiredBody}</p>
           </section>
         )}
 
         {status === "ready" && user && !roleAllows(user.role, ROLE_MODERATOR) && (
           <section className="maze-summary" aria-labelledby="review-detail-forbidden-title">
             <h2 id="review-detail-forbidden-title" className="section-title">
-              Moderator access required
+              {uiText.forbiddenTitle}
             </h2>
             <p className="body-copy">
-              Your current role is <code>{user.role}</code>. Only moderator and admin
-              accounts can inspect individual run reviews.
+              {uiText.forbiddenBodyPrefix} <code>{user.role}</code>. {uiText.forbiddenBodySuffix}
             </p>
           </section>
         )}
@@ -306,10 +310,10 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               <div className="review-header">
                 <div>
                   <h2 id="review-detail-summary-title" className="section-title">
-                    Submission overview
+                    {uiText.sections.submissionOverview}
                   </h2>
                   <p className="assistive-copy">
-                    Reviewing run <code>{detail.entry.publicId}</code> as{" "}
+                    {uiText.replay.viewingRunAs} <code>{detail.entry.publicId}</code> {uiText.replay.asUser}{" "}
                     <strong>{user.username}</strong>.
                   </p>
                 </div>
@@ -329,7 +333,9 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                     onClick={handleRequeue}
                     disabled={requeueStatus === "submitting"}
                   >
-                    {requeueStatus === "submitting" ? "Requeueing..." : "Requeue verification"}
+                    {requeueStatus === "submitting"
+                      ? uiText.actions.requeueing
+                      : uiText.actions.requeueVerification}
                   </button>
                 </div>
               )}
@@ -347,11 +353,11 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
 
               <dl className="metadata-list">
                 <div className="metadata-row">
-                  <dt>Verification</dt>
+                  <dt>{uiText.metadata.verification}</dt>
                   <dd>{detail.entry.verificationStatus}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Player</dt>
+                  <dt>{uiText.metadata.player}</dt>
                   <dd>
                     {detail.entry.username ? (
                       <Link
@@ -361,12 +367,12 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                         {detail.entry.username}
                       </Link>
                     ) : (
-                      "Anonymous"
+                      uiText.replay.anonymous
                     )}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Challenge</dt>
+                  <dt>{uiText.metadata.challenge}</dt>
                   <dd>
                     <Link href={`/history/${detail.entry.date}`} className="inline-link">
                       {detail.entry.date}
@@ -374,41 +380,43 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Seed</dt>
+                  <dt>{uiText.metadata.seed}</dt>
                   <dd>{detail.entry.seed}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Time</dt>
+                  <dt>{uiText.metadata.time}</dt>
                   <dd>{formatElapsedTime(detail.entry.elapsedTimeMs)}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Moves</dt>
+                  <dt>{uiText.metadata.moves}</dt>
                   <dd>{formatCount(detail.entry.moveCount)}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Accepted</dt>
+                  <dt>{uiText.metadata.accepted}</dt>
                   <dd>{formatDateTime(detail.entry.acceptedAt)}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Verification started</dt>
+                  <dt>{uiText.metadata.verificationStarted}</dt>
                   <dd>
                     {detail.entry.verificationStartedAt
                       ? formatDateTime(detail.entry.verificationStartedAt)
-                      : "Not recorded"}
+                      : uiText.replay.notRecorded}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Verified at</dt>
+                  <dt>{uiText.metadata.verifiedAt}</dt>
                   <dd>
-                    {detail.entry.verifiedAt ? formatDateTime(detail.entry.verifiedAt) : "Not recorded"}
+                    {detail.entry.verifiedAt
+                      ? formatDateTime(detail.entry.verifiedAt)
+                      : uiText.replay.notRecorded}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Attempts</dt>
+                  <dt>{uiText.metadata.attempts}</dt>
                   <dd>{formatCount(detail.entry.verificationAttempts)}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Reasons</dt>
+                  <dt>{uiText.metadata.reasons}</dt>
                   <dd className="reason-list">
                     {detail.entry.suspicionReasons.length > 0 ? (
                       detail.entry.suspicionReasons.map((reason) => (
@@ -417,12 +425,12 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                         </span>
                       ))
                     ) : (
-                      <span className="assistive-copy">None</span>
+                      <span className="assistive-copy">{uiText.replay.none}</span>
                     )}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Verification notes</dt>
+                  <dt>{uiText.metadata.verificationNotes}</dt>
                   <dd className="reason-list">
                     {detail.entry.verificationNotes.length > 0 ? (
                       detail.entry.verificationNotes.map((note) => (
@@ -431,27 +439,29 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                         </span>
                       ))
                     ) : (
-                      <span className="assistive-copy">None</span>
+                      <span className="assistive-copy">{uiText.replay.none}</span>
                     )}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Worker error</dt>
-                  <dd>{detail.entry.verificationError ?? "None"}</dd>
+                  <dt>{uiText.metadata.workerError}</dt>
+                  <dd>{detail.entry.verificationError ?? uiText.replay.none}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Review status</dt>
+                  <dt>{uiText.metadata.reviewStatus}</dt>
                   <dd>{detail.entry.reviewStatus}</dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Reviewed at</dt>
+                  <dt>{uiText.metadata.reviewedAt}</dt>
                   <dd>
-                    {detail.entry.reviewedAt ? formatDateTime(detail.entry.reviewedAt) : "Not recorded"}
+                    {detail.entry.reviewedAt
+                      ? formatDateTime(detail.entry.reviewedAt)
+                      : uiText.replay.notRecorded}
                   </dd>
                 </div>
                 <div className="metadata-row">
-                  <dt>Reviewed by</dt>
-                  <dd>{detail.entry.reviewedByUsername ?? "Not recorded"}</dd>
+                  <dt>{uiText.metadata.reviewedBy}</dt>
+                  <dd>{detail.entry.reviewedByUsername ?? uiText.replay.notRecorded}</dd>
                 </div>
               </dl>
             </section>
@@ -460,11 +470,9 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
               <div className="review-header">
                 <div>
                   <h2 id="review-moderation-title" className="section-title">
-                    Moderator review
+                    {uiText.sections.moderatorReview}
                   </h2>
-                  <p className="assistive-copy">
-                    Record a human decision and any follow-up notes for this run.
-                  </p>
+                  <p className="assistive-copy">{uiText.moderation.intro}</p>
                 </div>
               </div>
 
@@ -475,29 +483,29 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                 }}
               >
                 <fieldset className="filter-fieldset">
-                  <legend className="sr-only">Moderator review controls</legend>
+                  <legend className="sr-only">{uiText.moderation.fieldsetLegend}</legend>
                   <div className="filter-grid">
                     <label className="auth-field" htmlFor="review-status">
-                      <span>Review status</span>
+                      <span>{uiText.moderation.statusLabel}</span>
                       <select
                         id="review-status"
                         value={reviewStatusValue}
                         onChange={(event) => setReviewStatusValue(event.target.value)}
                       >
-                        <option value="unreviewed">Unreviewed</option>
-                        <option value="reviewed_clean">Reviewed clean</option>
-                        <option value="confirmed_suspicious">Confirmed suspicious</option>
+                        <option value="unreviewed">{uiText.moderation.unreviewed}</option>
+                        <option value="reviewed_clean">{uiText.moderation.reviewedClean}</option>
+                        <option value="confirmed_suspicious">{uiText.moderation.confirmedSuspicious}</option>
                       </select>
                     </label>
 
                     <label className="auth-field auth-field-full" htmlFor="review-notes">
-                      <span>Review notes</span>
+                      <span>{uiText.moderation.notesLabel}</span>
                       <textarea
                         id="review-notes"
                         value={reviewNotesValue}
                         onChange={(event) => setReviewNotesValue(event.target.value)}
                         rows={5}
-                        placeholder="Add any human review notes or follow-up context."
+                        placeholder={uiText.moderation.notesPlaceholder}
                       />
                     </label>
                   </div>
@@ -509,7 +517,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                     className="secondary-button"
                     disabled={reviewFormStatus === "submitting"}
                   >
-                    {reviewFormStatus === "submitting" ? "Saving..." : "Save review"}
+                    {reviewFormStatus === "submitting" ? uiText.actions.saving : uiText.actions.saveReview}
                   </button>
                 </div>
               </form>
