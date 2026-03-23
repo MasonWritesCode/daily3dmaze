@@ -120,10 +120,20 @@ export interface RunReviewEntry {
   verifiedAt: string | null;
   verificationAttempts: number;
   verificationError: string | null;
+  isStalePending: boolean;
   acceptedAt: string;
 }
 
+export interface RunReviewSummary {
+  pendingCount: number;
+  verifiedCount: number;
+  suspiciousCount: number;
+  invalidCount: number;
+  stalePendingCount: number;
+}
+
 export interface RunReviewsResponse {
+  summary: RunReviewSummary;
   entries: RunReviewEntry[];
 }
 

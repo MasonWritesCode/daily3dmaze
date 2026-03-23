@@ -94,10 +94,20 @@ type recentRunReviewEntry struct {
 	VerifiedAt            *string  `json:"verifiedAt"`
 	VerificationAttempts  int      `json:"verificationAttempts"`
 	VerificationError     *string  `json:"verificationError"`
+	IsStalePending        bool     `json:"isStalePending"`
 	AcceptedAt            string   `json:"acceptedAt"`
 }
 
+type runReviewSummary struct {
+	PendingCount      int `json:"pendingCount"`
+	VerifiedCount     int `json:"verifiedCount"`
+	SuspiciousCount   int `json:"suspiciousCount"`
+	InvalidCount      int `json:"invalidCount"`
+	StalePendingCount int `json:"stalePendingCount"`
+}
+
 type recentRunReviewsResponse struct {
+	Summary runReviewSummary       `json:"summary"`
 	Entries []recentRunReviewEntry `json:"entries"`
 }
 
@@ -125,13 +135,14 @@ type app struct {
 }
 
 const (
-	maxJSONBodyBytes = 64 * 1024
-	maxReplayEvents  = 512
-	maxMoveCount     = 100000
-	maxElapsedTimeMs = 24 * 60 * 60 * 1000
-	dateLayoutISO    = "2006-01-02"
-	authRateLimit    = 10
-	authWindow       = 5 * time.Minute
+	maxJSONBodyBytes  = 64 * 1024
+	maxReplayEvents   = 512
+	maxMoveCount      = 100000
+	maxElapsedTimeMs  = 24 * 60 * 60 * 1000
+	dateLayoutISO     = "2006-01-02"
+	authRateLimit     = 10
+	authWindow        = 5 * time.Minute
+	stalePendingAfter = 90 * time.Second
 )
 
 func main() {
@@ -401,8 +412,17 @@ func (a app) recentRunReviewsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	summary, err := a.loadRunReviewSummary()
+	if err != nil {
+		http.Error(w, "failed to load run review summary", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(recentRunReviewsResponse{Entries: entries}); err != nil {
+	if err := json.NewEncoder(w).Encode(recentRunReviewsResponse{
+		Summary: summary,
+		Entries: entries,
+	}); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
@@ -593,6 +613,12 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			value := verificationError.String
 			entry.VerificationError = &value
 		}
+		entry.IsStalePending = isStalePendingReview(
+			entry.VerificationStatus,
+			acceptedAt.UTC(),
+			verificationStartedAt,
+			a.currentTime(),
+		)
 		entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
 		entries = append(entries, entry)
 	}
@@ -602,6 +628,59 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 	}
 
 	return entries, nil
+}
+
+func (a app) loadRunReviewSummary() (runReviewSummary, error) {
+	if a.db == nil {
+		return runReviewSummary{}, errors.New("database unavailable")
+	}
+
+	const query = `
+		SELECT
+			COUNT(*) FILTER (WHERE verification_status = 'pending'),
+			COUNT(*) FILTER (WHERE verification_status = 'verified'),
+			COUNT(*) FILTER (WHERE verification_status = 'suspicious'),
+			COUNT(*) FILTER (WHERE verification_status = 'invalid'),
+			COUNT(*) FILTER (
+				WHERE verification_status = 'pending'
+					AND (
+						(verification_started_at IS NOT NULL AND verification_started_at < $1)
+						OR (verification_started_at IS NULL AND accepted_at < $1)
+					)
+			)
+		FROM runs
+	`
+
+	var summary runReviewSummary
+	if err := a.db.QueryRow(query, a.currentTime().Add(-stalePendingAfter)).Scan(
+		&summary.PendingCount,
+		&summary.VerifiedCount,
+		&summary.SuspiciousCount,
+		&summary.InvalidCount,
+		&summary.StalePendingCount,
+	); err != nil {
+		return runReviewSummary{}, err
+	}
+
+	return summary, nil
+}
+
+func isStalePendingReview(
+	verificationStatus string,
+	acceptedAt time.Time,
+	verificationStartedAt sql.NullTime,
+	now time.Time,
+) bool {
+	if verificationStatus != string(VerificationStatusPending) {
+		return false
+	}
+
+	staleThreshold := now.Add(-stalePendingAfter)
+	if verificationStartedAt.Valid {
+		return verificationStartedAt.Time.UTC().Before(staleThreshold)
+	}
+
+	return acceptedAt.Before(staleThreshold)
 }
 
 func (a app) requeueRunReview(runID int64) (int, error) {

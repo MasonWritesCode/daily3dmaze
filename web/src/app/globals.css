@@ -197,6 +197,32 @@ h1 {
   gap: 10px;
 }
 
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 20px 0 24px;
+}
+
+.summary-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: rgba(13, 16, 21, 0.6);
+}
+
+.summary-label {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.summary-value {
+  color: var(--text);
+  font-size: 1.45rem;
+}
+
 .review-row {
   display: grid;
   grid-template-columns: 96px 1fr minmax(180px, 1.2fr) 120px 96px 1.8fr 180px;

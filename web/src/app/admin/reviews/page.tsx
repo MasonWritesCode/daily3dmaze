@@ -8,7 +8,8 @@ import {
   recomputeRunReviews,
   fetchRunReviews,
   type AuthUser,
-  type RunReviewEntry
+  type RunReviewEntry,
+  type RunReviewSummary
 } from "../../../lib/api";
 import { formatElapsedTime } from "../../../lib/game/maze";
 
@@ -63,6 +64,7 @@ export default function AdminReviewsPage() {
   const [status, setStatus] = useState<PageStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [entries, setEntries] = useState<RunReviewEntry[]>([]);
+  const [summary, setSummary] = useState<RunReviewSummary | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [recomputeStatus, setRecomputeStatus] = useState<RecomputeStatus>("idle");
   const [recomputeMessage, setRecomputeMessage] = useState<string>("");
@@ -92,6 +94,7 @@ export default function AdminReviewsPage() {
           return;
         }
 
+        setSummary(payload.summary);
         setEntries(payload.entries);
         setStatus("ready");
       } catch (error) {
@@ -144,6 +147,7 @@ export default function AdminReviewsPage() {
     try {
       const recomputeResult = await recomputeRunReviews();
       const payload = await fetchRunReviews();
+      setSummary(payload.summary);
       setEntries(payload.entries);
       setRecomputeStatus("success");
       setRecomputeMessage(
@@ -243,6 +247,31 @@ export default function AdminReviewsPage() {
               </p>
             )}
 
+            {summary && (
+              <div className="summary-grid" aria-label="Verification queue health">
+                <article className="summary-card">
+                  <span className="summary-label">Pending</span>
+                  <strong className="summary-value">{summary.pendingCount}</strong>
+                </article>
+                <article className="summary-card">
+                  <span className="summary-label">Verified</span>
+                  <strong className="summary-value">{summary.verifiedCount}</strong>
+                </article>
+                <article className="summary-card">
+                  <span className="summary-label">Suspicious</span>
+                  <strong className="summary-value">{summary.suspiciousCount}</strong>
+                </article>
+                <article className="summary-card">
+                  <span className="summary-label">Invalid</span>
+                  <strong className="summary-value">{summary.invalidCount}</strong>
+                </article>
+                <article className="summary-card">
+                  <span className="summary-label">Stale pending</span>
+                  <strong className="summary-value">{summary.stalePendingCount}</strong>
+                </article>
+              </div>
+            )}
+
             {sortedEntries.length === 0 ? (
               <p className="body-copy">No run reviews are available yet.</p>
             ) : (
@@ -279,6 +308,9 @@ export default function AdminReviewsPage() {
                           <span className="assistive-copy">
                             Attempts: {entry.verificationAttempts}
                           </span>
+                          {entry.isStalePending && (
+                            <span className="reason-chip">stale pending</span>
+                          )}
                           {entry.verificationError && (
                             <span className="review-error-copy">
                               {entry.verificationError}

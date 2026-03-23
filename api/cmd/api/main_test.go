@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -390,6 +391,77 @@ func TestRequeueRunReview(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestLoadRunReviewSummary(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+	application := app{
+		db:  db,
+		now: func() time.Time { return now },
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT
+			COUNT(*) FILTER (WHERE verification_status = 'pending'),
+			COUNT(*) FILTER (WHERE verification_status = 'verified'),
+			COUNT(*) FILTER (WHERE verification_status = 'suspicious'),
+			COUNT(*) FILTER (WHERE verification_status = 'invalid'),
+			COUNT(*) FILTER (
+				WHERE verification_status = 'pending'
+					AND (
+						(verification_started_at IS NOT NULL AND verification_started_at < $1)
+						OR (verification_started_at IS NULL AND accepted_at < $1)
+					)
+			)
+		FROM runs
+	`)).
+		WithArgs(now.Add(-stalePendingAfter)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"pending_count",
+			"verified_count",
+			"suspicious_count",
+			"invalid_count",
+			"stale_pending_count",
+		}).AddRow(4, 9, 2, 1, 1))
+
+	summary, err := application.loadRunReviewSummary()
+	if err != nil {
+		t.Fatalf("load run review summary: %v", err)
+	}
+
+	if summary.PendingCount != 4 || summary.VerifiedCount != 9 || summary.StalePendingCount != 1 {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestIsStalePendingReview(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+	startedAt := sql.NullTime{
+		Time:  now.Add(-2 * time.Minute),
+		Valid: true,
+	}
+
+	if !isStalePendingReview(string(VerificationStatusPending), now.Add(-time.Minute), startedAt, now) {
+		t.Fatal("expected old pending run with old start time to be stale")
+	}
+
+	if isStalePendingReview(string(VerificationStatusVerified), now.Add(-10*time.Minute), sql.NullTime{}, now) {
+		t.Fatal("expected verified run to not be stale")
 	}
 }
 
