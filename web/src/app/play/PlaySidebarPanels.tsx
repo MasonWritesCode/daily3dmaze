@@ -188,7 +188,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
               <RoleBadge role={user.role} labels={uiText.auth.roles} />
             </span>
           </p>
-          <div className="actions">
+          <div className="actions auth-panel-actions auth-panel-actions-authenticated">
             {roleAllows(user.role, ROLE_MODERATOR) && (
               <Link href="/admin/reviews" className="secondary-link">
                 {uiText.authLinks.internalReviews}
@@ -267,7 +267,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
               aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
             />
           </label>
-          <div className="actions">
+          <div className="actions auth-panel-actions">
             <button type="submit" className="primary-button" disabled={status === "submitting"}>
               {submitLabel}
             </button>

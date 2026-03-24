@@ -512,7 +512,7 @@ export default function ReviewDetailPage({ params }: ReviewDetailPageProps) {
                 </span>
               </div>
               {roleAllows(user.role, ROLE_ADMIN) && (
-                <div className="actions">
+                <div className="actions admin-detail-actions">
                   <button
                     type="button"
                     className="secondary-button"

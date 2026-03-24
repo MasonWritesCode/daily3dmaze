@@ -295,6 +295,11 @@
   align-items: center;
 }
 
+:global(.admin-detail-actions) {
+  margin: 0 0 16px;
+  justify-content: flex-start;
+}
+
 :global(.admin-section-copy) {
   margin: 0 0 14px;
 }
