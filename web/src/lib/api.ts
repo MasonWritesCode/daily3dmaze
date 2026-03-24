@@ -2,11 +2,13 @@ import {
   adminRunReviewsEndpoint,
   apiBaseUrl,
   dailyMazeEndpoint,
+  forgotPasswordEndpoint,
   leaderboardEndpoint,
   loginEndpoint,
   logoutEndpoint,
   meEndpoint,
   registerEndpoint,
+  resetPasswordEndpoint,
   runsEndpoint
 } from "./config";
 import type { DailyMaze, ReplayTraceEvent } from "./game/maze";
@@ -61,6 +63,14 @@ export interface AuthUser {
   id: number;
   username: string;
   role: string;
+}
+
+export interface ForgotPasswordResponse {
+  message: string;
+}
+
+export interface ResetPasswordResponse {
+  message: string;
 }
 
 export const ROLE_USER = "user";
@@ -336,7 +346,7 @@ export async function fetchCurrentUser(): Promise<AuthUser | null> {
 
 export async function authenticate(
   mode: "login" | "register",
-  credentials: { username: string; password: string }
+  credentials: { username: string; email?: string; password: string }
 ): Promise<AuthUser> {
   const response = await fetch(mode === "register" ? registerEndpoint : loginEndpoint, {
     method: "POST",
@@ -364,6 +374,43 @@ export async function logout(): Promise<void> {
   if (!response.ok) {
     throw await readTextError(response, "Logout failed");
   }
+}
+
+export async function requestPasswordReset(
+  usernameOrEmail: string
+): Promise<ForgotPasswordResponse> {
+  const response = await fetch(forgotPasswordEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ usernameOrEmail })
+  });
+
+  if (!response.ok) {
+    throw await readTextError(response, "Password reset request failed");
+  }
+
+  return (await response.json()) as ForgotPasswordResponse;
+}
+
+export async function resetPassword(
+  token: string,
+  newPassword: string
+): Promise<ResetPasswordResponse> {
+  const response = await fetch(resetPasswordEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ token, newPassword })
+  });
+
+  if (!response.ok) {
+    throw await readTextError(response, "Password reset failed");
+  }
+
+  return (await response.json()) as ResetPasswordResponse;
 }
 
 export async function fetchPlayerProfile(username: string): Promise<PlayerProfile> {

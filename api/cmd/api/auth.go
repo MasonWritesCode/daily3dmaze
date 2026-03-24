@@ -31,6 +31,7 @@ var errAccountBanned = errors.New("account is banned")
 
 type authRequest struct {
 	Username string `json:"username"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -83,7 +84,7 @@ func (a app) registerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := a.createUser(strings.ToLower(request.Username), string(passwordHash))
+	user, err := a.createUser(strings.ToLower(request.Username), strings.ToLower(strings.TrimSpace(request.Email)), string(passwordHash))
 	if err != nil {
 		http.Error(w, "username is unavailable", http.StatusConflict)
 		return
@@ -211,18 +212,23 @@ func validateAuthRequest(request authRequest) error {
 		return errors.New("password must be at least 10 characters")
 	}
 
+	email := strings.TrimSpace(request.Email)
+	if email != "" && (!strings.Contains(email, "@") || strings.HasPrefix(email, "@") || strings.HasSuffix(email, "@")) {
+		return errors.New("email must be valid")
+	}
+
 	return nil
 }
 
-func (a app) createUser(username, passwordHash string) (currentUser, error) {
+func (a app) createUser(username, email, passwordHash string) (currentUser, error) {
 	const query = `
-		INSERT INTO users (username, password_hash, role)
-		VALUES ($1, $2, $3)
+		INSERT INTO users (username, email, password_hash, role)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, username, role
 	`
 
 	var user currentUser
-	if err := a.db.QueryRow(query, username, passwordHash, roleUser).Scan(&user.ID, &user.Username, &user.Role); err != nil {
+	if err := a.db.QueryRow(query, username, nullString(email), passwordHash, roleUser).Scan(&user.ID, &user.Username, &user.Role); err != nil {
 		return currentUser{}, err
 	}
 

@@ -477,12 +477,14 @@ export const enUSMessages = {
       exitFullscreen: "Exit fullscreen",
       logIn: "Log in",
       createAccount: "Create account",
-      logOut: "Log out"
+      logOut: "Log out",
+      forgotPassword: "Forgot password?"
     },
     auth: {
       heading: "Identity",
       modeLegend: "Authentication mode",
       username: "Username",
+      email: "Email",
       password: "Password",
       signedInAs: "Signed in as",
       role: "Role",
@@ -500,6 +502,7 @@ export const enUSMessages = {
     },
     authHelper:
       "Usernames support letters, numbers, underscores, and hyphens. Passwords must be at least 10 characters long.",
+    registerEmailHelper: "Add an email if you want password reset links later.",
     authErrors: {
       authenticationFailed: "Authentication failed",
       logoutFailed: "Logout failed"
@@ -538,6 +541,25 @@ export const enUSMessages = {
       completionMessage: "Maze complete in {elapsed}.",
       submissionAccepted:
         "Result saved at {acceptedAt}. Verification status: {status}."
+    },
+    passwordReset: {
+      title: "Reset password",
+      intro:
+        "Request a password reset link or enter a reset token to choose a new password.",
+      requestHeading: "Request reset link",
+      requestIntro:
+        "Enter your username or email. If an eligible account exists, a reset link will be sent.",
+      requestField: "Username or email",
+      requestAction: "Send reset link",
+      requestSuccess:
+        "If an eligible account exists, a password reset link has been sent.",
+      resetHeading: "Choose a new password",
+      resetIntro: "Enter a new password for this reset token.",
+      resetAction: "Reset password",
+      resetSuccess:
+        "Your password has been reset. You can return to the challenge and sign in.",
+      tokenMissing:
+        "No reset token was found in the link. Request a new password reset email below."
     },
     verification: {
       pending: "pending",

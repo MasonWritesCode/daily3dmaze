@@ -92,11 +92,11 @@ func TestRegisterHandlerCreatesUserAndSession(t *testing.T) {
 	application := app{db: db}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		INSERT INTO users (username, password_hash, role)
-		VALUES ($1, $2, $3)
+		INSERT INTO users (username, email, password_hash, role)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, username, role
 	`)).
-		WithArgs("mason_dev", sqlmock.AnyArg(), roleUser).
+		WithArgs("mason_dev", sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleUser))
 
 	mock.ExpectExec(regexp.QuoteMeta(`
@@ -432,11 +432,11 @@ func TestRegisterHandlerReturnsConflictWhenUsernameUnavailable(t *testing.T) {
 	application := app{db: db}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		INSERT INTO users (username, password_hash, role)
-		VALUES ($1, $2, $3)
+		INSERT INTO users (username, email, password_hash, role)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, username, role
 	`)).
-		WithArgs("mason_dev", sqlmock.AnyArg(), roleUser).
+		WithArgs("mason_dev", sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
 		WillReturnError(errors.New("duplicate key value violates unique constraint"))
 
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(

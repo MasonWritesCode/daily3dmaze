@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import RoleBadge from "../../components/RoleBadge";
@@ -118,8 +119,10 @@ function Leaderboard({ entries, scope, onScopeChange }: LeaderboardProps) {
 function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
   const { messages } = useLocale();
   const uiText = messages.play;
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("login");
   const [username, setUsername] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [status, setStatus] = useState<SubmissionStatus | "success">("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -144,11 +147,18 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
     setErrorMessage("");
 
     try {
-      const authenticatedUser = await authenticate(mode, { username, password });
+      const authenticatedUser = await authenticate(mode, {
+        username,
+        email: mode === "register" ? email : undefined,
+        password
+      });
       onAuthChange(authenticatedUser);
       setStatus("success");
       setErrorMessage("");
       setPassword("");
+      if (mode === "register") {
+        setEmail("");
+      }
     } catch (error) {
       setStatus("error");
       setErrorMessage(
@@ -217,6 +227,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
                   setMode("login");
                   setStatus("idle");
                   setErrorMessage("");
+                  setEmail("");
                 }}
               >
                 {uiText.actions.logIn}
@@ -254,6 +265,21 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
               aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
             />
           </label>
+          {mode === "register" && (
+            <label className="auth-field">
+              <span>{uiText.auth.email}</span>
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                aria-describedby={helperId}
+              />
+            </label>
+          )}
+          {mode === "register" && (
+            <p className="assistive-copy">{uiText.registerEmailHelper}</p>
+          )}
           <label className="auth-field">
             <span>{uiText.auth.password}</span>
             <input
@@ -271,6 +297,16 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
             <button type="submit" className="primary-button" disabled={status === "submitting"}>
               {submitLabel}
             </button>
+            {mode === "login" && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => router.push("/reset-password")}
+              >
+                {uiText.actions.forgotPassword}
+              </button>
+            )}
+            {mode === "register" && <span className="auth-panel-action-spacer" aria-hidden="true" />}
             {githubOAuthEnabled && (
               <a href={oauthStartEndpoint("github")} className="secondary-link">
                 {uiText.auth.continueWithGitHub}

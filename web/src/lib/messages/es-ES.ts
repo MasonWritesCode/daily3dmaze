@@ -308,13 +308,15 @@ export const esESMessages = {
       exitFullscreen: "Salir de pantalla completa",
       logIn: "Entrar",
       createAccount: "Crear cuenta",
-      logOut: "Cerrar sesión"
+      logOut: "Cerrar sesión",
+      forgotPassword: "¿Olvidaste tu contraseña?"
     },
     auth: {
       ...enUSMessages.play.auth,
       heading: "Identidad",
       modeLegend: "Modo de autenticación",
       username: "Usuario",
+      email: "Correo electrónico",
       password: "Contraseña",
       signedInAs: "Sesión iniciada como",
       role: "Rol",
@@ -332,6 +334,8 @@ export const esESMessages = {
     },
     authHelper:
       "Los nombres de usuario admiten letras, números, guiones bajos y guiones. Las contraseñas deben tener al menos 10 caracteres.",
+    registerEmailHelper:
+      "Agrega un correo electrónico si quieres poder restablecer tu contraseña más adelante.",
     authErrors: {
       authenticationFailed: "La autenticación falló",
       logoutFailed: "No se pudo cerrar la sesión"
@@ -371,6 +375,25 @@ export const esESMessages = {
       completionMessage: "Laberinto completado en {elapsed}.",
       submissionAccepted:
         "Resultado guardado a las {acceptedAt}. Estado de verificación: {status}."
+    },
+    passwordReset: {
+      title: "Restablecer contraseña",
+      intro:
+        "Solicita un enlace para restablecer la contraseña o introduce un token de restablecimiento para elegir una nueva.",
+      requestHeading: "Solicitar enlace",
+      requestIntro:
+        "Introduce tu usuario o correo electrónico. Si existe una cuenta apta, se enviará un enlace de restablecimiento.",
+      requestField: "Usuario o correo electrónico",
+      requestAction: "Enviar enlace",
+      requestSuccess:
+        "Si existe una cuenta apta, se ha enviado un enlace para restablecer la contraseña.",
+      resetHeading: "Elegir nueva contraseña",
+      resetIntro: "Introduce una nueva contraseña para este token de restablecimiento.",
+      resetAction: "Restablecer contraseña",
+      resetSuccess:
+        "Tu contraseña se ha restablecido. Puedes volver al reto e iniciar sesión.",
+      tokenMissing:
+        "No se encontró un token de restablecimiento en el enlace. Solicita un nuevo correo de restablecimiento abajo."
     },
     verification: {
       pending: "pendiente",

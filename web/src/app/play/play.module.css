@@ -189,12 +189,18 @@
 
 :global(.auth-panel-actions > .primary-button),
 :global(.auth-panel-actions > .secondary-link),
-:global(.auth-panel-actions > .secondary-button) {
+:global(.auth-panel-actions > .secondary-button),
+:global(.auth-panel-actions > .auth-panel-action-spacer) {
   margin: 0;
 }
 
 :global(.auth-panel-actions-authenticated) {
   grid-template-columns: repeat(auto-fit, minmax(0, max-content));
+}
+
+:global(.auth-panel-action-spacer) {
+  display: block;
+  min-height: 44px;
 }
 
 :global(.leaderboard-list) {

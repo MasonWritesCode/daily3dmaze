@@ -211,11 +211,11 @@ func TestResolveOAuthUserCreatesAndLinksNewUser(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		INSERT INTO users (username, password_hash, role)
-		VALUES ($1, $2, $3)
+		INSERT INTO users (username, email, password_hash, role)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, username, role
 	`)).
-		WithArgs("mason", sqlmock.AnyArg(), roleUser).
+		WithArgs("mason", sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason", roleUser))
 
 	mock.ExpectExec(regexp.QuoteMeta(`

@@ -424,7 +424,7 @@ func (a app) resolveOAuthUser(r *http.Request, identity oauthIdentity) (currentU
 		return currentUser{}, err
 	}
 
-	user, err := a.createUser(username, passwordHash)
+	user, err := a.createUser(username, identity.Email, passwordHash)
 	if err != nil {
 		return currentUser{}, err
 	}
