@@ -49,6 +49,14 @@ type githubUserResponse struct {
 	Email *string `json:"email"`
 }
 
+type googleUserResponse struct {
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
+	GivenName     string `json:"given_name"`
+}
+
 type oauthStateCookieValue struct {
 	Provider string `json:"provider"`
 	State    string `json:"state"`
@@ -68,6 +76,20 @@ func configuredOAuthProviders() map[string]oauthProvider {
 			TokenURL:     "https://github.com/login/oauth/access_token",
 			UserURL:      "https://api.github.com/user",
 			Scopes:       []string{"read:user", "user:email"},
+		}
+	}
+
+	googleClientID := strings.TrimSpace(os.Getenv("GOOGLE_OAUTH_CLIENT_ID"))
+	googleClientSecret := strings.TrimSpace(os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"))
+	if googleClientID != "" && googleClientSecret != "" {
+		providers["google"] = oauthProvider{
+			Name:         "google",
+			ClientID:     googleClientID,
+			ClientSecret: googleClientSecret,
+			AuthorizeURL: "https://accounts.google.com/o/oauth2/v2/auth",
+			TokenURL:     "https://oauth2.googleapis.com/token",
+			UserURL:      "https://openidconnect.googleapis.com/v1/userinfo",
+			Scopes:       []string{"openid", "profile", "email"},
 		}
 	}
 
@@ -274,6 +296,7 @@ func exchangeOAuthCode(client *http.Client, provider oauthProvider, code, redire
 	form.Set("client_secret", provider.ClientSecret)
 	form.Set("code", code)
 	form.Set("redirect_uri", redirectURL)
+	form.Set("grant_type", "authorization_code")
 
 	request, err := http.NewRequest(http.MethodPost, provider.TokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -341,6 +364,35 @@ func fetchOAuthIdentity(client *http.Client, provider oauthProvider, accessToken
 			Provider:       provider.Name,
 			ProviderUserID: strconv.FormatInt(payload.ID, 10),
 			Username:       payload.Login,
+			Email:          email,
+		}, nil
+	case "google":
+		var payload googleUserResponse
+		if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+			return oauthIdentity{}, err
+		}
+		if strings.TrimSpace(payload.Sub) == "" {
+			return oauthIdentity{}, errors.New("google oauth response is missing required identity fields")
+		}
+
+		email := strings.TrimSpace(payload.Email)
+		username := strings.TrimSpace(payload.Name)
+		if email != "" {
+			if localPart, _, ok := strings.Cut(email, "@"); ok && strings.TrimSpace(localPart) != "" {
+				username = strings.TrimSpace(localPart)
+			}
+		}
+		if username == "" {
+			username = strings.TrimSpace(payload.GivenName)
+		}
+		if username == "" {
+			username = "google_user"
+		}
+
+		return oauthIdentity{
+			Provider:       provider.Name,
+			ProviderUserID: payload.Sub,
+			Username:       username,
 			Email:          email,
 		}, nil
 	default:

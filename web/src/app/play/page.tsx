@@ -23,7 +23,7 @@ import {
   type ReplayTraceEvent,
   type RunSubmissionResponse
 } from "../../lib/api";
-import { githubOAuthEnabled, oauthStartEndpoint } from "../../lib/config";
+import { githubOAuthEnabled, googleOAuthEnabled, oauthStartEndpoint } from "../../lib/config";
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import {
   DIRECTION_ORDER,
@@ -1036,6 +1036,11 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
             {githubOAuthEnabled && (
               <a href={oauthStartEndpoint("github")} className="secondary-link">
                 {uiText.auth.continueWithGitHub}
+              </a>
+            )}
+            {googleOAuthEnabled && (
+              <a href={oauthStartEndpoint("google")} className="secondary-link">
+                {uiText.auth.continueWithGoogle}
               </a>
             )}
           </div>

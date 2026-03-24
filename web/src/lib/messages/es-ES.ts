@@ -326,7 +326,8 @@ export const esESMessages = {
       creatingAccount: "Creando cuenta...",
       loginSuccess: "Sesión iniciada correctamente.",
       registerSuccess: "Cuenta creada e iniciada.",
-      continueWithGitHub: "Continuar con GitHub"
+      continueWithGitHub: "Continuar con GitHub",
+      continueWithGoogle: "Continuar con Google"
     },
     authHelper:
       "Los nombres de usuario admiten letras, números, guiones bajos y guiones. Las contraseñas deben tener al menos 10 caracteres.",

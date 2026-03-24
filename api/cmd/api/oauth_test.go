@@ -19,6 +19,10 @@ func TestNormalizeOAuthUsername(t *testing.T) {
 	if got := normalizeOAuthUsername("!!!", "github"); got != "github_user" {
 		t.Fatalf("expected provider fallback username, got %q", got)
 	}
+
+	if got := normalizeOAuthUsername("Mason.Writes+Code", "google"); got != "mason_writes_code" {
+		t.Fatalf("expected normalized google username, got %q", got)
+	}
 }
 
 func TestOAuthHandlerRejectsInvalidState(t *testing.T) {

@@ -41,6 +41,9 @@ Current helper commands:
 Optional OAuth configuration:
 - `GITHUB_OAUTH_CLIENT_ID`
 - `GITHUB_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
 - `NEXT_PUBLIC_GITHUB_OAUTH_ENABLED=true`
+- `NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED=true`
 
 At this stage, Compose is only responsible for local infrastructure services.

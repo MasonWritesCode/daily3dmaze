@@ -494,7 +494,8 @@ export const enUSMessages = {
       creatingAccount: "Creating account...",
       loginSuccess: "Signed in successfully.",
       registerSuccess: "Account created and signed in.",
-      continueWithGitHub: "Continue with GitHub"
+      continueWithGitHub: "Continue with GitHub",
+      continueWithGoogle: "Continue with Google"
     },
     authHelper:
       "Usernames support letters, numbers, underscores, and hyphens. Passwords must be at least 10 characters long.",

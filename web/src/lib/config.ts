@@ -50,6 +50,8 @@ export const meEndpoint = `${apiBaseUrl}/api/me`;
 export const adminRunReviewsEndpoint = `${apiBaseUrl}/api/admin/run-reviews`;
 export const githubOAuthEnabled =
   process.env.NEXT_PUBLIC_GITHUB_OAUTH_ENABLED === "true";
+export const googleOAuthEnabled =
+  process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true";
 
 export function oauthStartEndpoint(provider: string): string {
   return `${apiBaseUrl}/api/auth/oauth/${provider}/start`;
