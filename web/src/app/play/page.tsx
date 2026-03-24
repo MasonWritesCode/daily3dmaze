@@ -9,6 +9,14 @@ import { useEffect, useRef, useState } from "react";
 import FirstPersonView from "../../components/game/FirstPersonView";
 import RoleBadge from "../../components/RoleBadge";
 import {
+  getLeaderboardRankTone,
+  getLocalizedDirectionLabel,
+  getLocalizedRoleLabel,
+  getLocalizedVerificationLabel,
+  mergeRunStatusIntoSubmissionSummary,
+  shouldPollRunVerification
+} from "./helpers";
+import {
   authenticate,
   fetchCurrentUser,
   fetchDailyMaze,
@@ -81,88 +89,6 @@ interface CollapsiblePanelProps {
   title: string;
   defaultOpen?: boolean;
   children: ReactNode;
-}
-
-function getLocalizedDirectionLabel(
-  directionName: string | undefined,
-  directions: {
-    north: string;
-    east: string;
-    south: string;
-    west: string;
-  }
-): string {
-  switch (directionName) {
-    case "North":
-      return directions.north;
-    case "East":
-      return directions.east;
-    case "South":
-      return directions.south;
-    case "West":
-      return directions.west;
-    default:
-      return directionName ?? "";
-  }
-}
-
-function getLocalizedRoleLabel(
-  role: string | undefined,
-  labels: {
-    user: string;
-    moderator: string;
-    admin: string;
-  }
-): string {
-  switch (role) {
-    case "user":
-      return labels.user;
-    case "moderator":
-      return labels.moderator;
-    case "admin":
-      return labels.admin;
-    default:
-      return role ?? "";
-  }
-}
-
-function getLocalizedVerificationLabel(
-  status: string | undefined,
-  labels: {
-    pending: string;
-    verified: string;
-    suspicious: string;
-    invalid: string;
-  }
-): string {
-  switch (status) {
-    case "pending":
-      return labels.pending;
-    case "verified":
-      return labels.verified;
-    case "suspicious":
-      return labels.suspicious;
-    case "invalid":
-      return labels.invalid;
-    default:
-      return status ?? "";
-  }
-}
-
-function getLeaderboardRankTone(rank: number): string {
-  if (rank === 1) {
-    return "gold";
-  }
-
-  if (rank === 2) {
-    return "silver";
-  }
-
-  if (rank === 3) {
-    return "bronze";
-  }
-
-  return "standard";
 }
 
 function CollapsiblePanel({ title, defaultOpen = false, children }: CollapsiblePanelProps) {
@@ -334,11 +260,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   }, [finishTime, hasFinished, maze.date, maze.seed, moveCount, onRunSubmitted, runStartTime]);
 
   useEffect(() => {
-    if (submissionStatus !== "submitted" || !submissionSummary) {
-      return undefined;
-    }
-
-    if (submissionSummary.verificationStatus !== "pending") {
+    if (!shouldPollRunVerification(submissionStatus, submissionSummary)) {
       return undefined;
     }
 
@@ -355,14 +277,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
 
         setSubmissionSummary((currentSummary) =>
           currentSummary
-            ? {
-                ...currentSummary,
-                acceptedAt: latestStatus.acceptedAt,
-                suspicionScore: latestStatus.suspicionScore,
-                suspicionReasons: latestStatus.suspicionReasons,
-                verificationStatus: latestStatus.verificationStatus,
-                verificationNotes: latestStatus.verificationNotes
-              }
+            ? mergeRunStatusIntoSubmissionSummary(currentSummary, latestStatus)
             : currentSummary
         );
 

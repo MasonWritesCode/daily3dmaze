@@ -4,6 +4,8 @@
   "packageManager": "pnpm@10.28.0",
   "scripts": {
     "dev": "next dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "build": "next build",
     "start": "next start"
   },
@@ -13,9 +15,14 @@
     "react-dom": "latest"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^5.9.3"
+    "jsdom": "^29.0.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.1"
   }
 }

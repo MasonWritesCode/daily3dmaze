@@ -16,150 +16,23 @@ import {
 } from "../../../lib/api";
 import { formatElapsedTime } from "../../../lib/game/maze";
 import { useLocale } from "../../../lib/locale";
+import {
+  filterRunReviewEntries,
+  getLocalizedReviewStatus,
+  getLocalizedRoleLabel,
+  getLocalizedSuspicionReason,
+  getLocalizedVerificationStatus,
+  getReviewTone,
+  getSuspicionTone,
+  getVerificationTone,
+  sortRunReviewEntries,
+  type ReviewStatusFilter,
+  type SortMode,
+  type VerificationFilter
+} from "./helpers";
 
 type PageStatus = "loading" | "ready" | "error";
 type RecomputeStatus = "idle" | "submitting" | "success" | "error";
-type VerificationFilter = "all" | "pending" | "verified" | "suspicious" | "invalid";
-type ReviewStatusFilter =
-  | "all"
-  | "unreviewed"
-  | "reviewed_clean"
-  | "confirmed_suspicious";
-type SortMode = "risk" | "newest" | "oldest-pending";
-
-function getSuspicionTone(score: number): string {
-  if (score >= 50) {
-    return "high";
-  }
-
-  if (score >= 20) {
-    return "medium";
-  }
-
-  return "low";
-}
-
-function getVerificationTone(status: string): string {
-  if (status === "pending") {
-    return "pending";
-  }
-
-  if (status === "invalid") {
-    return "high";
-  }
-
-  if (status === "suspicious") {
-    return "medium";
-  }
-
-  return "low";
-}
-
-function getLocalizedRoleLabel(
-  role: string | undefined,
-  labels: {
-    user: string;
-    moderator: string;
-    admin: string;
-  }
-): string {
-  switch (role) {
-    case "user":
-      return labels.user;
-    case "moderator":
-      return labels.moderator;
-    case "admin":
-      return labels.admin;
-    default:
-      return role ?? "";
-  }
-}
-
-function getLocalizedVerificationStatus(
-  status: string,
-  labels: {
-    pending: string;
-    verified: string;
-    suspicious: string;
-    invalid: string;
-  }
-): string {
-  switch (status) {
-    case "pending":
-      return labels.pending;
-    case "verified":
-      return labels.verified;
-    case "suspicious":
-      return labels.suspicious;
-    case "invalid":
-      return labels.invalid;
-    default:
-      return status;
-  }
-}
-
-function getLocalizedReviewStatus(
-  status: string,
-  labels: {
-    unreviewed: string;
-    reviewedClean: string;
-    confirmedSuspicious: string;
-  }
-): string {
-  if (status === "reviewed_clean") {
-    return labels.reviewedClean;
-  }
-
-  if (status === "confirmed_suspicious") {
-    return labels.confirmedSuspicious;
-  }
-
-  return labels.unreviewed;
-}
-
-function getLocalizedSuspicionReason(
-  reason: string,
-  labels: {
-    replayLengthMismatch: string;
-    timestampDrift: string;
-    highActionDensity: string;
-    rapidRepeatedTurns: string;
-    blockedMoveAttempts: string;
-    replayDoesNotReachExit: string;
-    actionsAfterExit: string;
-  }
-): string {
-  switch (reason) {
-    case "replay_length_mismatch":
-      return labels.replayLengthMismatch;
-    case "timestamp_drift":
-      return labels.timestampDrift;
-    case "high_action_density":
-      return labels.highActionDensity;
-    case "rapid_repeated_turns":
-      return labels.rapidRepeatedTurns;
-    case "blocked_move_attempts":
-      return labels.blockedMoveAttempts;
-    case "replay_does_not_reach_exit":
-      return labels.replayDoesNotReachExit;
-    case "actions_after_exit":
-      return labels.actionsAfterExit;
-    default:
-      return reason;
-  }
-}
-
-function getReviewTone(status: string): string {
-  if (status === "confirmed_suspicious") {
-    return "high";
-  }
-
-  if (status === "reviewed_clean") {
-    return "low";
-  }
-
-  return "pending";
-}
 
 export default function AdminReviewsPage() {
   const { formatCount, formatDateTime, messages } = useLocale();
@@ -232,81 +105,21 @@ export default function AdminReviewsPage() {
     };
   }, []);
 
-  const filteredEntries = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredEntries = useMemo(
+    () =>
+      filterRunReviewEntries(entries, {
+        verificationFilter,
+        reviewStatusFilter,
+        showOnlyStalePending,
+        searchQuery
+      }),
+    [entries, reviewStatusFilter, searchQuery, showOnlyStalePending, verificationFilter]
+  );
 
-    return entries.filter((entry) => {
-      if (verificationFilter !== "all" && entry.verificationStatus !== verificationFilter) {
-        return false;
-      }
-
-      if (reviewStatusFilter !== "all" && entry.reviewStatus !== reviewStatusFilter) {
-        return false;
-      }
-
-      if (showOnlyStalePending && !entry.isStalePending) {
-        return false;
-      }
-
-      if (!normalizedQuery) {
-        return true;
-      }
-
-      const haystack = [
-        entry.username || "anonymous",
-        entry.date,
-        entry.seed,
-        entry.verificationStatus,
-        entry.reviewStatus,
-        entry.reviewNotes
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(normalizedQuery);
-    });
-  }, [entries, reviewStatusFilter, searchQuery, showOnlyStalePending, verificationFilter]);
-
-  const sortedEntries = useMemo(() => {
-    const statusWeight = (status: string) =>
-      status === "pending"
-        ? 4
-        : status === "invalid"
-          ? 3
-          : status === "suspicious"
-            ? 2
-            : 1;
-
-    return [...filteredEntries].sort((left, right) => {
-      if (sortMode === "newest") {
-        return right.acceptedAt.localeCompare(left.acceptedAt);
-      }
-
-      if (sortMode === "oldest-pending") {
-        if (left.verificationStatus === "pending" && right.verificationStatus !== "pending") {
-          return -1;
-        }
-
-        if (right.verificationStatus === "pending" && left.verificationStatus !== "pending") {
-          return 1;
-        }
-
-        return left.acceptedAt.localeCompare(right.acceptedAt);
-      }
-
-      const leftStatusWeight = statusWeight(left.verificationStatus);
-      const rightStatusWeight = statusWeight(right.verificationStatus);
-      if (rightStatusWeight !== leftStatusWeight) {
-        return rightStatusWeight - leftStatusWeight;
-      }
-
-      if (right.suspicionScore !== left.suspicionScore) {
-        return right.suspicionScore - left.suspicionScore;
-      }
-
-      return right.acceptedAt.localeCompare(left.acceptedAt);
-    });
-  }, [filteredEntries, sortMode]);
+  const sortedEntries = useMemo(
+    () => sortRunReviewEntries(filteredEntries, sortMode),
+    [filteredEntries, sortMode]
+  );
 
   async function handleRecompute() {
     setRecomputeStatus("submitting");

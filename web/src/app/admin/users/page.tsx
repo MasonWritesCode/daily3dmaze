@@ -16,28 +16,13 @@ import {
   type AuthUser
 } from "../../../lib/api";
 import { useLocale } from "../../../lib/locale";
+import {
+  filterAdminUserEntries,
+  getLocalizedAdminRoleLabel
+} from "./helpers";
 
 type PageStatus = "loading" | "ready" | "error";
 type RowStatus = "idle" | "submitting" | "success" | "error";
-
-function getLocalizedAdminRoleLabel(
-  role: string,
-  labels: {
-    admin: string;
-    moderator: string;
-    standardUser: string;
-  }
-): string {
-  if (role === ROLE_ADMIN) {
-    return labels.admin;
-  }
-
-  if (role === ROLE_MODERATOR) {
-    return labels.moderator;
-  }
-
-  return labels.standardUser;
-}
 
 export default function AdminUsersPage() {
   const { formatCount, formatDateTime, messages } = useLocale();
@@ -100,19 +85,10 @@ export default function AdminUsersPage() {
     };
   }, []);
 
-  const filteredEntries = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return entries;
-    }
-
-    return entries.filter((entry) =>
-      [entry.username, entry.role, entry.isBanned ? "banned" : "active"]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedQuery)
-    );
-  }, [entries, searchQuery]);
+  const filteredEntries = useMemo(
+    () => filterAdminUserEntries(entries, searchQuery),
+    [entries, searchQuery]
+  );
 
   function patchEntry(username: string, patch: Partial<AdminUserEntry>) {
     setEntries((currentEntries) =>
