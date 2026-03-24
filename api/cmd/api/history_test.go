@@ -51,6 +51,7 @@ func TestHistoryHandlerReturnsRecentEntries(t *testing.T) {
 				runs.run_date::text AS run_date,
 				COUNT(*) OVER (PARTITION BY runs.run_date) AS submission_count,
 				COALESCE(users.username, '') AS username,
+				COALESCE(users.role, '') AS role,
 				runs.move_count,
 				runs.elapsed_time_ms,
 				runs.accepted_at,
@@ -63,16 +64,16 @@ func TestHistoryHandlerReturnsRecentEntries(t *testing.T) {
 			WHERE runs.run_date >= $1::date AND runs.run_date <= $2::date
 				AND runs.verification_status = 'verified'
 		)
-		SELECT run_date, submission_count, username, move_count, elapsed_time_ms, accepted_at
+		SELECT run_date, submission_count, username, role, move_count, elapsed_time_ms, accepted_at
 		FROM ranked_runs
 		WHERE rank = 1
 		ORDER BY run_date DESC
 	`)).
 		WithArgs(oldestDate, newestDate).
 		WillReturnRows(
-			sqlmock.NewRows([]string{"run_date", "submission_count", "username", "move_count", "elapsed_time_ms", "accepted_at"}).
-				AddRow("2026-03-21", 3, "mason_dev", 42, 12345, now).
-				AddRow("2026-03-20", 1, "", 55, 16000, now.Add(-24*time.Hour)),
+			sqlmock.NewRows([]string{"run_date", "submission_count", "username", "role", "move_count", "elapsed_time_ms", "accepted_at"}).
+				AddRow("2026-03-21", 3, "mason_dev", "admin", 42, 12345, now).
+				AddRow("2026-03-20", 1, "", "", 55, 16000, now.Add(-24*time.Hour)),
 		)
 
 	entries, err := application.loadHistory(3, now)
@@ -90,6 +91,9 @@ func TestHistoryHandlerReturnsRecentEntries(t *testing.T) {
 
 	if entries[0].BestRun == nil || entries[0].BestRun.Username != "mason_dev" {
 		t.Fatalf("expected best run for first entry, got %#v", entries[0].BestRun)
+	}
+	if entries[0].BestRun == nil || entries[0].BestRun.Role != "admin" {
+		t.Fatalf("expected best run role admin, got %#v", entries[0].BestRun)
 	}
 
 	if entries[2].Date != "2026-03-19" || entries[2].SubmissionCount != 0 || entries[2].BestRun != nil {
@@ -118,6 +122,7 @@ func TestHistoryHandlerEncodesResponse(t *testing.T) {
 				runs.run_date::text AS run_date,
 				COUNT(*) OVER (PARTITION BY runs.run_date) AS submission_count,
 				COALESCE(users.username, '') AS username,
+				COALESCE(users.role, '') AS role,
 				runs.move_count,
 				runs.elapsed_time_ms,
 				runs.accepted_at,
@@ -130,13 +135,13 @@ func TestHistoryHandlerEncodesResponse(t *testing.T) {
 			WHERE runs.run_date >= $1::date AND runs.run_date <= $2::date
 				AND runs.verification_status = 'verified'
 		)
-		SELECT run_date, submission_count, username, move_count, elapsed_time_ms, accepted_at
+		SELECT run_date, submission_count, username, role, move_count, elapsed_time_ms, accepted_at
 		FROM ranked_runs
 		WHERE rank = 1
 		ORDER BY run_date DESC
 	`)).
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"run_date", "submission_count", "username", "move_count", "elapsed_time_ms", "accepted_at"}))
+		WillReturnRows(sqlmock.NewRows([]string{"run_date", "submission_count", "username", "role", "move_count", "elapsed_time_ms", "accepted_at"}))
 
 	request := httptest.NewRequest(http.MethodGet, "/api/history?limit=2", nil)
 	recorder := httptest.NewRecorder()
@@ -173,7 +178,7 @@ func TestHistoryDayHandlerReturnsChallengeAndLeaderboard(t *testing.T) {
 	acceptedAt := time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT run_date::text, COALESCE(users.username, ''), seed, move_count, elapsed_time_ms, accepted_at
+		SELECT run_date::text, COALESCE(users.username, ''), COALESCE(users.role, ''), seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
 		WHERE run_date = $1::date AND verification_status = 'verified'
@@ -182,8 +187,8 @@ func TestHistoryDayHandlerReturnsChallengeAndLeaderboard(t *testing.T) {
 	`)).
 		WithArgs("2026-03-21").
 		WillReturnRows(
-			sqlmock.NewRows([]string{"run_date", "username", "seed", "move_count", "elapsed_time_ms", "accepted_at"}).
-				AddRow("2026-03-21", "mason_dev", "daily3dmaze:2026-03-21", 42, 12345, acceptedAt),
+			sqlmock.NewRows([]string{"run_date", "username", "role", "seed", "move_count", "elapsed_time_ms", "accepted_at"}).
+				AddRow("2026-03-21", "mason_dev", "moderator", "daily3dmaze:2026-03-21", 42, 12345, acceptedAt),
 		)
 
 	request := httptest.NewRequest(http.MethodGet, "/api/history/day?date=2026-03-21", nil)
@@ -213,6 +218,9 @@ func TestHistoryDayHandlerReturnsChallengeAndLeaderboard(t *testing.T) {
 
 	if payload.Leaderboard.Entries[0].Rank != 1 {
 		t.Fatalf("expected ranked leaderboard entry, got %#v", payload.Leaderboard.Entries[0])
+	}
+	if payload.Leaderboard.Entries[0].Role != "moderator" {
+		t.Fatalf("expected leaderboard role moderator, got %#v", payload.Leaderboard.Entries[0])
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

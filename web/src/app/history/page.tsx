@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import RoleBadge from "../../components/RoleBadge";
 import { fetchHistory, type HistoryEntry } from "../../lib/api";
 import { formatElapsedTime } from "../../lib/game/maze";
 import { useLocale } from "../../lib/locale";
@@ -137,12 +138,18 @@ export default function HistoryPage() {
                                   {segment}
                                   {index < segments.length - 1 &&
                                     (entry.bestRun?.username ? (
-                                      <Link
-                                        href={`/profile/${entry.bestRun.username}`}
-                                        className="inline-link"
-                                      >
-                                        {entry.bestRun.username}
-                                      </Link>
+                                      <span className="player-link-with-badge">
+                                        <Link
+                                          href={`/profile/${entry.bestRun.username}`}
+                                          className="inline-link"
+                                        >
+                                          {entry.bestRun.username}
+                                        </Link>
+                                        <RoleBadge
+                                          role={entry.bestRun.role}
+                                          labels={messages.play.auth.roles}
+                                        />
+                                      </span>
                                     ) : (
                                       uiText.anonymous
                                     ))}

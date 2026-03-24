@@ -15,6 +15,7 @@ const (
 
 type historyBestRun struct {
 	Username      string `json:"username"`
+	Role          string `json:"role"`
 	MoveCount     int    `json:"moveCount"`
 	ElapsedTimeMs int    `json:"elapsedTimeMs"`
 	AcceptedAt    string `json:"acceptedAt"`
@@ -157,6 +158,7 @@ func (a app) loadHistory(limit int, now time.Time) ([]historyEntry, error) {
 				runs.run_date::text AS run_date,
 				COUNT(*) OVER (PARTITION BY runs.run_date) AS submission_count,
 				COALESCE(users.username, '') AS username,
+				COALESCE(users.role, '') AS role,
 				runs.move_count,
 				runs.elapsed_time_ms,
 				runs.accepted_at,
@@ -169,7 +171,7 @@ func (a app) loadHistory(limit int, now time.Time) ([]historyEntry, error) {
 			WHERE runs.run_date >= $1::date AND runs.run_date <= $2::date
 				AND runs.verification_status = 'verified'
 		)
-		SELECT run_date, submission_count, username, move_count, elapsed_time_ms, accepted_at
+		SELECT run_date, submission_count, username, role, move_count, elapsed_time_ms, accepted_at
 		FROM ranked_runs
 		WHERE rank = 1
 		ORDER BY run_date DESC
@@ -192,6 +194,7 @@ func (a app) loadHistory(limit int, now time.Time) ([]historyEntry, error) {
 			&runDate,
 			&submissionCount,
 			&bestRun.Username,
+			&bestRun.Role,
 			&bestRun.MoveCount,
 			&bestRun.ElapsedTimeMs,
 			&acceptedAt,

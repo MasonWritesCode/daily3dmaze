@@ -15,6 +15,7 @@ export type { ReplayTraceEvent } from "./game/maze";
 export interface LeaderboardEntry {
   rank: number;
   username: string;
+  role: string;
   date: string;
   seed: string;
   moveCount: number;
@@ -99,6 +100,7 @@ export interface PlayerProfile {
 
 export interface HistoryBestRun {
   username: string;
+  role: string;
   moveCount: number;
   elapsedTimeMs: number;
   acceptedAt: string;

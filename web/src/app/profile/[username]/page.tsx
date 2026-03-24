@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
+import RoleBadge from "../../../components/RoleBadge";
 import {
   fetchPlayerProfile,
   type PlayerProfile
@@ -84,7 +85,10 @@ export default function ProfilePage() {
                 <div className="metadata-row">
                   <dt>{uiText.labels.username}</dt>
                   <dd>
-                    <code>{profile.user.username}</code>
+                    <span className="player-link-with-badge">
+                      <code>{profile.user.username}</code>
+                      <RoleBadge role={profile.user.role} labels={messages.play.auth.roles} />
+                    </span>
                   </dd>
                 </div>
                 <div className="metadata-row">

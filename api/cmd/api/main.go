@@ -67,6 +67,7 @@ type runSubmissionResponse struct {
 type leaderboardEntry struct {
 	Rank          int    `json:"rank"`
 	Username      string `json:"username"`
+	Role          string `json:"role"`
 	Date          string `json:"date"`
 	Seed          string `json:"seed"`
 	MoveCount     int    `json:"moveCount"`
@@ -1142,7 +1143,7 @@ func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
 	}
 
 	const query = `
-		SELECT run_date::text, COALESCE(users.username, ''), seed, move_count, elapsed_time_ms, accepted_at
+		SELECT run_date::text, COALESCE(users.username, ''), COALESCE(users.role, ''), seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
 		WHERE run_date = $1::date AND verification_status = 'verified'
@@ -1161,7 +1162,7 @@ func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
 		var entry leaderboardEntry
 		var acceptedAt time.Time
 
-		if err := rows.Scan(&entry.Date, &entry.Username, &entry.Seed, &entry.MoveCount, &entry.ElapsedTimeMs, &acceptedAt); err != nil {
+		if err := rows.Scan(&entry.Date, &entry.Username, &entry.Role, &entry.Seed, &entry.MoveCount, &entry.ElapsedTimeMs, &acceptedAt); err != nil {
 			return nil, err
 		}
 

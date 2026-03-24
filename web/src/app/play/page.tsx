@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import FirstPersonView from "../../components/game/FirstPersonView";
+import RoleBadge from "../../components/RoleBadge";
 import {
   authenticate,
   fetchCurrentUser,
@@ -806,9 +807,12 @@ function Leaderboard({ entries }: LeaderboardProps) {
               <span>#{entry.rank}</span>
               <span>
                 {entry.username ? (
-                  <Link href={`/profile/${entry.username}`} className="inline-link">
-                    {entry.username}
-                  </Link>
+                  <span className="player-link-with-badge">
+                    <Link href={`/profile/${entry.username}`} className="inline-link">
+                      {entry.username}
+                    </Link>
+                    <RoleBadge role={entry.role} labels={uiText.auth.roles} />
+                  </span>
                 ) : (
                   uiText.leaderboard.anonymous
                 )}
@@ -891,12 +895,12 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
         <>
           <p className="body-copy">
             {uiText.auth.signedInAs}{" "}
-            <Link href={`/profile/${user.username}`} className="inline-link">
-              <code>{user.username}</code>
-            </Link>
-            {" "}(
-            {uiText.auth.role}:{" "}
-            <code>{getLocalizedRoleLabel(user.role, uiText.auth.roles)}</code>)
+            <span className="player-link-with-badge">
+              <Link href={`/profile/${user.username}`} className="inline-link">
+                <code>{user.username}</code>
+              </Link>
+              <RoleBadge role={user.role} labels={uiText.auth.roles} />
+            </span>
           </p>
           <div className="actions">
             {roleAllows(user.role, ROLE_MODERATOR) && (

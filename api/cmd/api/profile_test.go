@@ -46,6 +46,7 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 		SELECT
 			users.id,
 			users.username,
+			users.role,
 			users.created_at,
 			COUNT(runs.id),
 			COUNT(DISTINCT runs.run_date),
@@ -59,8 +60,8 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 	`)).
 		WithArgs("mason_dev").
 		WillReturnRows(
-			sqlmock.NewRows([]string{"id", "username", "created_at", "count", "days", "min", "avg", "max"}).
-				AddRow(7, "mason_dev", createdAt, 2, 2, 12345, 13000.0, acceptedAt),
+			sqlmock.NewRows([]string{"id", "username", "role", "created_at", "count", "days", "min", "avg", "max"}).
+				AddRow(7, "mason_dev", "admin", createdAt, 2, 2, 12345, 13000.0, acceptedAt),
 		)
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
@@ -108,6 +109,9 @@ func TestProfileHandlerReturnsProfileAndRecentRuns(t *testing.T) {
 
 	if payload.User.Username != "mason_dev" {
 		t.Fatalf("expected username %q, got %q", "mason_dev", payload.User.Username)
+	}
+	if payload.User.Role != "admin" {
+		t.Fatalf("expected role %q, got %q", "admin", payload.User.Role)
 	}
 
 	if payload.Stats.TotalRuns != 2 {

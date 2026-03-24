@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import RoleBadge from "../../../components/RoleBadge";
 import {
   fetchHistoryDay,
   type HistoryDayResponse
@@ -143,12 +144,15 @@ export default function HistoryDayPage() {
                       <span>#{entry.rank}</span>
                       <span>
                         {entry.username ? (
-                          <Link
-                            href={`/profile/${entry.username}`}
-                            className="inline-link"
-                          >
-                            {entry.username}
-                          </Link>
+                          <span className="player-link-with-badge">
+                            <Link
+                              href={`/profile/${entry.username}`}
+                              className="inline-link"
+                            >
+                              {entry.username}
+                            </Link>
+                            <RoleBadge role={entry.role} labels={messages.play.auth.roles} />
+                          </span>
                         ) : (
                           uiText.anonymous
                         )}

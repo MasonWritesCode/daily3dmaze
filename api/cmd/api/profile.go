@@ -21,6 +21,7 @@ type profileResponse struct {
 	User struct {
 		ID        int64  `json:"id"`
 		Username  string `json:"username"`
+		Role      string `json:"role"`
 		CreatedAt string `json:"createdAt"`
 	} `json:"user"`
 	Stats struct {
@@ -90,6 +91,7 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 		SELECT
 			users.id,
 			users.username,
+			users.role,
 			users.created_at,
 			COUNT(runs.id),
 			COUNT(DISTINCT runs.run_date),
@@ -115,6 +117,7 @@ func (a app) loadProfile(username string) (profileResponse, error) {
 	if err := a.db.QueryRow(userQuery, username).Scan(
 		&profile.User.ID,
 		&profile.User.Username,
+		&profile.User.Role,
 		&createdAt,
 		&totalRuns,
 		&daysPlayed,
