@@ -386,9 +386,9 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
 
     const requestFullscreenSupported =
       typeof document !== "undefined" &&
-      typeof document.fullscreenEnabled === "boolean" &&
-      document.fullscreenEnabled &&
-      typeof viewportRef.current?.requestFullscreen === "function";
+      typeof document.fullscreenEnabled !== "undefined" &&
+      document.fullscreenEnabled !== false &&
+      typeof document.documentElement?.requestFullscreen === "function";
 
     setSupportsFullscreen(requestFullscreenSupported);
 
@@ -747,10 +747,12 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
                 type="button"
                 className="secondary-button"
                 onClick={() => void handleFullscreenToggle()}
-            >
-              {isFullscreen ? uiText.actions.exitFullscreen : uiText.actions.fullscreen}
-            </button>
-          )}
+              >
+                {isFullscreen
+                  ? uiText.actions.exitFullscreen
+                  : uiText.actions.fullscreen}
+              </button>
+            )}
           </div>
           <div className="play-status-stack" aria-live="polite">
             {hasFinished ? (

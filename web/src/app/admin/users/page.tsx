@@ -159,8 +159,8 @@ export default function AdminUsersPage() {
       <div className="content-card content-card-wide">
         <p className="eyebrow">{uiText.eyebrow}</p>
         <h1>{uiText.title}</h1>
-        <p className="body-copy">{uiText.intro}</p>
-        <div className="actions admin-page-toolbar admin-users-toolbar">
+        <p className="body-copy page-intro">{uiText.intro}</p>
+        <div className="actions admin-page-toolbar admin-users-toolbar page-actions">
           <Link href="/admin/reviews" className="primary-link">
             {uiText.actions.reviewQueue}
           </Link>

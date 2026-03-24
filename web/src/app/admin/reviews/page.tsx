@@ -152,8 +152,8 @@ export default function AdminReviewsPage() {
       <div className="content-card content-card-wide">
         <p className="eyebrow">{uiText.eyebrow}</p>
         <h1>{uiText.title}</h1>
-        <p className="body-copy">{uiText.intro}</p>
-        <div className="actions admin-page-toolbar">
+        <p className="body-copy page-intro">{uiText.intro}</p>
+        <div className="actions admin-page-toolbar page-actions">
           <Link href="/play" className="primary-link">
             {uiText.actions.returnToChallenge}
           </Link>

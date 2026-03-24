@@ -56,7 +56,7 @@ export default function HistoryPage() {
       <div className="content-card">
         <p className="eyebrow">{uiText.eyebrow}</p>
         <h1>{uiText.title}</h1>
-        <p className="body-copy">{uiText.intro}</p>
+        <p className="body-copy page-intro">{uiText.intro}</p>
 
         {status === "loading" && (
           <p className="body-copy status-copy" aria-live="polite">
@@ -78,98 +78,111 @@ export default function HistoryPage() {
             {entries.length === 0 ? (
               <p className="body-copy">{uiText.empty}</p>
             ) : (
-            <div className="history-list" role="list" aria-label={uiText.listLabel}>
-              {entries.map((entry) => (
-                <article key={entry.date} className="history-card" role="listitem">
-                  <div className="history-card-header">
-                    <div>
-                      <p className="body-copy history-date">
-                        <Link href={`/history/${entry.date}`} className="inline-link">
-                          {entry.date}
-                        </Link>
-                      </p>
-                      <p className="body-copy history-title">
-                        <Link href={`/history/${entry.date}`} className="inline-link">
-                          {getDisplayTitle(entry.title)}
-                        </Link>
-                      </p>
+              <div className="history-list" role="list" aria-label={uiText.listLabel}>
+                {entries.map((entry) => (
+                  <article key={entry.date} className="history-card" role="listitem">
+                    <div className="history-card-header">
+                      <div>
+                        <p className="body-copy history-date">
+                          <Link href={`/history/${entry.date}`} className="inline-link">
+                            {entry.date}
+                          </Link>
+                        </p>
+                        <p className="body-copy history-title">
+                          <Link href={`/history/${entry.date}`} className="inline-link">
+                            {getDisplayTitle(entry.title)}
+                          </Link>
+                        </p>
+                      </div>
+                      <span className="history-chip">
+                        {(entry.submissionCount === 1
+                          ? uiText.submissionCount.one
+                          : uiText.submissionCount.other
+                        ).replace("{count}", formatCount(entry.submissionCount))}
+                      </span>
                     </div>
-                    <span className="history-chip">
-                      {(entry.submissionCount === 1
-                        ? uiText.submissionCount.one
-                        : uiText.submissionCount.other
-                      ).replace("{count}", formatCount(entry.submissionCount))}
-                    </span>
-                  </div>
-                  <dl className="metadata-list">
-                    <div className="metadata-row">
-                      <dt>{uiText.labels.seed}</dt>
-                      <dd>
-                        <code>{entry.seed}</code>
-                      </dd>
-                    </div>
-                    <div className="metadata-row">
-                      <dt>{uiText.labels.size}</dt>
-                      <dd>
-                        {entry.size.width} x {entry.size.height}
-                      </dd>
-                    </div>
-                    <div className="metadata-row">
-                      <dt>{uiText.labels.bestRun}</dt>
-                      <dd>
-                        {entry.bestRun ? (
-                          <>
-                            {uiText.bestRunSummary
-                              .replace(
-                                "{player}",
-                                entry.bestRun.username ?? uiText.anonymous
-                              )
-                              .replace(
-                                "{elapsed}",
-                                formatElapsedTime(entry.bestRun.elapsedTimeMs)
-                              )
-                              .replace(
-                                "{moves}",
-                                formatCount(entry.bestRun.moveCount)
-                              )
-                              .split(entry.bestRun.username ?? uiText.anonymous)
-                              .map((segment, index, segments) => (
-                                <span key={`${entry.date}-best-run-${index}`}>
-                                  {segment}
-                                  {index < segments.length - 1 &&
-                                    (entry.bestRun?.username ? (
-                                      <span className="player-link-with-badge">
-                                        <Link
-                                          href={`/profile/${entry.bestRun.username}`}
-                                          className="inline-link"
-                                        >
-                                          {entry.bestRun.username}
-                                        </Link>
-                                        <RoleBadge
-                                          role={entry.bestRun.role}
-                                          labels={messages.play.auth.roles}
-                                        />
-                                      </span>
-                                    ) : (
-                                      uiText.anonymous
-                                    ))}
-                                </span>
-                              ))}
-                          </>
-                        ) : (
-                          uiText.bestRunNoSubmissions
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
-            </div>
+                    <dl className="metadata-list">
+                      <div className="metadata-row">
+                        <dt>{uiText.labels.seed}</dt>
+                        <dd>
+                          <code>{entry.seed}</code>
+                        </dd>
+                      </div>
+                      <div className="metadata-row">
+                        <dt>{uiText.labels.size}</dt>
+                        <dd>
+                          {entry.size.width} x {entry.size.height}
+                        </dd>
+                      </div>
+                      <div className="metadata-row">
+                        <dt>{uiText.labels.bestRun}</dt>
+                        <dd>
+                          {entry.bestRun ? (
+                            (() => {
+                              const bestRun = entry.bestRun;
+
+                              if (bestRun.username) {
+                                return (
+                                  <>
+                                    {uiText.bestRunSummary
+                                      .replace("{player}", bestRun.username)
+                                      .replace(
+                                        "{elapsed}",
+                                        formatElapsedTime(bestRun.elapsedTimeMs)
+                                      )
+                                      .replace(
+                                        "{moves}",
+                                        formatCount(bestRun.moveCount)
+                                      )
+                                      .split(bestRun.username)
+                                      .map((segment, index, segments) => (
+                                        <span key={`${entry.date}-best-run-${index}`}>
+                                          {segment}
+                                          {index < segments.length - 1 && (
+                                            <span className="player-link-with-badge">
+                                              <Link
+                                                href={`/profile/${bestRun.username}`}
+                                                className="inline-link"
+                                              >
+                                                {bestRun.username}
+                                              </Link>
+                                              <RoleBadge
+                                                role={bestRun.role}
+                                                labels={messages.play.auth.roles}
+                                              />
+                                            </span>
+                                          )}
+                                        </span>
+                                      ))}
+                                  </>
+                                );
+                              }
+
+                              return uiText.bestRunSummary
+                                .replace("{player}", uiText.anonymous)
+                                .replace(
+                                  "{elapsed}",
+                                  formatElapsedTime(bestRun.elapsedTimeMs)
+                                )
+                                .replace(
+                                  "{moves}",
+                                  formatCount(bestRun.moveCount)
+                                );
+                            })()
+                          ) : (
+                            uiText.bestRunNoSubmissions
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
             )}
           </section>
         )}
 
-        <div className="actions">
+        <div className="actions page-actions">
           <Link href="/play" className="primary-link">
             {uiText.actions.openPlay}
           </Link>

@@ -63,7 +63,7 @@ export default function HomePage() {
             priority
           />
         </div>
-        <div className="actions">
+        <div className="actions page-actions">
           <Link href="/play" className="primary-link">
             {uiText.actions.launchChallenge}
           </Link>

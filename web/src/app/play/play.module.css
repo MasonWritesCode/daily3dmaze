@@ -22,8 +22,9 @@
 
 :global(.play-focus-sidebar) {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   order: 2;
+  align-content: start;
 }
 
 :global(.play-focus-main) {
@@ -32,13 +33,18 @@
 }
 
 :global(.play-focus-actions) {
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
 }
 
 :global(.play-status-stack) {
   display: grid;
   gap: 8px;
   min-height: 92px;
+  width: 100%;
+  margin: 0;
 }
 
 :global(.play-win-state) {
@@ -103,7 +109,7 @@
   display: grid;
   grid-template-columns: minmax(180px, 1.2fr) repeat(2, minmax(120px, 0.8fr));
   gap: 10px;
-  margin: 0 0 10px;
+  margin: 0;
   min-height: 126px;
 }
 
@@ -139,7 +145,7 @@
 }
 
 :global(.gameplay-controls) {
-  margin: 0 0 10px;
+  margin: 0;
   padding: 8px 10px;
   border: 2px solid var(--panel-dark);
   border-top-color: var(--panel-darker);
@@ -168,6 +174,10 @@
 
 :global(.play-focus-sidebar .gameplay-hud-item-primary dd) {
   font-size: clamp(1.55rem, 2.8vw, 2rem);
+}
+
+:global(.play-focus-actions .secondary-button) {
+  width: 100%;
 }
 
 :global(.leaderboard-list) {
@@ -383,7 +393,7 @@
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 22px;
+  margin: 22px -24px -24px;
   padding: 8px 10px;
   border: 2px solid var(--panel-dark);
   border-top-color: var(--panel-darker);
@@ -459,7 +469,6 @@
   :global(.gameplay-hud) {
     grid-template-columns: 1fr;
     gap: 6px;
-    margin-bottom: 8px;
   }
 
   :global(.gameplay-hud-item),
@@ -480,7 +489,6 @@
   }
 
   :global(.gameplay-controls) {
-    margin-bottom: 8px;
     padding: 7px 8px;
     font-size: 0.76rem;
   }
@@ -538,7 +546,7 @@
   }
 
   :global(.window-footer) {
-    margin-top: 18px;
+    margin: 18px -16px -16px;
   }
 }
 

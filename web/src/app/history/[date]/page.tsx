@@ -191,11 +191,11 @@ export default function HistoryDayPage() {
           </>
         )}
 
-        <div className="actions">
+        <div className="actions page-actions">
           <Link href={`/play?date=${date}`} className="primary-link">
             {uiText.actions.play}
           </Link>
-          <Link href="/history" className="primary-link">
+          <Link href="/history" className="secondary-link">
             {uiText.actions.backToHistory}
           </Link>
           <Link href="/play" className="secondary-link">

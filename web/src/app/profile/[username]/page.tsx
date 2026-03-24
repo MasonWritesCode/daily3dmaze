@@ -176,7 +176,7 @@ export default function ProfilePage() {
           </>
         )}
 
-        <div className="actions">
+        <div className="actions page-actions">
           <Link href="/play" className="secondary-link">
             {uiText.actions.backToPlay}
           </Link>
