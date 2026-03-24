@@ -91,7 +91,7 @@ func (a app) historyDayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := a.listLeaderboard(date)
+	entries, err := a.listLeaderboard(date, "all")
 	if err != nil {
 		http.Error(w, "failed to load archive leaderboard", http.StatusInternalServerError)
 		return

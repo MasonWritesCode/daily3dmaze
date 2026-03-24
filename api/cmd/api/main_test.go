@@ -161,6 +161,26 @@ func TestRankLeaderboardEntries(t *testing.T) {
 	}
 }
 
+func TestParseLeaderboardScope(t *testing.T) {
+	t.Parallel()
+
+	scope, err := parseLeaderboardScope("")
+	if err != nil {
+		t.Fatalf("expected default scope, got error: %v", err)
+	}
+	if scope != "all" {
+		t.Fatalf("expected default scope all, got %q", scope)
+	}
+
+	if _, err := parseLeaderboardScope("first"); err != nil {
+		t.Fatalf("expected first scope to be valid, got %v", err)
+	}
+
+	if _, err := parseLeaderboardScope("weird"); err == nil {
+		t.Fatal("expected invalid leaderboard scope to fail")
+	}
+}
+
 func TestGenerateDailyMazeIsDeterministic(t *testing.T) {
 	t.Parallel()
 

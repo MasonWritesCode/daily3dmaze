@@ -15,7 +15,7 @@ export type { ReplayTraceEvent } from "./game/maze";
 export interface LeaderboardEntry {
   rank: number;
   username: string;
-  role: string;
+  role?: string;
   date: string;
   seed: string;
   moveCount: number;
@@ -25,6 +25,7 @@ export interface LeaderboardEntry {
 
 export interface LeaderboardResponse {
   date: string;
+  scope?: string;
   entries: LeaderboardEntry[];
 }
 
@@ -100,7 +101,7 @@ export interface PlayerProfile {
 
 export interface HistoryBestRun {
   username: string;
-  role: string;
+  role?: string;
   moveCount: number;
   elapsedTimeMs: number;
   acceptedAt: string;
@@ -247,9 +248,12 @@ export async function fetchDailyMaze(date?: string): Promise<DailyMaze> {
   return (await response.json()) as DailyMaze;
 }
 
-export async function fetchLeaderboard(date: string): Promise<LeaderboardResponse> {
+export async function fetchLeaderboard(
+  date: string,
+  scope: "all" | "first" = "all"
+): Promise<LeaderboardResponse> {
   const response = await fetch(
-    `${leaderboardEndpoint}?date=${encodeURIComponent(date)}`
+    `${leaderboardEndpoint}?date=${encodeURIComponent(date)}&scope=${encodeURIComponent(scope)}`
   );
 
   if (!response.ok) {

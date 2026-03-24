@@ -77,6 +77,7 @@ type leaderboardEntry struct {
 
 type leaderboardResponse struct {
 	Date    string             `json:"date"`
+	Scope   string             `json:"scope"`
 	Entries []leaderboardEntry `json:"entries"`
 }
 
@@ -351,7 +352,13 @@ func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries, err := a.listLeaderboard(date)
+	scope, err := parseLeaderboardScope(r.URL.Query().Get("scope"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	entries, err := a.listLeaderboard(date, scope)
 	if err != nil {
 		http.Error(w, "failed to load leaderboard", http.StatusInternalServerError)
 		return
@@ -359,6 +366,7 @@ func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := leaderboardResponse{
 		Date:    date,
+		Scope:   scope,
 		Entries: entries,
 	}
 
@@ -1137,16 +1145,50 @@ func newRunPublicID() (string, error) {
 	return "run_" + fmt.Sprintf("%x", bytes), nil
 }
 
-func (a app) listLeaderboard(date string) ([]leaderboardEntry, error) {
+func parseLeaderboardScope(raw string) (string, error) {
+	if raw == "" {
+		return "all", nil
+	}
+
+	if raw == "all" || raw == "first" {
+		return raw, nil
+	}
+
+	return "", errors.New("scope must be either all or first")
+}
+
+func (a app) listLeaderboard(date string, scope string) ([]leaderboardEntry, error) {
 	if a.db == nil {
 		return nil, errors.New("database unavailable")
 	}
 
-	const query = `
+	query := `
 		SELECT run_date::text, COALESCE(users.username, ''), COALESCE(users.role, ''), seed, move_count, elapsed_time_ms, accepted_at
 		FROM runs
 		LEFT JOIN users ON users.id = runs.user_id
 		WHERE run_date = $1::date AND verification_status = 'verified'
+	`
+	if scope == "first" {
+		query = `
+			WITH first_runs AS (
+				SELECT DISTINCT ON (COALESCE(users.username, ''), runs.user_id)
+					runs.run_date::text,
+					COALESCE(users.username, ''),
+					COALESCE(users.role, ''),
+					runs.seed,
+					runs.move_count,
+					runs.elapsed_time_ms,
+					runs.accepted_at
+				FROM runs
+				LEFT JOIN users ON users.id = runs.user_id
+				WHERE runs.run_date = $1::date AND runs.verification_status = 'verified'
+				ORDER BY COALESCE(users.username, ''), runs.user_id, runs.accepted_at ASC
+			)
+			SELECT *
+			FROM first_runs
+		`
+	}
+	query += `
 		ORDER BY elapsed_time_ms ASC, move_count ASC, accepted_at ASC
 		LIMIT 10
 	`

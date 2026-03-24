@@ -14,6 +14,22 @@ import { useLocale } from "../../../lib/locale";
 
 type PageStatus = "loading" | "success" | "error";
 
+function getLeaderboardRankTone(rank: number): string {
+  if (rank === 1) {
+    return "gold";
+  }
+
+  if (rank === 2) {
+    return "silver";
+  }
+
+  if (rank === 3) {
+    return "bronze";
+  }
+
+  return "standard";
+}
+
 export default function HistoryDayPage() {
   const { formatCount, messages } = useLocale();
   const uiText = messages.historyDay;
@@ -138,10 +154,18 @@ export default function HistoryDayPage() {
                   {payload.leaderboard.entries.map((entry) => (
                     <div
                       key={`${entry.rank}-${entry.acceptedAt}`}
-                      className="leaderboard-row"
+                      className={`leaderboard-row leaderboard-row-${getLeaderboardRankTone(
+                        entry.rank
+                      )}`}
                       role="listitem"
                     >
-                      <span>#{entry.rank}</span>
+                      <span
+                        className={`leaderboard-rank leaderboard-rank-${getLeaderboardRankTone(
+                          entry.rank
+                        )}`}
+                      >
+                        #{entry.rank}
+                      </span>
                       <span>
                         {entry.username ? (
                           <span className="player-link-with-badge">

@@ -485,6 +485,10 @@ h1 {
   margin-top: 16px;
 }
 
+.leaderboard-scope-toggle {
+  margin: 0 0 12px;
+}
+
 .leaderboard-row {
   display: grid;
   grid-template-columns: 72px 1.2fr 1fr 1fr;
@@ -498,10 +502,53 @@ h1 {
   color: var(--muted);
 }
 
+.leaderboard-row-gold {
+  background: #f5ecd0;
+}
+
+.leaderboard-row-silver {
+  background: #e3e8ef;
+}
+
+.leaderboard-row-bronze {
+  background: #ecdccf;
+}
+
 .leaderboard-row-header {
   color: var(--text);
   font-weight: 600;
   background: transparent;
+}
+
+.leaderboard-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  background: #efefef;
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.leaderboard-rank-gold {
+  background: linear-gradient(180deg, #f6e8a8, #d6a400);
+  color: #473400;
+}
+
+.leaderboard-rank-silver {
+  background: linear-gradient(180deg, #f6f8fc, #a6b4c8);
+  color: #24364a;
+}
+
+.leaderboard-rank-bronze {
+  background: linear-gradient(180deg, #efc7a8, #b97432);
+  color: #40240d;
 }
 
 .history-list {

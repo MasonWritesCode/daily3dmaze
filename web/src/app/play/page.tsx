@@ -63,6 +63,8 @@ interface MazeDetailsProps {
 
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
+  scope: "all" | "first";
+  onScopeChange: (scope: "all" | "first") => void;
 }
 
 interface AuthPanelProps {
@@ -144,6 +146,22 @@ function getLocalizedVerificationLabel(
     default:
       return status ?? "";
   }
+}
+
+function getLeaderboardRankTone(rank: number): string {
+  if (rank === 1) {
+    return "gold";
+  }
+
+  if (rank === 2) {
+    return "silver";
+  }
+
+  if (rank === 3) {
+    return "bronze";
+  }
+
+  return "standard";
 }
 
 function CollapsiblePanel({ title, defaultOpen = false, children }: CollapsiblePanelProps) {
@@ -785,7 +803,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   );
 }
 
-function Leaderboard({ entries }: LeaderboardProps) {
+function Leaderboard({ entries, scope, onScopeChange }: LeaderboardProps) {
   const { formatCount, messages } = useLocale();
   const uiText = messages.play;
   return (
@@ -793,6 +811,27 @@ function Leaderboard({ entries }: LeaderboardProps) {
       <h2 id="leaderboard-title" className="section-title">
         {uiText.leaderboard.heading}
       </h2>
+      <fieldset className="auth-toggle-group leaderboard-scope-toggle">
+        <legend className="sr-only">{uiText.leaderboard.scopeLegend}</legend>
+        <div className="auth-toggle" role="tablist" aria-label={uiText.leaderboard.scopeLegend}>
+          <button
+            type="button"
+            className={scope === "all" ? "secondary-button is-active" : "secondary-button"}
+            aria-pressed={scope === "all"}
+            onClick={() => onScopeChange("all")}
+          >
+            {uiText.leaderboard.allRuns}
+          </button>
+          <button
+            type="button"
+            className={scope === "first" ? "secondary-button is-active" : "secondary-button"}
+            aria-pressed={scope === "first"}
+            onClick={() => onScopeChange("first")}
+          >
+            {uiText.leaderboard.firstRuns}
+          </button>
+        </div>
+      </fieldset>
       {entries.length === 0 && <p className="body-copy">{uiText.leaderboard.empty}</p>}
       {entries.length > 0 && (
         <div className="leaderboard-list" aria-label={uiText.leaderboard.ariaLabel}>
@@ -803,8 +842,17 @@ function Leaderboard({ entries }: LeaderboardProps) {
             <span>{uiText.leaderboard.moves}</span>
           </div>
           {entries.map((entry) => (
-            <div key={`${entry.rank}-${entry.acceptedAt}`} className="leaderboard-row">
-              <span>#{entry.rank}</span>
+            <div
+              key={`${entry.rank}-${entry.acceptedAt}`}
+              className={`leaderboard-row leaderboard-row-${getLeaderboardRankTone(entry.rank)}`}
+            >
+              <span
+                className={`leaderboard-rank leaderboard-rank-${getLeaderboardRankTone(
+                  entry.rank
+                )}`}
+              >
+                #{entry.rank}
+              </span>
               <span>
                 {entry.username ? (
                   <span className="player-link-with-badge">
@@ -1021,6 +1069,7 @@ function PlayPageContent() {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [leaderboardStatus, setLeaderboardStatus] = useState<AsyncStatus>("idle");
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState<number>(0);
+  const [leaderboardScope, setLeaderboardScope] = useState<"all" | "first">("all");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [isCompactLandscape, setIsCompactLandscape] = useState<boolean>(false);
@@ -1110,7 +1159,7 @@ function PlayPageContent() {
 
     async function loadLeaderboard() {
       try {
-        const payload = await fetchLeaderboard(mazeDate);
+        const payload = await fetchLeaderboard(mazeDate, leaderboardScope);
 
         if (!isMounted) {
           return;
@@ -1134,7 +1183,7 @@ function PlayPageContent() {
     return () => {
       isMounted = false;
     };
-  }, [leaderboardRefreshKey, maze]);
+  }, [leaderboardRefreshKey, leaderboardScope, maze]);
 
   return (
     <main className="page-shell">
@@ -1182,7 +1231,11 @@ function PlayPageContent() {
                     </p>
                   )}
                   {leaderboardStatus !== "error" && (
-                    <Leaderboard entries={leaderboardEntries} />
+                    <Leaderboard
+                      entries={leaderboardEntries}
+                      scope={leaderboardScope}
+                      onScopeChange={setLeaderboardScope}
+                    />
                   )}
                 </CollapsiblePanel>
               ) : (
@@ -1193,7 +1246,11 @@ function PlayPageContent() {
                     </p>
                   )}
                   {leaderboardStatus !== "error" && (
-                    <Leaderboard entries={leaderboardEntries} />
+                    <Leaderboard
+                      entries={leaderboardEntries}
+                      scope={leaderboardScope}
+                      onScopeChange={setLeaderboardScope}
+                    />
                   )}
                 </>
               )}
