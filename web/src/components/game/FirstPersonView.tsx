@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { memo, useEffect, useRef, useState, type RefObject } from "react";
 
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import {
@@ -17,6 +17,8 @@ const CEILING_TEXTURE_SCALE = 1.02;
 const FIELD_OF_VIEW = Math.PI * 0.285;
 const INTRO_RISE_DURATION_MS = 1250;
 const RAT_STEP_DURATION_MS = 2200;
+const CANVAS_WIDTH = 480;
+const CANVAS_HEIGHT = 360;
 const TEXTURE_PATHS = {
   wall: "/assets/3d-maze/wall.png",
   accentWall: "/assets/3d-maze/openglwall.png",
@@ -43,6 +45,14 @@ interface TextureSurfaceState {
   accentWall: TextureSurface | null;
   floor: TextureSurface | null;
   ceiling: TextureSurface | null;
+}
+
+interface RenderBufferState {
+  width: number;
+  height: number;
+  imageData: ImageData | null;
+  depthBuffer: Float32Array | null;
+  rowDistanceByY: Float32Array | null;
 }
 
 interface SpriteDefinition {
@@ -216,7 +226,45 @@ function sampleTexture(texture: TextureSurface, x: number, y: number) {
   };
 }
 
-export default function FirstPersonView({
+function getQuantizedIntroProgress(progress: number): number {
+  const stepCount = 24;
+  return Math.round(progress * stepCount) / stepCount;
+}
+
+function ensureRenderBuffers(
+  context: CanvasRenderingContext2D,
+  current: RenderBufferState,
+  width: number,
+  height: number
+): RenderBufferState {
+  if (
+    current.width === width &&
+    current.height === height &&
+    current.imageData &&
+    current.depthBuffer &&
+    current.rowDistanceByY
+  ) {
+    return current;
+  }
+
+  const horizon = height * 0.5;
+  const rowDistanceByY = new Float32Array(height);
+
+  for (let y = 0; y < height; y += 1) {
+    const rowOffset = y > horizon ? y - horizon : horizon - y;
+    rowDistanceByY[y] = rowOffset > 0 ? (0.5 * height) / rowOffset : 0;
+  }
+
+  return {
+    width,
+    height,
+    imageData: context.createImageData(width, height),
+    depthBuffer: new Float32Array(width),
+    rowDistanceByY
+  };
+}
+
+function FirstPersonView({
   maze,
   playerPosition,
   playerAngle,
@@ -231,6 +279,7 @@ export default function FirstPersonView({
   const [introProgress, setIntroProgress] = useState<number>(0);
   const [ratTick, setRatTick] = useState<number>(0);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(false);
+  const introProgressRef = useRef<number>(0);
   const textureSurfaceRef = useRef<TextureSurfaceState>({
     source: null,
     supportsSurfaceTextures: false,
@@ -238,6 +287,13 @@ export default function FirstPersonView({
     accentWall: null,
     floor: null,
     ceiling: null
+  });
+  const renderBufferRef = useRef<RenderBufferState>({
+    width: 0,
+    height: 0,
+    imageData: null,
+    depthBuffer: null,
+    rowDistanceByY: null
   });
 
   useEffect(() => {
@@ -255,17 +311,25 @@ export default function FirstPersonView({
   useEffect(() => {
     let frameId = 0;
     if (prefersReducedMotion) {
+      introProgressRef.current = animationMode === "intro" ? 1 : 0;
       setIntroProgress(animationMode === "intro" ? 1 : 0);
       return undefined;
     }
 
     const startedAt = performance.now();
+    introProgressRef.current = animationMode === "intro" ? 0 : 1;
     setIntroProgress(animationMode === "intro" ? 0 : 1);
 
     function tick(now: number) {
       const progress = Math.min(1, (now - startedAt) / INTRO_RISE_DURATION_MS);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setIntroProgress(animationMode === "intro" ? eased : 1 - eased);
+      const nextProgress = animationMode === "intro" ? eased : 1 - eased;
+      const quantizedProgress = getQuantizedIntroProgress(nextProgress);
+
+      if (quantizedProgress !== introProgressRef.current) {
+        introProgressRef.current = quantizedProgress;
+        setIntroProgress(quantizedProgress);
+      }
 
       if (progress < 1) {
         frameId = window.requestAnimationFrame(tick);
@@ -280,7 +344,7 @@ export default function FirstPersonView({
   }, [animationMode, introSequence, maze.date, maze.seed, prefersReducedMotion]);
 
   useEffect(() => {
-    if (prefersReducedMotion) {
+    if (prefersReducedMotion || introProgress < 1) {
       setRatTick(0);
       return undefined;
     }
@@ -318,7 +382,6 @@ export default function FirstPersonView({
     const fieldOfView = FIELD_OF_VIEW;
     const maxDistance = 24;
     const horizon = height * 0.5;
-    const depthBuffer = new Array<number>(width).fill(maxDistance);
     context.imageSmoothingEnabled = false;
 
     if (textureSurfaceRef.current.source !== textures) {
@@ -339,13 +402,32 @@ export default function FirstPersonView({
     }
 
     const textureSurfaces = textureSurfaceRef.current;
-    const imageBuffer = context.createImageData(width, height);
-    const pixels = imageBuffer.data;
+    const renderBuffers = ensureRenderBuffers(
+      context,
+      renderBufferRef.current,
+      width,
+      height
+    );
+    renderBufferRef.current = renderBuffers;
+    const imageBuffer = renderBuffers.imageData;
+    const pixels = imageBuffer?.data;
+    const depthBuffer = renderBuffers.depthBuffer;
+    const rowDistanceByY = renderBuffers.rowDistanceByY;
     const hasSurfaceTextures = Boolean(
-      textureSurfaces.floor || textureSurfaces.ceiling
+      textureSurfaces.floor &&
+        textureSurfaces.ceiling &&
+        imageBuffer &&
+        pixels &&
+        rowDistanceByY
     );
 
-    if (hasSurfaceTextures) {
+    if (!depthBuffer) {
+      return;
+    }
+
+    depthBuffer.fill(maxDistance);
+
+    if (hasSurfaceTextures && pixels && rowDistanceByY) {
       const leftRayAngle = playerAngle - fieldOfView / 2;
       const rightRayAngle = playerAngle + fieldOfView / 2;
       const leftRayX = Math.cos(leftRayAngle);
@@ -361,13 +443,11 @@ export default function FirstPersonView({
           continue;
         }
 
-        const rowOffset = isFloor ? y - horizon : horizon - y;
+        const rowDistance = rowDistanceByY[y];
 
-        if (rowOffset <= 0) {
+        if (rowDistance <= 0) {
           continue;
         }
-
-        const rowDistance = (0.5 * height) / rowOffset;
         const stepX = (rowDistance * (rightRayX - leftRayX)) / width;
         const stepY = (rowDistance * (rightRayY - leftRayY)) / width;
         let worldX = originX + rowDistance * leftRayX;
@@ -404,7 +484,7 @@ export default function FirstPersonView({
       context.fillRect(0, horizon, width, height / 2);
     }
 
-    if (hasSurfaceTextures) {
+    if (hasSurfaceTextures && imageBuffer) {
       context.putImageData(imageBuffer, 0, 0);
     }
 
@@ -617,7 +697,16 @@ export default function FirstPersonView({
     context.moveTo(0, height / 2);
     context.lineTo(width, height / 2);
     context.stroke();
-  }, [animationMode, introProgress, maze, playerAngle, playerPosition, prefersReducedMotion, ratTick, textures]);
+  }, [
+    animationMode,
+    introProgress,
+    maze,
+    playerAngle,
+    playerPosition,
+    prefersReducedMotion,
+    ratTick,
+    textures
+  ]);
 
   function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -674,10 +763,27 @@ export default function FirstPersonView({
       <canvas
         ref={canvasRef}
         className="raycast-canvas"
-        width={480}
-        height={360}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
         aria-label="First-person maze view"
       />
     </div>
   );
 }
+
+function areEqualProps(
+  previous: FirstPersonViewProps,
+  next: FirstPersonViewProps
+): boolean {
+  return (
+    previous.maze === next.maze &&
+    previous.playerPosition.x === next.playerPosition.x &&
+    previous.playerPosition.y === next.playerPosition.y &&
+    previous.playerAngle === next.playerAngle &&
+    previous.introSequence === next.introSequence &&
+    previous.animationMode === next.animationMode &&
+    previous.viewportRef === next.viewportRef
+  );
+}
+
+export default memo(FirstPersonView, areEqualProps);

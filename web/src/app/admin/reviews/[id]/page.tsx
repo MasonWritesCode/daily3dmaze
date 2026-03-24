@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import styles from "../../admin.module.css";
 
 import {
   fetchCurrentUser,
@@ -24,6 +25,8 @@ import {
   type ReplayFrame
 } from "../../../../lib/game/maze";
 import { useLocale } from "../../../../lib/locale";
+
+void styles;
 
 type PageStatus = "loading" | "ready" | "error";
 type RequeueStatus = "idle" | "submitting" | "success" | "error";

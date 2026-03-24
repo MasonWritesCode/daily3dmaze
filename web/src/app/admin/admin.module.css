@@ -1,0 +1,460 @@
+:global(.review-actions) {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+:global(.admin-page-toolbar) {
+  margin-top: 18px;
+  margin-bottom: 12px;
+}
+
+:global(.admin-page-toolbar .primary-link),
+:global(.admin-page-toolbar .secondary-link) {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+:global(.admin-panel-section) {
+  padding-top: 18px;
+}
+
+:global(.admin-filter-panel) {
+  margin-top: 4px;
+}
+
+:global(.admin-section-toolbar) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+:global(.admin-toolbar-actions) {
+  justify-content: flex-end;
+}
+
+:global(.admin-toolbar-copy) {
+  margin: 0;
+}
+
+:global(.admin-sort-hint) {
+  margin: -4px 0 16px;
+  text-align: right;
+}
+
+:global(.review-list) {
+  display: grid;
+  gap: 10px;
+}
+
+:global(.summary-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 20px 0 24px;
+}
+
+:global(.summary-card) {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  border-radius: 0;
+  background: #efefef;
+}
+
+:global(.summary-label) {
+  color: var(--muted);
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+:global(.summary-value) {
+  color: var(--text);
+  font-size: 1.45rem;
+}
+
+:global(.filter-panel) {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  border-radius: 0;
+  background: #efefef;
+}
+
+:global(.filter-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+:global(.filter-grid > *) {
+  min-width: 0;
+}
+
+:global(.review-row) {
+  display: grid;
+  grid-template-columns: 96px 1fr minmax(180px, 1.2fr) 120px 96px 1.8fr 180px;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  border-radius: 0;
+  background: #f2f2f2;
+  color: var(--muted);
+}
+
+:global(.admin-user-row) {
+  grid-template-columns:
+    minmax(220px, 1.2fr)
+    minmax(180px, 220px)
+    minmax(150px, 180px)
+    minmax(180px, 220px)
+    minmax(220px, 1fr);
+  align-items: start;
+  row-gap: 10px;
+  padding: 18px 16px;
+}
+
+:global(.admin-user-row-header) {
+  align-items: center;
+}
+
+:global(.admin-users-toolbar) {
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+
+:global(.admin-users-signed-in) {
+  margin: 0 0 14px;
+}
+
+:global(.admin-users-results) {
+  display: block;
+  margin-top: 10px;
+  margin-bottom: 16px;
+}
+
+:global(.admin-user-identity) {
+  margin-top: 0;
+}
+
+:global(.admin-user-row .review-detail-stack) {
+  margin-top: 0;
+}
+
+:global(.admin-user-role-cell select) {
+  width: 100%;
+  min-height: 40px;
+}
+
+:global(.admin-user-status-cell) {
+  margin-top: 0;
+}
+
+:global(.admin-user-created-cell) {
+  line-height: 1.4;
+  padding-top: 0;
+  align-self: center;
+}
+
+:global(.admin-user-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 0;
+}
+
+:global(.admin-user-actions .secondary-button) {
+  min-width: 88px;
+  min-height: 40px;
+}
+
+:global(.admin-user-actions-cell) {
+  align-self: start;
+}
+
+:global(.admin-user-message) {
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+:global(.admin-users-list) {
+  gap: 14px;
+}
+
+:global(.admin-users-list-header) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+:global(.admin-user-card) {
+  align-items: center;
+  row-gap: 12px;
+}
+
+:global(.admin-user-card .admin-user-cell) {
+  min-width: 0;
+}
+
+:global(.admin-user-created-cell) {
+  align-self: center;
+  line-height: 1.35;
+}
+
+:global(.review-row-header) {
+  color: var(--text);
+  font-weight: 600;
+  background: transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.82rem;
+}
+
+:global(.review-challenge) {
+  display: grid;
+  gap: 4px;
+}
+
+:global(.review-detail-stack) {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+:global(.admin-review-list) {
+  gap: 14px;
+}
+
+:global(.admin-review-card) {
+  grid-template-columns: minmax(240px, 1.1fr) minmax(180px, 0.8fr) minmax(260px, 1fr);
+  grid-template-areas:
+    "status challenge moderation"
+    "player stats accepted"
+    "reasons reasons accepted";
+  gap: 16px 22px;
+  padding: 18px 16px;
+}
+
+:global(.admin-review-block) {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+:global(.admin-review-status-block) {
+  grid-area: status;
+}
+
+:global(.admin-review-player-block) {
+  grid-area: player;
+}
+
+:global(.admin-review-challenge-block) {
+  grid-area: challenge;
+}
+
+:global(.admin-review-stats-block) {
+  grid-area: stats;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+:global(.admin-review-moderation-block) {
+  grid-area: moderation;
+}
+
+:global(.admin-review-reasons-block) {
+  grid-area: reasons;
+}
+
+:global(.admin-review-accepted-block) {
+  grid-area: accepted;
+}
+
+:global(.admin-review-label) {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:global(.admin-detail-toolbar) {
+  align-items: center;
+}
+
+:global(.admin-section-copy) {
+  margin: 0 0 14px;
+}
+
+:global(.review-error-copy) {
+  color: #fca5a5;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+:global(.reason-list) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:global(.reason-chip),
+:global(.score-badge) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  border-radius: 0;
+  font-size: 0.92rem;
+}
+
+:global(.reason-chip) {
+  background: #e6e6e6;
+  color: var(--text);
+}
+
+:global(.score-badge) {
+  justify-content: center;
+  min-width: 54px;
+  font-weight: 700;
+}
+
+:global(.score-badge-low) {
+  background: #dff0dd;
+  color: var(--success);
+}
+
+:global(.score-badge-pending) {
+  background: #d7e6f7;
+  color: var(--accent);
+}
+
+:global(.score-badge-medium) {
+  background: #f6efc2;
+  color: #6d5a00;
+}
+
+:global(.score-badge-high) {
+  background: #f4d7d2;
+  color: var(--danger);
+}
+
+:global(.comparison-list) {
+  display: grid;
+  gap: 10px;
+}
+
+:global(.comparison-row) {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr 120px;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  border-radius: 0;
+  background: #f2f2f2;
+  color: var(--muted);
+}
+
+:global(.comparison-row-header) {
+  color: var(--text);
+  font-weight: 600;
+  background: transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.82rem;
+}
+
+:global(.comparison-status) {
+  font-weight: 600;
+}
+
+:global(.comparison-status-match) {
+  color: #86efac;
+}
+
+:global(.comparison-status-mismatch) {
+  color: #fca5a5;
+}
+
+:global(.trace-list) {
+  display: grid;
+  gap: 10px;
+}
+
+:global(.trace-row) {
+  display: grid;
+  grid-template-columns: 96px 1.4fr 160px;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 2px solid var(--panel-dark);
+  border-top-color: var(--panel-light);
+  border-left-color: var(--panel-light);
+  border-radius: 0;
+  background: #f2f2f2;
+  color: var(--muted);
+}
+
+:global(.trace-row-header) {
+  color: var(--text);
+  font-weight: 600;
+  background: transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.82rem;
+}
+
+:global(.trace-row-active) {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.2);
+}
+
+:global(.trace-step-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.14em;
+}
+
+:global(.trace-step-button:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  :global(.review-row),
+  :global(.comparison-row),
+  :global(.trace-row) {
+    grid-template-columns: 1fr;
+  }
+
+  :global(.review-actions) {
+    justify-items: start;
+  }
+}

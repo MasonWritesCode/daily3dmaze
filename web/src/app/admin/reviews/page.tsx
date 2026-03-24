@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import styles from "../admin.module.css";
 
 import {
   fetchCurrentUser,
@@ -30,6 +31,8 @@ import {
   type SortMode,
   type VerificationFilter
 } from "./helpers";
+
+void styles;
 
 type PageStatus = "loading" | "ready" | "error";
 type RecomputeStatus = "idle" | "submitting" | "success" | "error";

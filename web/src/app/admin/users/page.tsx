@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import styles from "../admin.module.css";
 
 import {
   fetchAdminUsers,
@@ -20,6 +21,8 @@ import {
   filterAdminUserEntries,
   getLocalizedAdminRoleLabel
 } from "./helpers";
+
+void styles;
 
 type PageStatus = "loading" | "ready" | "error";
 type RowStatus = "idle" | "submitting" | "success" | "error";

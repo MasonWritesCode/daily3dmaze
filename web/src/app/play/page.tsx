@@ -1,38 +1,30 @@
 "use client";
 
 import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import styles from "./play.module.css";
 
-import FirstPersonView from "../../components/game/FirstPersonView";
-import RoleBadge from "../../components/RoleBadge";
 import {
-  getLeaderboardRankTone,
   getLocalizedDirectionLabel,
-  getLocalizedRoleLabel,
   getLocalizedVerificationLabel,
   mergeRunStatusIntoSubmissionSummary,
   shouldPollRunVerification
 } from "./helpers";
 import {
-  authenticate,
   fetchCurrentUser,
   fetchDailyMaze,
-  fetchLeaderboard,
   fetchRunStatus,
-  logout,
   ROLE_ADMIN,
   roleAllows,
-  ROLE_MODERATOR,
   submitRun,
   type AuthUser,
-  type LeaderboardEntry,
   type ReplayTraceEvent,
   type RunSubmissionResponse
 } from "../../lib/api";
-import { githubOAuthEnabled, googleOAuthEnabled, oauthStartEndpoint } from "../../lib/config";
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import {
   DIRECTION_ORDER,
@@ -47,9 +39,10 @@ import {
 } from "../../lib/game/maze";
 import { useLocale } from "../../lib/locale";
 
+void styles;
+
 type AsyncStatus = "idle" | "loading" | "success" | "error";
 type SubmissionStatus = "idle" | "submitting" | "submitted" | "error";
-type AuthMode = "login" | "register";
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 type SceneAnimationMode = "intro" | "outro";
 
@@ -70,33 +63,107 @@ interface MazeDetailsProps {
   onRunSubmitted: () => void;
 }
 
-interface LeaderboardProps {
-  entries: LeaderboardEntry[];
-  scope: "all" | "first";
-  onScopeChange: (scope: "all" | "first") => void;
-}
-
-interface AuthPanelProps {
-  user: AuthUser | null;
-  onAuthChange: (nextUser: AuthUser | null) => void;
-}
-
 interface ArchiveNavigatorProps {
   archiveDate: string;
 }
 
-interface CollapsiblePanelProps {
-  title: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
+interface RunTimerValueProps {
+  runStartTime: number | null;
+  finishTime: number | null;
 }
 
-function CollapsiblePanel({ title, defaultOpen = false, children }: CollapsiblePanelProps) {
+const FirstPersonView = dynamic(() => import("../../components/game/FirstPersonView"), {
+  ssr: false,
+  loading: () => (
+    <div className="raycast-panel raycast-panel-loading" aria-hidden="true">
+      <div className="raycast-canvas raycast-canvas-loading" />
+    </div>
+  )
+});
+
+const PlaySidebarPanels = dynamic(() => import("./PlaySidebarPanels"), {
+  ssr: false,
+  loading: () => <div className="play-side-panels play-side-panels-loading" aria-hidden="true" />
+});
+
+function RunTimerValue({ runStartTime, finishTime }: RunTimerValueProps) {
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (!runStartTime || finishTime) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setNow(Date.now());
+    }, 50);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [finishTime, runStartTime]);
+
+  if (!runStartTime) {
+    return <>{formatElapsedTime(0)}</>;
+  }
+
+  if (finishTime) {
+    return <>{formatElapsedTime(finishTime - runStartTime)}</>;
+  }
+
+  return <>{formatElapsedTime(Math.max(0, now - runStartTime))}</>;
+}
+
+function PlaySkeleton() {
   return (
-    <details className="play-secondary-details" open={defaultOpen}>
-      <summary>{title}</summary>
-      <div className="play-secondary-details-body">{children}</div>
-    </details>
+    <>
+      <section className="maze-summary play-summary play-loading-shell" aria-hidden="true">
+        <div className="play-focus-layout">
+          <div className="play-focus-sidebar">
+            <div className="gameplay-hud gameplay-hud-loading">
+              <div className="gameplay-hud-item gameplay-hud-item-primary play-skeleton-block" />
+              <div className="gameplay-hud-item play-skeleton-block" />
+              <div className="gameplay-hud-item play-skeleton-block" />
+            </div>
+            <div className="gameplay-controls play-skeleton-line" />
+            <div className="actions play-focus-actions">
+              <span className="secondary-button play-skeleton-button" />
+              <span className="secondary-button play-skeleton-button" />
+            </div>
+            <div className="play-status-stack">
+              <div className="play-win-state play-skeleton-block play-skeleton-status" />
+            </div>
+          </div>
+          <div className="play-focus-main">
+            <div className="raycast-panel raycast-panel-loading">
+              <div className="raycast-canvas raycast-canvas-loading" />
+            </div>
+          </div>
+        </div>
+      </section>
+      <div className="play-side-panels play-side-panels-loading" aria-hidden="true">
+        <div className="play-side-panel">
+          <section className="maze-summary play-loading-panel">
+            <h2 className="section-title play-skeleton-title" />
+            <div className="play-skeleton-list">
+              <div className="play-skeleton-row" />
+              <div className="play-skeleton-row" />
+              <div className="play-skeleton-row" />
+            </div>
+          </section>
+        </div>
+        <div className="play-side-panel">
+          <section className="maze-summary play-loading-panel">
+            <h2 className="section-title play-skeleton-title" />
+            <div className="play-skeleton-form">
+              <div className="play-skeleton-line" />
+              <div className="play-skeleton-line" />
+              <div className="play-skeleton-line" />
+            </div>
+          </section>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -172,7 +239,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   const [hasFinished, setHasFinished] = useState<boolean>(false);
   const [runStartTime, setRunStartTime] = useState<number | null>(null);
   const [finishTime, setFinishTime] = useState<number | null>(null);
-  const [elapsedMs, setElapsedMs] = useState<number>(0);
   const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus>("idle");
   const [submissionSummary, setSubmissionSummary] =
     useState<RunSubmissionResponse | null>(null);
@@ -188,7 +254,10 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   const submittedRunRef = useRef<string | null>(null);
   const replayTraceRef = useRef<ReplayTraceEvent[]>([]);
   const viewportRef = useRef<HTMLDivElement | null>(null);
-  const gridRows = renderGridRows(maze, playerPosition, directionIndex);
+  const gridRows = useMemo(
+    () => renderGridRows(maze, playerPosition, directionIndex),
+    [maze, playerPosition, directionIndex]
+  );
 
   useEffect(() => {
     setPlayerPosition(maze.start);
@@ -199,7 +268,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     setHasFinished(false);
     setRunStartTime(null);
     setFinishTime(null);
-    setElapsedMs(0);
     setSubmissionStatus("idle");
     setSubmissionSummary(null);
     setSceneAnimationMode("intro");
@@ -208,20 +276,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     submittedRunRef.current = null;
     replayTraceRef.current = [];
   }, [maze, startingDirectionIndex]);
-
-  useEffect(() => {
-    if (!runStartTime || hasFinished || finishTime) {
-      return undefined;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setElapsedMs(Date.now() - runStartTime);
-    }, 16);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [finishTime, hasFinished, runStartTime]);
 
   useEffect(() => {
     if (!hasFinished || !finishTime || !runStartTime) {
@@ -367,7 +421,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
 
       const startedAt = Date.now();
       setRunStartTime(startedAt);
-      setElapsedMs(0);
       return startedAt;
     }
 
@@ -394,7 +447,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
           const completedAt = Date.now();
           setHasFinished(true);
           setFinishTime(completedAt);
-          setElapsedMs(completedAt - startedAtForRun);
         }
 
         return;
@@ -427,7 +479,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
           const completedAt = Date.now();
           setHasFinished(true);
           setFinishTime(completedAt);
-          setElapsedMs(completedAt - startedAtForRun);
         }
       }
 
@@ -439,7 +490,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       actionLockRef.current = true;
       setMoveCount((currentCount) => currentCount + 1);
       setFinishTime(completedAt);
-      setElapsedMs(completedAt - startedAtForRun);
 
       if (prefersReducedMotion) {
         setHasFinished(true);
@@ -612,7 +662,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     setHasFinished(false);
     setRunStartTime(null);
     setFinishTime(null);
-    setElapsedMs(0);
     setSubmissionStatus("idle");
     setSubmissionSummary(null);
     setSceneAnimationMode("intro");
@@ -622,26 +671,28 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     replayTraceRef.current = [];
   }
 
-  const elapsedTime = finishTime && runStartTime
-    ? formatElapsedTime(finishTime - runStartTime)
-    : formatElapsedTime(elapsedMs);
-  const metadataItems: MetadataItem[] = [
-    { label: uiText.labels.date, value: maze.date },
-    { label: uiText.labels.title, value: maze.title },
-    { label: uiText.labels.seed, value: <code>{maze.seed}</code> },
-    {
-      label: uiText.labels.size,
-      value: `${maze.size.width} x ${maze.size.height}`
-    },
-    {
-      label: uiText.labels.start,
-      value: `(${maze.start.x}, ${maze.start.y})`
-    },
-    {
-      label: uiText.labels.exit,
-      value: `(${maze.exit.x}, ${maze.exit.y})`
-    }
-  ];
+  const completedElapsedTime =
+    finishTime && runStartTime ? formatElapsedTime(finishTime - runStartTime) : null;
+  const metadataItems: MetadataItem[] = useMemo(
+    () => [
+      { label: uiText.labels.date, value: maze.date },
+      { label: uiText.labels.title, value: maze.title },
+      { label: uiText.labels.seed, value: <code>{maze.seed}</code> },
+      {
+        label: uiText.labels.size,
+        value: `${maze.size.width} x ${maze.size.height}`
+      },
+      {
+        label: uiText.labels.start,
+        value: `(${maze.start.x}, ${maze.start.y})`
+      },
+      {
+        label: uiText.labels.exit,
+        value: `(${maze.exit.x}, ${maze.exit.y})`
+      }
+    ],
+    [maze, uiText.labels]
+  );
 
   async function handleFullscreenToggle() {
     try {
@@ -666,7 +717,9 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
           <dl className="gameplay-hud" aria-label={uiText.gameplay.currentRunStatus}>
             <div className="gameplay-hud-item gameplay-hud-item-primary">
               <dt>{hasFinished ? uiText.gameplay.winTitle : uiText.labels.time}</dt>
-              <dd>{elapsedTime}</dd>
+              <dd>
+                <RunTimerValue runStartTime={runStartTime} finishTime={finishTime} />
+              </dd>
             </div>
             <div className="gameplay-hud-item">
               <dt>{uiText.labels.moves}</dt>
@@ -703,7 +756,10 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
             {hasFinished ? (
               <section className="play-win-state" aria-label={uiText.gameplay.winTitle}>
                 <p className="body-copy status-copy success-copy">
-                  {uiText.gameplay.completionMessage.replace("{elapsed}", elapsedTime)}
+                  {uiText.gameplay.completionMessage.replace(
+                    "{elapsed}",
+                    completedElapsedTime ?? formatElapsedTime(0)
+                  )}
                 </p>
                 {submissionStatus === "submitting" && (
                   <p className="body-copy status-copy">{uiText.gameplay.submittingRun}</p>
@@ -777,267 +833,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   );
 }
 
-function Leaderboard({ entries, scope, onScopeChange }: LeaderboardProps) {
-  const { formatCount, messages } = useLocale();
-  const uiText = messages.play;
-  return (
-    <section className="maze-summary" aria-labelledby="leaderboard-title">
-      <h2 id="leaderboard-title" className="section-title">
-        {uiText.leaderboard.heading}
-      </h2>
-      <fieldset className="auth-toggle-group leaderboard-scope-toggle">
-        <legend className="sr-only">{uiText.leaderboard.scopeLegend}</legend>
-        <div className="auth-toggle" role="tablist" aria-label={uiText.leaderboard.scopeLegend}>
-          <button
-            type="button"
-            className={scope === "all" ? "secondary-button is-active" : "secondary-button"}
-            aria-pressed={scope === "all"}
-            onClick={() => onScopeChange("all")}
-          >
-            {uiText.leaderboard.allRuns}
-          </button>
-          <button
-            type="button"
-            className={scope === "first" ? "secondary-button is-active" : "secondary-button"}
-            aria-pressed={scope === "first"}
-            onClick={() => onScopeChange("first")}
-          >
-            {uiText.leaderboard.firstRuns}
-          </button>
-        </div>
-      </fieldset>
-      {entries.length === 0 && <p className="body-copy">{uiText.leaderboard.empty}</p>}
-      {entries.length > 0 && (
-        <div className="leaderboard-list" aria-label={uiText.leaderboard.ariaLabel}>
-          <div className="leaderboard-row leaderboard-row-header" aria-hidden="true">
-            <span>{uiText.leaderboard.rank}</span>
-            <span>{uiText.leaderboard.player}</span>
-            <span>{uiText.leaderboard.elapsed}</span>
-            <span>{uiText.leaderboard.moves}</span>
-          </div>
-          {entries.map((entry) => (
-            <div
-              key={`${entry.rank}-${entry.acceptedAt}`}
-              className={`leaderboard-row leaderboard-row-${getLeaderboardRankTone(entry.rank)}`}
-            >
-              <span
-                className={`leaderboard-rank leaderboard-rank-${getLeaderboardRankTone(
-                  entry.rank
-                )}`}
-              >
-                #{entry.rank}
-              </span>
-              <span>
-                {entry.username ? (
-                  <span className="player-link-with-badge">
-                    <Link href={`/profile/${entry.username}`} className="inline-link">
-                      {entry.username}
-                    </Link>
-                    <RoleBadge role={entry.role} labels={uiText.auth.roles} />
-                  </span>
-                ) : (
-                  uiText.leaderboard.anonymous
-                )}
-              </span>
-              <span>{formatElapsedTime(entry.elapsedTimeMs)}</span>
-              <span>
-                {formatCount(entry.moveCount)} {uiText.leaderboard.moveSuffix}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
-  const { messages } = useLocale();
-  const uiText = messages.play;
-  const [mode, setMode] = useState<AuthMode>("login");
-  const [username, setUsername] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
-  const [status, setStatus] = useState<SubmissionStatus | "success">("idle");
-  const [errorMessage, setErrorMessage] = useState<string>("");
-  const errorId = "auth-panel-error";
-  const helperId = "auth-panel-helper";
-  const submitLabel =
-    mode === "register" ? uiText.actions.createAccount : uiText.actions.logIn;
-  const statusMessage =
-    status === "submitting"
-      ? mode === "register"
-        ? uiText.auth.creatingAccount
-        : uiText.auth.signingIn
-      : status === "success"
-        ? mode === "register"
-          ? uiText.auth.registerSuccess
-          : uiText.auth.loginSuccess
-        : "";
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus("submitting");
-    setErrorMessage("");
-
-    try {
-      const authenticatedUser = await authenticate(mode, { username, password });
-      onAuthChange(authenticatedUser);
-      setStatus("success");
-      setErrorMessage("");
-      setPassword("");
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : uiText.authErrors.authenticationFailed
-      );
-    }
-  }
-
-  async function handleLogout() {
-    setStatus("submitting");
-    setErrorMessage("");
-
-    try {
-      await logout();
-      onAuthChange(null);
-      setStatus("idle");
-      setPassword("");
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : uiText.authErrors.logoutFailed);
-    }
-  }
-
-  return (
-    <section className="maze-summary" aria-labelledby="identity-title">
-      <h2 id="identity-title" className="section-title">
-        {uiText.auth.heading}
-      </h2>
-      {user ? (
-        <>
-          <p className="body-copy">
-            {uiText.auth.signedInAs}{" "}
-            <span className="player-link-with-badge">
-              <Link href={`/profile/${user.username}`} className="inline-link">
-                <code>{user.username}</code>
-              </Link>
-              <RoleBadge role={user.role} labels={uiText.auth.roles} />
-            </span>
-          </p>
-          <div className="actions">
-            {roleAllows(user.role, ROLE_MODERATOR) && (
-              <Link href="/admin/reviews" className="secondary-link">
-                {uiText.authLinks.internalReviews}
-              </Link>
-            )}
-            {roleAllows(user.role, ROLE_ADMIN) && (
-              <Link href="/admin/users" className="secondary-link">
-                {uiText.authLinks.manageUsers}
-              </Link>
-            )}
-            <button type="button" className="secondary-button" onClick={handleLogout}>
-              {uiText.actions.logOut}
-            </button>
-          </div>
-        </>
-      ) : (
-        <form className="auth-form" onSubmit={handleSubmit} aria-describedby={helperId}>
-          <fieldset className="auth-toggle-group">
-            <legend className="sr-only">{uiText.auth.modeLegend}</legend>
-            <div className="auth-toggle" role="tablist" aria-label={uiText.auth.modeLegend}>
-              <button
-                type="button"
-                className={mode === "login" ? "secondary-button is-active" : "secondary-button"}
-                aria-pressed={mode === "login"}
-                onClick={() => {
-                  setMode("login");
-                  setStatus("idle");
-                  setErrorMessage("");
-                }}
-              >
-                {uiText.actions.logIn}
-              </button>
-              <button
-                type="button"
-                className={
-                  mode === "register" ? "secondary-button is-active" : "secondary-button"
-                }
-                aria-pressed={mode === "register"}
-                onClick={() => {
-                  setMode("register");
-                  setStatus("idle");
-                  setErrorMessage("");
-                }}
-              >
-                {uiText.actions.createAccount}
-              </button>
-            </div>
-          </fieldset>
-          <p id={helperId} className="assistive-copy">
-            {uiText.authHelper}
-          </p>
-          <label className="auth-field">
-            <span>{uiText.auth.username}</span>
-            <input
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              required
-              minLength={3}
-              maxLength={32}
-              aria-invalid={status === "error"}
-              aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
-            />
-          </label>
-          <label className="auth-field">
-            <span>{uiText.auth.password}</span>
-            <input
-              type="password"
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              minLength={10}
-              aria-invalid={status === "error"}
-              aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
-            />
-          </label>
-          <div className="actions">
-            <button type="submit" className="primary-button" disabled={status === "submitting"}>
-              {submitLabel}
-            </button>
-            {githubOAuthEnabled && (
-              <a href={oauthStartEndpoint("github")} className="secondary-link">
-                {uiText.auth.continueWithGitHub}
-              </a>
-            )}
-            {googleOAuthEnabled && (
-              <a href={oauthStartEndpoint("google")} className="secondary-link">
-                {uiText.auth.continueWithGoogle}
-              </a>
-            )}
-          </div>
-          {(status === "submitting" || status === "success") && (
-            <p className="body-copy status-copy success-copy" aria-live="polite">
-              {statusMessage}
-            </p>
-          )}
-          {status === "error" && errorMessage && (
-            <p
-              id={errorId}
-              className="body-copy status-copy error-copy"
-              aria-live="assertive"
-            >
-              {errorMessage}
-            </p>
-          )}
-        </form>
-      )}
-    </section>
-  );
-}
-
 function PlayPageContent() {
   const { messages } = useLocale();
   const uiText = messages.play;
@@ -1045,10 +840,7 @@ function PlayPageContent() {
   const archiveDate = searchParams.get("date") ?? "";
   const [maze, setMaze] = useState<DailyMaze | null>(null);
   const [status, setStatus] = useState<AsyncStatus>("loading");
-  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
-  const [leaderboardStatus, setLeaderboardStatus] = useState<AsyncStatus>("idle");
   const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState<number>(0);
-  const [leaderboardScope, setLeaderboardScope] = useState<"all" | "first">("all");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading");
   const [isCompactLandscape, setIsCompactLandscape] = useState<boolean>(false);
@@ -1127,43 +919,6 @@ function PlayPageContent() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!maze) {
-      return;
-    }
-
-    const mazeDate = maze.date;
-    let isMounted = true;
-    setLeaderboardStatus("loading");
-
-    async function loadLeaderboard() {
-      try {
-        const payload = await fetchLeaderboard(mazeDate, leaderboardScope);
-
-        if (!isMounted) {
-          return;
-        }
-
-        setLeaderboardEntries(payload.entries || []);
-        setLeaderboardStatus("success");
-      } catch (error) {
-        console.error("Failed to load leaderboard", error);
-
-        if (!isMounted) {
-          return;
-        }
-
-        setLeaderboardStatus("error");
-      }
-    }
-
-    void loadLeaderboard();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [leaderboardRefreshKey, leaderboardScope, maze]);
-
   return (
     <main className="page-shell">
       <div className="content-card content-card-wide play-window">
@@ -1176,17 +931,23 @@ function PlayPageContent() {
         )}
         {archiveDate &&
           (isCompactLandscape ? (
-            <CollapsiblePanel title={uiText.archivePanelTitle}>
-              <ArchiveNavigator archiveDate={archiveDate} />
-            </CollapsiblePanel>
+            <details className="play-secondary-details">
+              <summary>{uiText.archivePanelTitle}</summary>
+              <div className="play-secondary-details-body">
+                <ArchiveNavigator archiveDate={archiveDate} />
+              </div>
+            </details>
           ) : (
             <ArchiveNavigator archiveDate={archiveDate} />
           ))}
 
         {status === "loading" && (
-          <p className="body-copy status-copy" aria-live="polite">
-            {uiText.loadingMaze}
-          </p>
+          <>
+            <p className="body-copy status-copy" aria-live="polite">
+              {uiText.loadingMaze}
+            </p>
+            <PlaySkeleton />
+          </>
         )}
 
         {status === "success" && maze && (
@@ -1200,75 +961,18 @@ function PlayPageContent() {
         )}
 
         {status === "success" && maze && (
-          <div className="play-side-panels">
-            <div className="play-side-panel">
-              {isCompactLandscape ? (
-                <CollapsiblePanel title={uiText.leaderboard.title}>
-                  {leaderboardStatus === "loading" && (
-                    <p className="body-copy status-copy" aria-live="polite">
-                      {uiText.loadingLeaderboard}
-                    </p>
-                  )}
-                  {leaderboardStatus !== "error" && (
-                    <Leaderboard
-                      entries={leaderboardEntries}
-                      scope={leaderboardScope}
-                      onScopeChange={setLeaderboardScope}
-                    />
-                  )}
-                </CollapsiblePanel>
-              ) : (
-                <>
-                  {leaderboardStatus === "loading" && (
-                    <p className="body-copy status-copy" aria-live="polite">
-                      {uiText.loadingLeaderboard}
-                    </p>
-                  )}
-                  {leaderboardStatus !== "error" && (
-                    <Leaderboard
-                      entries={leaderboardEntries}
-                      scope={leaderboardScope}
-                      onScopeChange={setLeaderboardScope}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="play-side-panel">
-              {authStatus !== "loading" &&
-                (isCompactLandscape ? (
-                  <CollapsiblePanel
-                    title={user ? uiText.authLinks.playerPanel : uiText.authLinks.signInPanel}
-                    defaultOpen={false}
-                  >
-                    <AuthPanel
-                      user={user}
-                      onAuthChange={(nextUser) => {
-                        setUser(nextUser);
-                        setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
-                        setLeaderboardRefreshKey((currentKey) => currentKey + 1);
-                      }}
-                    />
-                  </CollapsiblePanel>
-                ) : (
-                  <AuthPanel
-                    user={user}
-                    onAuthChange={(nextUser) => {
-                      setUser(nextUser);
-                      setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
-                      setLeaderboardRefreshKey((currentKey) => currentKey + 1);
-                    }}
-                  />
-                ))}
-            </div>
-          </div>
-        )}
-
-        {status === "success" && maze && leaderboardStatus === "error" && (
-          <p className="body-copy status-copy error-copy" aria-live="polite">
-            {uiText.leaderboardError}
-          </p>
+          <PlaySidebarPanels
+            mazeDate={maze.date}
+            user={user}
+            authStatus={authStatus}
+            leaderboardRefreshKey={leaderboardRefreshKey}
+            isCompactLandscape={isCompactLandscape}
+            onAuthChange={(nextUser) => {
+              setUser(nextUser);
+              setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
+              setLeaderboardRefreshKey((currentKey) => currentKey + 1);
+            }}
+          />
         )}
 
         {status === "error" && (
@@ -1311,6 +1015,7 @@ export default function PlayPage() {
             <p className="body-copy status-copy" aria-live="polite">
               {uiText.loadingMaze}
             </p>
+            <PlaySkeleton />
           </div>
         </main>
       }
