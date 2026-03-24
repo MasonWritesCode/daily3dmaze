@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -181,5 +183,491 @@ func TestFetchOAuthIdentityGoogle(t *testing.T) {
 	}
 	if identity.Email != "mason@example.com" {
 		t.Fatalf("expected email mason@example.com, got %q", identity.Email)
+	}
+}
+
+func TestResolveOAuthUserCreatesAndLinksNewUser(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM oauth_accounts
+		JOIN users ON users.id = oauth_accounts.user_id
+		WHERE oauth_accounts.provider = $1 AND oauth_accounts.provider_user_id = $2
+	`)).
+		WithArgs("google", "google-user-123").
+		WillReturnError(sql.ErrNoRows)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM users WHERE username = $1)`)).
+		WithArgs("mason").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		INSERT INTO users (username, password_hash, role)
+		VALUES ($1, $2, $3)
+		RETURNING id, username, role
+	`)).
+		WithArgs("mason", sqlmock.AnyArg(), roleUser).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason", roleUser))
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_username, provider_email)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (provider, provider_user_id)
+		DO NOTHING
+	`)).
+		WithArgs(int64(7), "google", "google-user-123", "mason", sql.NullString{String: "mason@example.com", Valid: true}).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	user, err := application.resolveOAuthUser(httptest.NewRequest(http.MethodGet, "/", nil), oauthIdentity{
+		Provider:       "google",
+		ProviderUserID: "google-user-123",
+		Username:       "mason",
+		Email:          "mason@example.com",
+	})
+	if err != nil {
+		t.Fatalf("resolve oauth user: %v", err)
+	}
+
+	if user.Username != "mason" || user.Role != roleUser {
+		t.Fatalf("unexpected created oauth user: %+v", user)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestResolveOAuthUserRejectsBannedLinkedAccount(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM oauth_accounts
+		JOIN users ON users.id = oauth_accounts.user_id
+		WHERE oauth_accounts.provider = $1 AND oauth_accounts.provider_user_id = $2
+	`)).
+		WithArgs("github", "42").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleUser, true))
+
+	_, err = application.resolveOAuthUser(httptest.NewRequest(http.MethodGet, "/", nil), oauthIdentity{
+		Provider:       "github",
+		ProviderUserID: "42",
+		Username:       "mason_dev",
+	})
+	if !errors.Is(err, errAccountBanned) {
+		t.Fatalf("expected banned-account error, got %v", err)
+	}
+}
+
+func TestResolveOAuthUserLinksAccountToExistingSessionUser(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	token := "session-token"
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM oauth_accounts
+		JOIN users ON users.id = oauth_accounts.user_id
+		WHERE oauth_accounts.provider = $1 AND oauth_accounts.provider_user_id = $2
+	`)).
+		WithArgs("github", "42").
+		WillReturnError(sql.ErrNoRows)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM sessions
+		JOIN users ON users.id = sessions.user_id
+		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
+	`)).
+		WithArgs(hashToken(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(9, "signed_in_user", roleModerator, false))
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_username, provider_email)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (provider, provider_user_id)
+		DO NOTHING
+	`)).
+		WithArgs(int64(9), "github", "42", "mason_dev", sql.NullString{String: "", Valid: false}).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+
+	user, err := application.resolveOAuthUser(request, oauthIdentity{
+		Provider:       "github",
+		ProviderUserID: "42",
+		Username:       "mason_dev",
+	})
+	if err != nil {
+		t.Fatalf("resolve oauth user: %v", err)
+	}
+
+	if user.ID != 9 || user.Username != "signed_in_user" {
+		t.Fatalf("unexpected linked session user %+v", user)
+	}
+}
+
+func TestLinkOAuthAccountRejectsDifferentOwnerCollision(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_username, provider_email)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (provider, provider_user_id)
+		DO NOTHING
+	`)).
+		WithArgs(int64(7), "google", "google-user-123", "mason", sql.NullString{String: "mason@example.com", Valid: true}).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT user_id
+		FROM oauth_accounts
+		WHERE provider = $1 AND provider_user_id = $2
+	`)).
+		WithArgs("google", "google-user-123").
+		WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(int64(11)))
+
+	err = application.linkOAuthAccount(currentUser{ID: 7, Username: "mason"}, oauthIdentity{
+		Provider:       "google",
+		ProviderUserID: "google-user-123",
+		Username:       "mason",
+		Email:          "mason@example.com",
+	})
+	if err == nil || err.Error() != "oauth account is already linked to another user" {
+		t.Fatalf("expected ownership collision error, got %v", err)
+	}
+}
+
+func TestLinkOAuthAccountAllowsExistingLinkForSameUser(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO oauth_accounts (user_id, provider, provider_user_id, provider_username, provider_email)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (provider, provider_user_id)
+		DO NOTHING
+	`)).
+		WithArgs(int64(7), "github", "42", "mason_dev", sql.NullString{String: "", Valid: false}).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT user_id
+		FROM oauth_accounts
+		WHERE provider = $1 AND provider_user_id = $2
+	`)).
+		WithArgs("github", "42").
+		WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(int64(7)))
+
+	if err := application.linkOAuthAccount(currentUser{ID: 7, Username: "mason"}, oauthIdentity{
+		Provider:       "github",
+		ProviderUserID: "42",
+		Username:       "mason_dev",
+	}); err != nil {
+		t.Fatalf("expected idempotent link to succeed, got %v", err)
+	}
+}
+
+func TestAllocateOAuthUsernameFallsBackToNumberedSuffix(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM users WHERE username = $1)`)).
+		WithArgs("mason").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM users WHERE username = $1)`)).
+		WithArgs("mason2").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	username, err := application.allocateOAuthUsername("mason", "google")
+	if err != nil {
+		t.Fatalf("allocate oauth username: %v", err)
+	}
+	if username != "mason2" {
+		t.Fatalf("expected username mason2, got %q", username)
+	}
+}
+
+func TestOAuthCallbackHandlerReturnsForbiddenForBannedAccount(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.String() {
+		case "https://oauth.example/token":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`{"access_token":"oauth-access-token"}`)),
+			}, nil
+		case "https://oauth.example/user":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`{"sub":"google-user-123","email":"mason@example.com","name":"Mason"}`)),
+			}, nil
+		default:
+			t.Fatalf("unexpected oauth request url %q", r.URL.String())
+			return nil, nil
+		}
+	})}
+
+	application := app{
+		db:          db,
+		oauthClient: client,
+		webBaseURL:  "http://localhost:3000",
+		apiBaseURL:  "http://localhost:8080",
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM oauth_accounts
+		JOIN users ON users.id = oauth_accounts.user_id
+		WHERE oauth_accounts.provider = $1 AND oauth_accounts.provider_user_id = $2
+	`)).
+		WithArgs("google", "google-user-123").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleUser, true))
+
+	stateRecorder := httptest.NewRecorder()
+	if err := setOAuthStateCookie(stateRecorder, "google", "test-state"); err != nil {
+		t.Fatalf("set oauth state cookie: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/google/callback?state=test-state&code=oauth-code", nil)
+	for _, cookie := range stateRecorder.Result().Cookies() {
+		request.AddCookie(cookie)
+	}
+	recorder := httptest.NewRecorder()
+
+	application.oauthCallbackHandler(recorder, request, oauthProvider{
+		Name:         "google",
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenURL:     "https://oauth.example/token",
+		UserURL:      "https://oauth.example/user",
+	})
+
+	if recorder.Result().StatusCode != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, recorder.Result().StatusCode)
+	}
+}
+
+func TestOAuthCallbackHandlerReturnsServerErrorWhenSessionCreationFails(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.String() {
+		case "https://oauth.example/token":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`{"access_token":"oauth-access-token"}`)),
+			}, nil
+		case "https://oauth.example/user":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`{"sub":"google-user-123","email":"mason@example.com","name":"Mason"}`)),
+			}, nil
+		default:
+			t.Fatalf("unexpected oauth request url %q", r.URL.String())
+			return nil, nil
+		}
+	})}
+
+	application := app{
+		db:          db,
+		oauthClient: client,
+		webBaseURL:  "http://localhost:3000",
+		apiBaseURL:  "http://localhost:8080",
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM oauth_accounts
+		JOIN users ON users.id = oauth_accounts.user_id
+		WHERE oauth_accounts.provider = $1 AND oauth_accounts.provider_user_id = $2
+	`)).
+		WithArgs("google", "google-user-123").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleUser, false))
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO sessions (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3)
+	`)).
+		WithArgs(int64(7), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnError(errors.New("db unavailable"))
+
+	stateRecorder := httptest.NewRecorder()
+	if err := setOAuthStateCookie(stateRecorder, "google", "test-state"); err != nil {
+		t.Fatalf("set oauth state cookie: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/google/callback?state=test-state&code=oauth-code", nil)
+	for _, cookie := range stateRecorder.Result().Cookies() {
+		request.AddCookie(cookie)
+	}
+	recorder := httptest.NewRecorder()
+
+	application.oauthCallbackHandler(recorder, request, oauthProvider{
+		Name:         "google",
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenURL:     "https://oauth.example/token",
+		UserURL:      "https://oauth.example/user",
+	})
+
+	if recorder.Result().StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, recorder.Result().StatusCode)
+	}
+}
+
+func TestOAuthCallbackHandlerCreatesSessionAndRedirects(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.String() {
+		case "https://oauth.example/token":
+			payload := `{"access_token":"oauth-access-token"}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(payload)),
+			}, nil
+		case "https://oauth.example/user":
+			payload := `{"sub":"google-user-123","email":"mason@example.com","name":"Mason"}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(payload)),
+			}, nil
+		default:
+			t.Fatalf("unexpected oauth request url %q", r.URL.String())
+			return nil, nil
+		}
+	})}
+
+	application := app{
+		db:          db,
+		oauthClient: client,
+		webBaseURL:  "http://localhost:3000",
+		apiBaseURL:  "http://localhost:8080",
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM oauth_accounts
+		JOIN users ON users.id = oauth_accounts.user_id
+		WHERE oauth_accounts.provider = $1 AND oauth_accounts.provider_user_id = $2
+	`)).
+		WithArgs("google", "google-user-123").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleUser, false))
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO sessions (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3)
+	`)).
+		WithArgs(int64(7), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/google/callback?state=test-state&code=oauth-code", nil)
+	if err := setOAuthStateCookie(httptest.NewRecorder(), "google", "test-state"); err != nil {
+		t.Fatalf("set oauth state cookie: %v", err)
+	}
+	stateRecorder := httptest.NewRecorder()
+	if err := setOAuthStateCookie(stateRecorder, "google", "test-state"); err != nil {
+		t.Fatalf("set oauth state cookie: %v", err)
+	}
+	for _, cookie := range stateRecorder.Result().Cookies() {
+		request.AddCookie(cookie)
+	}
+	recorder := httptest.NewRecorder()
+
+	application.oauthCallbackHandler(recorder, request, oauthProvider{
+		Name:         "google",
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		TokenURL:     "https://oauth.example/token",
+		UserURL:      "https://oauth.example/user",
+	})
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusFound {
+		t.Fatalf("expected redirect status, got %d", response.StatusCode)
+	}
+	if got := response.Header.Get("Location"); got != "http://localhost:3000/play" {
+		t.Fatalf("expected redirect to play page, got %q", got)
+	}
+	if len(response.Cookies()) == 0 {
+		t.Fatal("expected callback to set session cookie")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }

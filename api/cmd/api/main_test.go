@@ -476,6 +476,133 @@ func TestRecentRunReviewsHandlerRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestRecentRunReviewsHandlerReturnsPayloadForModerator(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+	application := app{
+		db:  db,
+		now: func() time.Time { return now },
+	}
+	token := "session-token"
+	acceptedAt := time.Date(2026, 3, 23, 11, 30, 0, 0, time.UTC)
+	verifiedAt := time.Date(2026, 3, 23, 11, 31, 0, 0, time.UTC)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM sessions
+		JOIN users ON users.id = sessions.user_id
+		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
+	`)).
+		WithArgs(hashToken(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mod_mason", roleModerator, false))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT
+			runs.public_id,
+			runs.run_date::text,
+			runs.seed,
+			COALESCE(users.username, ''),
+			runs.move_count,
+			runs.elapsed_time_ms,
+			runs.suspicion_score,
+			runs.suspicion_reasons_json,
+			runs.verification_status,
+			runs.verification_notes_json,
+			runs.verification_started_at,
+			runs.verified_at,
+			runs.verification_attempts,
+			runs.verification_error,
+			runs.review_status,
+			runs.review_notes,
+			runs.reviewed_at,
+			review_users.username,
+			runs.accepted_at
+		FROM runs
+		LEFT JOIN users ON users.id = runs.user_id
+		LEFT JOIN users AS review_users ON review_users.id = runs.reviewed_by_user_id
+		ORDER BY runs.accepted_at DESC
+		LIMIT 20
+	`)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"public_id", "run_date", "seed", "username", "move_count", "elapsed_time_ms",
+			"suspicion_score", "suspicion_reasons_json", "verification_status",
+			"verification_notes_json", "verification_started_at", "verified_at",
+			"verification_attempts", "verification_error", "review_status",
+			"review_notes", "reviewed_at", "review_users_username", "accepted_at",
+		}).AddRow(
+			"run_0123456789abcdef0123456789abcdef",
+			"2026-03-23",
+			"daily3dmaze:2026-03-23",
+			"mason",
+			108,
+			33600,
+			0,
+			[]byte(`[]`),
+			"verified",
+			[]byte(`["simulation_matches_expected_outcome"]`),
+			nil,
+			verifiedAt,
+			1,
+			nil,
+			"unreviewed",
+			"",
+			nil,
+			nil,
+			acceptedAt,
+		))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT
+			COUNT(*) FILTER (WHERE verification_status = 'pending'),
+			COUNT(*) FILTER (WHERE verification_status = 'verified'),
+			COUNT(*) FILTER (WHERE verification_status = 'suspicious'),
+			COUNT(*) FILTER (WHERE verification_status = 'invalid'),
+			COUNT(*) FILTER (
+				WHERE verification_status = 'pending'
+					AND (
+						(verification_started_at IS NOT NULL AND verification_started_at < $1)
+						OR (verification_started_at IS NULL AND accepted_at < $1)
+					)
+			)
+		FROM runs
+	`)).
+		WithArgs(now.Add(-stalePendingAfter)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"pending_count", "verified_count", "suspicious_count", "invalid_count", "stale_pending_count",
+		}).AddRow(1, 2, 3, 4, 5))
+
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/run-reviews", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	application.recentRunReviewsHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.StatusCode)
+	}
+
+	var payload recentRunReviewsResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode run reviews response: %v", err)
+	}
+	if payload.Summary.VerifiedCount != 2 || len(payload.Entries) != 1 {
+		t.Fatalf("unexpected reviews payload %+v", payload)
+	}
+	if payload.Entries[0].PublicID != "run_0123456789abcdef0123456789abcdef" {
+		t.Fatalf("unexpected review entry %+v", payload.Entries[0])
+	}
+}
+
 func TestRecentRunReviewsHandlerRequiresModeratorRole(t *testing.T) {
 	t.Parallel()
 
@@ -525,6 +652,230 @@ func TestRunReviewDetailHandlerRequiresAuthentication(t *testing.T) {
 
 	if response.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, response.StatusCode)
+	}
+}
+
+func TestRunReviewDetailHandlerReturnsDetailForModerator(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	token := "session-token"
+	acceptedAt := time.Date(2026, 3, 23, 11, 30, 0, 0, time.UTC)
+	replayTrace := []replayTraceEvent{{ElapsedTimeMs: 300, Action: "move_forward"}}
+	replayTraceJSON, err := json.Marshal(replayTrace)
+	if err != nil {
+		t.Fatalf("marshal replay trace: %v", err)
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM sessions
+		JOIN users ON users.id = sessions.user_id
+		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
+	`)).
+		WithArgs(hashToken(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mod_mason", roleModerator, false))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT
+			runs.public_id,
+			runs.run_date::text,
+			runs.seed,
+			COALESCE(users.username, ''),
+			runs.move_count,
+			runs.elapsed_time_ms,
+			runs.suspicion_score,
+			runs.suspicion_reasons_json,
+			runs.verification_status,
+			runs.verification_notes_json,
+			runs.verification_started_at,
+			runs.verified_at,
+			runs.verification_attempts,
+			runs.verification_error,
+			runs.review_status,
+			runs.review_notes,
+			runs.reviewed_at,
+			review_users.username,
+			runs.replay_trace_json,
+			runs.accepted_at
+		FROM runs
+		LEFT JOIN users ON users.id = runs.user_id
+		LEFT JOIN users AS review_users ON review_users.id = runs.reviewed_by_user_id
+		WHERE runs.public_id = $1
+	`)).
+		WithArgs("run_0123456789abcdef0123456789abcdef").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"public_id", "run_date", "seed", "username", "move_count", "elapsed_time_ms",
+			"suspicion_score", "suspicion_reasons_json", "verification_status",
+			"verification_notes_json", "verification_started_at", "verified_at",
+			"verification_attempts", "verification_error", "review_status",
+			"review_notes", "reviewed_at", "review_users_username", "replay_trace_json", "accepted_at",
+		}).AddRow(
+			"run_0123456789abcdef0123456789abcdef",
+			"2026-03-23",
+			"daily3dmaze:2026-03-23",
+			"mason",
+			108,
+			33600,
+			0,
+			[]byte(`[]`),
+			"verified",
+			[]byte(`["simulation_matches_expected_outcome"]`),
+			nil,
+			nil,
+			1,
+			nil,
+			"unreviewed",
+			"",
+			nil,
+			nil,
+			replayTraceJSON,
+			acceptedAt,
+		))
+
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/run-reviews/run_0123456789abcdef0123456789abcdef", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	application.runReviewDetailHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.StatusCode)
+	}
+
+	var payload runReviewDetailResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode run review detail: %v", err)
+	}
+	if payload.Entry.PublicID != "run_0123456789abcdef0123456789abcdef" || len(payload.ReplayTrace) != 1 {
+		t.Fatalf("unexpected detail payload %+v", payload)
+	}
+}
+
+func TestRunReviewDetailHandlerRequeuesRun(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	token := "session-token"
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM sessions
+		JOIN users ON users.id = sessions.user_id
+		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
+	`)).
+		WithArgs(hashToken(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mod_mason", roleModerator, false))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		UPDATE runs
+		SET
+			verification_status = $2,
+			verification_notes_json = $3,
+			verification_started_at = NULL,
+			verified_at = NULL,
+			verification_error = NULL
+		WHERE public_id = $1
+		RETURNING verification_attempts
+	`)).
+		WithArgs("run_0123456789abcdef0123456789abcdef", string(VerificationStatusPending), []byte(`["manually_requeued_for_verification"]`)).
+		WillReturnRows(sqlmock.NewRows([]string{"verification_attempts"}).AddRow(2))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/run_0123456789abcdef0123456789abcdef/requeue", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	application.runReviewDetailHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.StatusCode)
+	}
+
+	var payload requeueRunReviewResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode requeue response: %v", err)
+	}
+	if payload.VerificationAttempts != 2 || payload.RunPublicID == "" {
+		t.Fatalf("unexpected requeue payload %+v", payload)
+	}
+}
+
+func TestRunReviewDetailHandlerUpdatesReview(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Date(2026, 3, 23, 12, 0, 0, 0, time.UTC)
+	application := app{
+		db:  db,
+		now: func() time.Time { return now },
+	}
+	token := "session-token"
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM sessions
+		JOIN users ON users.id = sessions.user_id
+		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
+	`)).
+		WithArgs(hashToken(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mod_mason", roleModerator, false))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		UPDATE runs
+		SET
+			review_status = $2,
+			review_notes = $3,
+			reviewed_at = $4,
+			reviewed_by_user_id = $5
+		WHERE public_id = $1
+		RETURNING id
+	`)).
+		WithArgs("run_0123456789abcdef0123456789abcdef", "reviewed_clean", "looks legitimate", sql.NullTime{Time: now, Valid: true}, int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(3))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/run-reviews/run_0123456789abcdef0123456789abcdef/review", strings.NewReader(`{"reviewStatus":"reviewed_clean","reviewNotes":" looks legitimate "}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	application.runReviewDetailHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.StatusCode)
+	}
+
+	var payload updateRunReviewResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode update review response: %v", err)
+	}
+	if payload.ReviewStatus != "reviewed_clean" || payload.ReviewedByUsername == nil || *payload.ReviewedByUsername != "mod_mason" {
+		t.Fatalf("unexpected update review payload %+v", payload)
 	}
 }
 

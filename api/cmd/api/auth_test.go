@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -197,6 +198,98 @@ func TestLoginHandlerRejectsInvalidPassword(t *testing.T) {
 	}
 }
 
+func TestLoginHandlerCreatesSessionOnSuccess(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("supersecure123"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("generate password hash: %v", err)
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, username, role, COALESCE(is_banned, FALSE), password_hash
+		FROM users
+		WHERE username = $1
+	`)).
+		WithArgs("mason_dev").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned", "password_hash"}).
+			AddRow(7, "mason_dev", roleModerator, false, string(passwordHash)))
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO sessions (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3)
+	`)).
+		WithArgs(int64(7), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(
+		`{"username":"mason_dev","password":"supersecure123"}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	application.loginHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.StatusCode)
+	}
+
+	var payload authResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode auth response: %v", err)
+	}
+	if payload.User.Username != "mason_dev" || payload.User.Role != roleModerator {
+		t.Fatalf("unexpected login payload %+v", payload.User)
+	}
+	if len(response.Cookies()) != 1 {
+		t.Fatalf("expected session cookie, got %d cookies", len(response.Cookies()))
+	}
+}
+
+func TestLoginHandlerRejectsBannedUser(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT id, username, role, COALESCE(is_banned, FALSE), password_hash
+		FROM users
+		WHERE username = $1
+	`)).
+		WithArgs("mason_dev").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned", "password_hash"}).
+			AddRow(7, "mason_dev", roleUser, true, "$2a$10$invalidplaceholderhashvalue123456789012345678901234567890123"))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(
+		`{"username":"mason_dev","password":"supersecure123"}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	application.loginHandler(recorder, request)
+
+	if recorder.Result().StatusCode != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, recorder.Result().StatusCode)
+	}
+}
+
 func TestMeHandlerReturnsAuthenticatedUser(t *testing.T) {
 	t.Parallel()
 
@@ -292,6 +385,70 @@ func TestLogoutHandlerDeletesSessionAndClearsCookie(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestMeHandlerRejectsBannedSessionUser(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	token := "session-token"
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT users.id, users.username, users.role, COALESCE(users.is_banned, FALSE)
+		FROM sessions
+		JOIN users ON users.id = sessions.user_id
+		WHERE sessions.token_hash = $1 AND sessions.expires_at > NOW()
+	`)).
+		WithArgs(hashToken(token)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleUser, true))
+
+	request := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
+	recorder := httptest.NewRecorder()
+
+	application.meHandler(recorder, request)
+
+	if recorder.Result().StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, recorder.Result().StatusCode)
+	}
+}
+
+func TestRegisterHandlerReturnsConflictWhenUsernameUnavailable(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		INSERT INTO users (username, password_hash, role)
+		VALUES ($1, $2, $3)
+		RETURNING id, username, role
+	`)).
+		WithArgs("mason_dev", sqlmock.AnyArg(), roleUser).
+		WillReturnError(errors.New("duplicate key value violates unique constraint"))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(
+		`{"username":"Mason_Dev","password":"supersecure123"}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	application.registerHandler(recorder, request)
+
+	if recorder.Result().StatusCode != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d", http.StatusConflict, recorder.Result().StatusCode)
 	}
 }
 
