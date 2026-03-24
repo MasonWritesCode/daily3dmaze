@@ -159,15 +159,16 @@ type updateRunReviewResponse struct {
 }
 
 type app struct {
-	db             *sql.DB
-	authLimiter    *authRateLimiter
-	now            func() time.Time
-	oauthClient    *http.Client
-	oauthProviders map[string]oauthProvider
+	db                  *sql.DB
+	authLimiter         *authRateLimiter
+	now                 func() time.Time
+	oauthClient         *http.Client
+	oauthProviders      map[string]oauthProvider
 	passwordResetSender passwordResetSender
-	apiBaseURL     string
-	webBaseURL     string
-	allowedOrigins map[string]struct{}
+	apiBaseURL          string
+	webBaseURL          string
+	allowedOrigins      map[string]struct{}
+	trustProxyHeaders   bool
 }
 
 const (
@@ -203,6 +204,7 @@ func main() {
 		apiBaseURL:          envOrDefault("API_BASE_URL", "http://localhost:8080"),
 		webBaseURL:          envOrDefault("WEB_BASE_URL", "http://localhost:3000"),
 		allowedOrigins:      configuredAllowedOrigins(),
+		trustProxyHeaders:   configuredTrustProxyHeaders(),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
@@ -212,6 +214,8 @@ func main() {
 	mux.HandleFunc("/api/auth/logout", application.logoutHandler)
 	mux.HandleFunc("/api/auth/forgot-password", application.forgotPasswordHandler)
 	mux.HandleFunc("/api/auth/reset-password", application.resetPasswordHandler)
+	mux.HandleFunc("/api/auth/verify-email/request", application.requestEmailVerificationHandler)
+	mux.HandleFunc("/api/auth/verify-email", application.verifyEmailHandler)
 	mux.HandleFunc("/api/auth/oauth/", application.oauthHandler)
 	mux.HandleFunc("/api/me", application.meHandler)
 	mux.HandleFunc("/api/profile", application.profileHandler)
@@ -229,7 +233,8 @@ func main() {
 	addr := ":" + port
 	log.Printf("api listening on %s", addr)
 
-	if err := http.ListenAndServe(addr, withCORS(mux, application.allowedOrigins)); err != nil {
+	handler := withSecurityHeaders(withCORS(mux, application.allowedOrigins))
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -502,9 +507,9 @@ func (a app) loadRunStatus(runPublicID string) (runStatusResponse, error) {
 	`
 
 	var (
-		response             runStatusResponse
-		acceptedAt           time.Time
-		suspicionReasonsJSON []byte
+		response              runStatusResponse
+		acceptedAt            time.Time
+		suspicionReasonsJSON  []byte
 		verificationNotesJSON []byte
 	)
 
@@ -1463,6 +1468,20 @@ func withCORS(next http.Handler, allowedOrigins map[string]struct{}) http.Handle
 	})
 }
 
+func withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func configuredTrustProxyHeaders() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("TRUST_PROXY_HEADERS")), "true")
+}
+
 type authRateLimiter struct {
 	limit         int
 	window        time.Duration
@@ -1509,16 +1528,18 @@ func (l *authRateLimiter) allow(action, key string) bool {
 	return true
 }
 
-func rateLimitKeyFromRequest(r *http.Request) string {
-	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
-		first := strings.TrimSpace(strings.Split(forwardedFor, ",")[0])
-		if first != "" {
-			return first
+func (a app) rateLimitKeyFromRequest(r *http.Request) string {
+	if a.trustProxyHeaders {
+		if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
+			first := strings.TrimSpace(strings.Split(forwardedFor, ",")[0])
+			if first != "" {
+				return first
+			}
 		}
-	}
 
-	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
-		return realIP
+		if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+			return realIP
+		}
 	}
 
 	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))

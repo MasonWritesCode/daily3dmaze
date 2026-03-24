@@ -9,6 +9,7 @@ import {
   authenticate,
   fetchLeaderboard,
   logout,
+  requestEmailVerification,
   roleAllows,
   ROLE_ADMIN,
   ROLE_MODERATOR,
@@ -30,6 +31,7 @@ import {
 type SubmissionStatus = "idle" | "submitting" | "submitted" | "error";
 type AuthMode = "login" | "register";
 type AuthStatus = "loading" | "authenticated" | "unauthenticated";
+type AuthFieldKey = "username" | "email" | "password";
 
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
@@ -126,8 +128,31 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
   const [password, setPassword] = useState<string>("");
   const [status, setStatus] = useState<SubmissionStatus | "success">("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [invalidFields, setInvalidFields] = useState<AuthFieldKey[]>([]);
+  const [registeredWithEmail, setRegisteredWithEmail] = useState<boolean>(false);
+  const [verificationMessage, setVerificationMessage] = useState<string>("");
+  const [verificationStatus, setVerificationStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const errorId = "auth-panel-error";
   const helperId = "auth-panel-helper";
+  function describeAuthError(message: string): { message: string; invalidFields: AuthFieldKey[] } {
+    switch (message.trim().toLowerCase()) {
+      case "username is unavailable":
+        return {
+          message: uiText.authErrors.usernameUnavailable,
+          invalidFields: ["username"]
+        };
+      case "email is already in use":
+        return {
+          message: uiText.authErrors.emailUnavailable,
+          invalidFields: ["email"]
+        };
+      default:
+        return {
+          message,
+          invalidFields: mode === "login" ? ["username", "password"] : ["username", "password"]
+        };
+    }
+  }
   const submitLabel =
     mode === "register" ? uiText.actions.createAccount : uiText.actions.logIn;
   const statusMessage =
@@ -136,23 +161,28 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
         ? uiText.auth.creatingAccount
         : uiText.auth.signingIn
       : status === "success"
-        ? mode === "register"
-          ? uiText.auth.registerSuccess
+      ? mode === "register"
+          ? registeredWithEmail
+            ? uiText.auth.registerSuccessWithVerification
+            : uiText.auth.registerSuccess
           : uiText.auth.loginSuccess
-        : "";
+      : "";
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("submitting");
     setErrorMessage("");
+    setInvalidFields([]);
 
     try {
+      const didRegisterWithEmail = mode === "register" && email.trim() !== "";
       const authenticatedUser = await authenticate(mode, {
         username,
         email: mode === "register" ? email : undefined,
         password
       });
       onAuthChange(authenticatedUser);
+      setRegisteredWithEmail(didRegisterWithEmail);
       setStatus("success");
       setErrorMessage("");
       setPassword("");
@@ -160,10 +190,16 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
         setEmail("");
       }
     } catch (error) {
+      const describedError: { message: string; invalidFields: AuthFieldKey[] } =
+        error instanceof Error
+          ? describeAuthError(error.message)
+          : {
+              message: uiText.authErrors.authenticationFailed,
+              invalidFields: mode === "login" ? ["username", "password"] : ["username", "password"]
+            };
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? error.message : uiText.authErrors.authenticationFailed
-      );
+      setErrorMessage(describedError.message);
+      setInvalidFields(describedError.invalidFields);
     }
   }
 
@@ -175,10 +211,29 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
       await logout();
       onAuthChange(null);
       setStatus("idle");
+      setInvalidFields([]);
+      setRegisteredWithEmail(false);
       setPassword("");
     } catch (error) {
       setStatus("error");
       setErrorMessage(error instanceof Error ? error.message : uiText.authErrors.logoutFailed);
+    }
+  }
+
+  async function handleVerificationRequest() {
+    setVerificationStatus("submitting");
+    setVerificationMessage("");
+
+    try {
+      const response = await requestEmailVerification();
+      setVerificationStatus("success");
+      setVerificationMessage(response.message || uiText.auth.verificationSent);
+      onAuthChange(user);
+    } catch (error) {
+      setVerificationStatus("error");
+      setVerificationMessage(
+        error instanceof Error ? error.message : uiText.authErrors.authenticationFailed
+      );
     }
   }
 
@@ -198,6 +253,32 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
               <RoleBadge role={user.role} labels={uiText.auth.roles} />
             </span>
           </p>
+          {user.email && !user.emailVerified && (
+            <div className="status-panel">
+              <p className="body-copy"><strong>{uiText.auth.emailUnverifiedTitle}</strong></p>
+              <p className="body-copy">{uiText.auth.emailUnverifiedBody}</p>
+              <div className="actions auth-panel-actions auth-panel-actions-authenticated">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleVerificationRequest}
+                  disabled={verificationStatus === "submitting"}
+                >
+                  {uiText.auth.sendVerification}
+                </button>
+              </div>
+              {verificationMessage && (
+                <p
+                  className={`body-copy status-copy ${
+                    verificationStatus === "error" ? "error-copy" : "success-copy"
+                  }`}
+                  aria-live={verificationStatus === "error" ? "assertive" : "polite"}
+                >
+                  {verificationMessage}
+                </p>
+              )}
+            </div>
+          )}
           <div className="actions auth-panel-actions auth-panel-actions-authenticated">
             {roleAllows(user.role, ROLE_MODERATOR) && (
               <Link href="/admin/reviews" className="secondary-link">
@@ -227,6 +308,8 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
                   setMode("login");
                   setStatus("idle");
                   setErrorMessage("");
+                  setInvalidFields([]);
+                  setRegisteredWithEmail(false);
                   setEmail("");
                 }}
               >
@@ -242,6 +325,8 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
                   setMode("register");
                   setStatus("idle");
                   setErrorMessage("");
+                  setInvalidFields([]);
+                  setRegisteredWithEmail(false);
                 }}
               >
                 {uiText.actions.createAccount}
@@ -261,7 +346,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
               required
               minLength={3}
               maxLength={32}
-              aria-invalid={status === "error"}
+              aria-invalid={invalidFields.includes("username")}
               aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
             />
           </label>
@@ -273,7 +358,8 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
                 autoComplete="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                aria-describedby={helperId}
+                aria-invalid={invalidFields.includes("email")}
+                aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
               />
             </label>
           )}
@@ -289,7 +375,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
               onChange={(event) => setPassword(event.target.value)}
               required
               minLength={10}
-              aria-invalid={status === "error"}
+              aria-invalid={invalidFields.includes("password")}
               aria-describedby={status === "error" ? `${helperId} ${errorId}` : helperId}
             />
           </label>

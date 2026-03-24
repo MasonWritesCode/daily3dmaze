@@ -248,6 +248,44 @@ CREATE INDEX IF NOT EXISTS password_reset_tokens_expires_at_idx
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`)).
+		WithArgs("000015_add_email_verification_to_users.sql").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`ALTER TABLE users
+	ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;`)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO schema_migrations (version) VALUES ($1)`)).
+		WithArgs("000015_add_email_verification_to_users.sql").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = $1)`)).
+		WithArgs("000016_add_email_verification_tokens.sql").
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta(`CREATE TABLE IF NOT EXISTS email_verification_tokens (
+	id BIGSERIAL PRIMARY KEY,
+	user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	token_hash TEXT NOT NULL UNIQUE,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	expires_at TIMESTAMPTZ NOT NULL,
+	used_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS email_verification_tokens_user_id_idx
+	ON email_verification_tokens (user_id);
+
+CREATE INDEX IF NOT EXISTS email_verification_tokens_expires_at_idx
+	ON email_verification_tokens (expires_at);`)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO schema_migrations (version) VALUES ($1)`)).
+		WithArgs("000016_add_email_verification_tokens.sql").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
 	if err := runMigrations(db); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}

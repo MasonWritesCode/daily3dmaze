@@ -29,6 +29,7 @@ type oauthProvider struct {
 	AuthorizeURL string
 	TokenURL     string
 	UserURL      string
+	EmailURL     string
 	Scopes       []string
 }
 
@@ -37,6 +38,7 @@ type oauthIdentity struct {
 	ProviderUserID string
 	Username       string
 	Email          string
+	EmailVerified  bool
 }
 
 type oauthTokenResponse struct {
@@ -47,6 +49,12 @@ type githubUserResponse struct {
 	ID    int64   `json:"id"`
 	Login string  `json:"login"`
 	Email *string `json:"email"`
+}
+
+type githubEmailResponse struct {
+	Email    string `json:"email"`
+	Primary  bool   `json:"primary"`
+	Verified bool   `json:"verified"`
 }
 
 type googleUserResponse struct {
@@ -75,6 +83,7 @@ func configuredOAuthProviders() map[string]oauthProvider {
 			AuthorizeURL: "https://github.com/login/oauth/authorize",
 			TokenURL:     "https://github.com/login/oauth/access_token",
 			UserURL:      "https://api.github.com/user",
+			EmailURL:     "https://api.github.com/user/emails",
 			Scopes:       []string{"read:user", "user:email"},
 		}
 	}
@@ -356,8 +365,15 @@ func fetchOAuthIdentity(client *http.Client, provider oauthProvider, accessToken
 		}
 
 		email := ""
+		emailVerified := false
 		if payload.Email != nil {
 			email = strings.TrimSpace(*payload.Email)
+		}
+		if provider.EmailURL != "" {
+			if verifiedEmail, ok := fetchVerifiedGitHubEmail(client, provider, accessToken); ok {
+				email = verifiedEmail
+				emailVerified = true
+			}
 		}
 
 		return oauthIdentity{
@@ -365,6 +381,7 @@ func fetchOAuthIdentity(client *http.Client, provider oauthProvider, accessToken
 			ProviderUserID: strconv.FormatInt(payload.ID, 10),
 			Username:       payload.Login,
 			Email:          email,
+			EmailVerified:  emailVerified,
 		}, nil
 	case "google":
 		var payload googleUserResponse
@@ -394,10 +411,51 @@ func fetchOAuthIdentity(client *http.Client, provider oauthProvider, accessToken
 			ProviderUserID: payload.Sub,
 			Username:       username,
 			Email:          email,
+			EmailVerified:  payload.EmailVerified,
 		}, nil
 	default:
 		return oauthIdentity{}, errors.New("oauth provider is not supported")
 	}
+}
+
+func fetchVerifiedGitHubEmail(client *http.Client, provider oauthProvider, accessToken string) (string, bool) {
+	request, err := http.NewRequest(http.MethodGet, provider.EmailURL, nil)
+	if err != nil {
+		return "", false
+	}
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	request.Header.Set("Accept", "application/json")
+
+	response, err := client.Do(request)
+	if err != nil {
+		return "", false
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return "", false
+	}
+
+	var payload []githubEmailResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		return "", false
+	}
+
+	for _, candidate := range payload {
+		email := strings.TrimSpace(candidate.Email)
+		if candidate.Primary && candidate.Verified && email != "" {
+			return email, true
+		}
+	}
+
+	for _, candidate := range payload {
+		email := strings.TrimSpace(candidate.Email)
+		if candidate.Verified && email != "" {
+			return email, true
+		}
+	}
+
+	return "", false
 }
 
 func (a app) resolveOAuthUser(r *http.Request, identity oauthIdentity) (currentUser, error) {
@@ -424,7 +482,7 @@ func (a app) resolveOAuthUser(r *http.Request, identity oauthIdentity) (currentU
 		return currentUser{}, err
 	}
 
-	user, err := a.createUser(username, identity.Email, passwordHash)
+	user, err := a.createUser(username, identity.Email, passwordHash, identity.EmailVerified)
 	if err != nil {
 		return currentUser{}, err
 	}
@@ -480,6 +538,11 @@ func (a app) linkOAuthAccount(user currentUser, identity oauthIdentity) error {
 		return err
 	}
 	if rowsAffected > 0 {
+		if identity.EmailVerified {
+			if err := a.syncVerifiedOAuthEmail(user.ID, identity.Email); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -497,7 +560,38 @@ func (a app) linkOAuthAccount(user currentUser, identity oauthIdentity) error {
 		return errors.New("oauth account is already linked to another user")
 	}
 
+	if identity.EmailVerified {
+		if err := a.syncVerifiedOAuthEmail(user.ID, identity.Email); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+func (a app) syncVerifiedOAuthEmail(userID int64, email string) error {
+	normalizedEmail := strings.TrimSpace(strings.ToLower(email))
+	if normalizedEmail == "" {
+		return nil
+	}
+
+	const query = `
+		UPDATE users
+		SET
+			email = CASE
+				WHEN email IS NULL OR email = '' OR LOWER(email) = LOWER($2) THEN $2
+				ELSE email
+			END,
+			email_verified_at = CASE
+				WHEN email IS NULL OR email = '' OR LOWER(email) = LOWER($2)
+				THEN COALESCE(email_verified_at, NOW())
+				ELSE email_verified_at
+			END
+		WHERE id = $1
+	`
+
+	_, err := a.db.Exec(query, userID, normalizedEmail)
+	return err
 }
 
 func (a app) allocateOAuthUsername(candidate, providerName string) (string, error) {

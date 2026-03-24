@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -92,11 +93,11 @@ func TestRegisterHandlerCreatesUserAndSession(t *testing.T) {
 	application := app{db: db}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		INSERT INTO users (username, email, password_hash, role)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO users (username, email, email_verified_at, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, username, role
 	`)).
-		WithArgs("mason_dev", sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
+		WithArgs("mason_dev", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleUser))
 
 	mock.ExpectExec(regexp.QuoteMeta(`
@@ -151,6 +152,66 @@ func TestRegisterHandlerCreatesUserAndSession(t *testing.T) {
 	}
 }
 
+func TestRegisterHandlerIssuesVerificationEmailWhenEmailProvided(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	sender := &stubPasswordResetSender{}
+	now := time.Date(2026, 3, 24, 12, 0, 0, 0, time.UTC)
+	application := app{
+		db:                  db,
+		now:                 func() time.Time { return now },
+		webBaseURL:          "http://localhost:3000",
+		passwordResetSender: sender,
+	}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		INSERT INTO users (username, email, email_verified_at, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, username, role
+	`)).
+		WithArgs("mason_dev", sql.NullString{String: "mason@example.com", Valid: true}, sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason_dev", roleUser))
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO sessions (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3)
+	`)).
+		WithArgs(int64(7), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM email_verification_tokens WHERE user_id = $1 OR expires_at <= NOW()`)).
+		WithArgs(int64(7)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+		VALUES ($1, $2, $3)
+	`)).
+		WithArgs(int64(7), sqlmock.AnyArg(), now.Add(emailVerificationLifetime)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(
+		`{"username":"Mason_Dev","email":"mason@example.com","password":"supersecure123"}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	application.registerHandler(recorder, request)
+
+	if recorder.Result().StatusCode != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, recorder.Result().StatusCode)
+	}
+	if sender.calls != 1 {
+		t.Fatalf("expected verification sender to be called once, got %d", sender.calls)
+	}
+}
+
 func TestLoginHandlerRejectsInvalidPassword(t *testing.T) {
 	t.Parallel()
 
@@ -168,14 +229,14 @@ func TestLoginHandlerRejectsInvalidPassword(t *testing.T) {
 	}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, username, role, COALESCE(is_banned, FALSE), password_hash
+		SELECT id, username, role, COALESCE(email, ''), email_verified_at IS NOT NULL, COALESCE(is_banned, FALSE), password_hash
 		FROM users
 		WHERE username = $1
 	`)).
 		WithArgs("mason_dev").
 		WillReturnRows(
-			sqlmock.NewRows([]string{"id", "username", "role", "is_banned", "password_hash"}).
-				AddRow(7, "mason_dev", roleUser, false, string(passwordHash)),
+			sqlmock.NewRows([]string{"id", "username", "role", "email", "email_verified", "is_banned", "password_hash"}).
+				AddRow(7, "mason_dev", roleUser, "", false, false, string(passwordHash)),
 		)
 
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(
@@ -215,13 +276,13 @@ func TestLoginHandlerCreatesSessionOnSuccess(t *testing.T) {
 	}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, username, role, COALESCE(is_banned, FALSE), password_hash
+		SELECT id, username, role, COALESCE(email, ''), email_verified_at IS NOT NULL, COALESCE(is_banned, FALSE), password_hash
 		FROM users
 		WHERE username = $1
 	`)).
 		WithArgs("mason_dev").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned", "password_hash"}).
-			AddRow(7, "mason_dev", roleModerator, false, string(passwordHash)))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "email", "email_verified", "is_banned", "password_hash"}).
+			AddRow(7, "mason_dev", roleModerator, "", false, false, string(passwordHash)))
 
 	mock.ExpectExec(regexp.QuoteMeta(`
 		INSERT INTO sessions (user_id, token_hash, expires_at)
@@ -269,13 +330,13 @@ func TestLoginHandlerRejectsBannedUser(t *testing.T) {
 	application := app{db: db}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		SELECT id, username, role, COALESCE(is_banned, FALSE), password_hash
+		SELECT id, username, role, COALESCE(email, ''), email_verified_at IS NOT NULL, COALESCE(is_banned, FALSE), password_hash
 		FROM users
 		WHERE username = $1
 	`)).
 		WithArgs("mason_dev").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned", "password_hash"}).
-			AddRow(7, "mason_dev", roleUser, true, "$2a$10$invalidplaceholderhashvalue123456789012345678901234567890123"))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "email", "email_verified", "is_banned", "password_hash"}).
+			AddRow(7, "mason_dev", roleUser, "", false, true, "$2a$10$invalidplaceholderhashvalue123456789012345678901234567890123"))
 
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(
 		`{"username":"mason_dev","password":"supersecure123"}`,
@@ -310,6 +371,14 @@ func TestMeHandlerReturnsAuthenticatedUser(t *testing.T) {
 	`)).
 		WithArgs(hashToken(token)).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleModerator, false))
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT COALESCE(email, ''), email_verified_at IS NOT NULL
+		FROM users
+		WHERE id = $1
+	`)).
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"email", "email_verified"}).AddRow("mason@example.com", true))
 
 	request := httptest.NewRequest(http.MethodGet, "/api/me", nil)
 	request.AddCookie(&http.Cookie{Name: sessionCookieName, Value: token})
@@ -432,11 +501,11 @@ func TestRegisterHandlerReturnsConflictWhenUsernameUnavailable(t *testing.T) {
 	application := app{db: db}
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		INSERT INTO users (username, email, password_hash, role)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO users (username, email, email_verified_at, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, username, role
 	`)).
-		WithArgs("mason_dev", sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
+		WithArgs("mason_dev", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
 		WillReturnError(errors.New("duplicate key value violates unique constraint"))
 
 	request := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(
@@ -449,6 +518,41 @@ func TestRegisterHandlerReturnsConflictWhenUsernameUnavailable(t *testing.T) {
 
 	if recorder.Result().StatusCode != http.StatusConflict {
 		t.Fatalf("expected status %d, got %d", http.StatusConflict, recorder.Result().StatusCode)
+	}
+}
+
+func TestRegisterHandlerReturnsConflictWhenEmailAlreadyInUse(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		INSERT INTO users (username, email, email_verified_at, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, username, role
+	`)).
+		WithArgs("mason_dev", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
+		WillReturnError(errors.New(`duplicate key value violates unique constraint "users_email_lower_idx"`))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/register", strings.NewReader(
+		`{"username":"Mason_Dev","email":"mason@example.com","password":"supersecure123"}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	application.registerHandler(recorder, request)
+
+	if recorder.Result().StatusCode != http.StatusConflict {
+		t.Fatalf("expected status %d, got %d", http.StatusConflict, recorder.Result().StatusCode)
+	}
+	if body := recorder.Body.String(); !strings.Contains(body, "email is already in use") {
+		t.Fatalf("expected email collision message, got %q", body)
 	}
 }
 

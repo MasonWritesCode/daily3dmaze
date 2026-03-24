@@ -329,8 +329,16 @@ export const esESMessages = {
       creatingAccount: "Creando cuenta...",
       loginSuccess: "Sesión iniciada correctamente.",
       registerSuccess: "Cuenta creada e iniciada.",
+      registerSuccessWithVerification:
+        "Cuenta creada e iniciada. Revisa tu correo para verificar la dirección.",
       continueWithGitHub: "Continuar con GitHub",
-      continueWithGoogle: "Continuar con Google"
+      continueWithGoogle: "Continuar con Google",
+      emailUnverifiedTitle: "Verifica tu correo",
+      emailUnverifiedBody:
+        "Verifica tu dirección de correo para habilitar el restablecimiento de contraseña para esta cuenta.",
+      sendVerification: "Enviar enlace de verificación",
+      verificationSent: "Enlace de verificación enviado.",
+      alreadyVerified: "Correo verificado"
     },
     authHelper:
       "Los nombres de usuario admiten letras, números, guiones bajos y guiones. Las contraseñas deben tener al menos 10 caracteres.",
@@ -338,7 +346,9 @@ export const esESMessages = {
       "Agrega un correo electrónico si quieres poder restablecer tu contraseña más adelante.",
     authErrors: {
       authenticationFailed: "La autenticación falló",
-      logoutFailed: "No se pudo cerrar la sesión"
+      logoutFailed: "No se pudo cerrar la sesión",
+      usernameUnavailable: "Ese nombre de usuario ya está en uso.",
+      emailUnavailable: "Esa dirección de correo ya está en uso."
     },
     authLinks: {
       internalReviews: "Revisiones internas",
@@ -394,6 +404,17 @@ export const esESMessages = {
         "Tu contraseña se ha restablecido. Puedes volver al reto e iniciar sesión.",
       tokenMissing:
         "No se encontró un token de restablecimiento en el enlace. Solicita un nuevo correo de restablecimiento abajo."
+    },
+    emailVerification: {
+      title: "Verificar correo",
+      intro:
+        "Confirma tu dirección de correo para habilitar la recuperación de cuenta en inicios de sesión locales.",
+      verifying: "Verificando tu correo...",
+      success:
+        "Tu correo se ha verificado. Puedes volver al reto.",
+      error:
+        "Este enlace de verificación no es válido o ha caducado. Solicita uno nuevo desde la página del reto.",
+      action: "Volver al reto"
     },
     verification: {
       pending: "pendiente",

@@ -21,7 +21,6 @@ The project will begin as a monorepo with two primary applications:
 
 Supporting infrastructure is expected to include:
 - Postgres
-- Redis
 
 ## Development Approach
 

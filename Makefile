@@ -4,13 +4,13 @@ export
 .PHONY: infra-up infra-down infra-logs dev-api dev-web dev-worker build-web prod-web
 
 infra-up:
-	docker compose up -d postgres redis
+	docker compose up -d postgres
 
 infra-down:
 	docker compose down
 
 infra-logs:
-	docker compose logs -f postgres redis
+	docker compose logs -f postgres
 
 dev-api:
 	cd api && go run ./cmd/api

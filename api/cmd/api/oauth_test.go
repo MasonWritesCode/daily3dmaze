@@ -184,6 +184,73 @@ func TestFetchOAuthIdentityGoogle(t *testing.T) {
 	if identity.Email != "mason@example.com" {
 		t.Fatalf("expected email mason@example.com, got %q", identity.Email)
 	}
+	if !identity.EmailVerified {
+		t.Fatal("expected google email to be marked verified")
+	}
+}
+
+func TestFetchOAuthIdentityGitHubUsesVerifiedEmailEndpoint(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if got := r.Header.Get("Authorization"); got != "Bearer github-access-token" {
+			t.Fatalf("expected bearer token, got %q", got)
+		}
+
+		switch r.URL.String() {
+		case "https://api.github.test/user":
+			payload, err := json.Marshal(map[string]any{
+				"id":    42,
+				"login": "mason_dev",
+				"email": nil,
+			})
+			if err != nil {
+				t.Fatalf("encode github user response: %v", err)
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewReader(payload)),
+			}, nil
+		case "https://api.github.test/user/emails":
+			payload, err := json.Marshal([]map[string]any{
+				{"email": "secondary@example.com", "primary": false, "verified": true},
+				{"email": "mason@example.com", "primary": true, "verified": true},
+			})
+			if err != nil {
+				t.Fatalf("encode github email response: %v", err)
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewReader(payload)),
+			}, nil
+		default:
+			t.Fatalf("unexpected github request url %q", r.URL.String())
+			return nil, nil
+		}
+	})}
+
+	identity, err := fetchOAuthIdentity(client, oauthProvider{
+		Name:     "github",
+		UserURL:  "https://api.github.test/user",
+		EmailURL: "https://api.github.test/user/emails",
+	}, "github-access-token")
+	if err != nil {
+		t.Fatalf("fetch github oauth identity: %v", err)
+	}
+
+	if identity.ProviderUserID != "42" {
+		t.Fatalf("expected provider user id 42, got %q", identity.ProviderUserID)
+	}
+	if identity.Email != "mason@example.com" {
+		t.Fatalf("expected verified primary email, got %q", identity.Email)
+	}
+	if !identity.EmailVerified {
+		t.Fatal("expected github email to be marked verified")
+	}
 }
 
 func TestResolveOAuthUserCreatesAndLinksNewUser(t *testing.T) {
@@ -211,11 +278,11 @@ func TestResolveOAuthUserCreatesAndLinksNewUser(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 
 	mock.ExpectQuery(regexp.QuoteMeta(`
-		INSERT INTO users (username, email, password_hash, role)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO users (username, email, email_verified_at, password_hash, role)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, username, role
 	`)).
-		WithArgs("mason", sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
+		WithArgs("mason", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), roleUser).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role"}).AddRow(7, "mason", roleUser))
 
 	mock.ExpectExec(regexp.QuoteMeta(`
@@ -227,11 +294,29 @@ func TestResolveOAuthUserCreatesAndLinksNewUser(t *testing.T) {
 		WithArgs(int64(7), "google", "google-user-123", "mason", sql.NullString{String: "mason@example.com", Valid: true}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
+	mock.ExpectExec(regexp.QuoteMeta(`
+		UPDATE users
+		SET
+			email = CASE
+				WHEN email IS NULL OR email = '' OR LOWER(email) = LOWER($2) THEN $2
+				ELSE email
+			END,
+			email_verified_at = CASE
+				WHEN email IS NULL OR email = '' OR LOWER(email) = LOWER($2)
+				THEN COALESCE(email_verified_at, NOW())
+				ELSE email_verified_at
+			END
+		WHERE id = $1
+	`)).
+		WithArgs(int64(7), "mason@example.com").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
 	user, err := application.resolveOAuthUser(httptest.NewRequest(http.MethodGet, "/", nil), oauthIdentity{
 		Provider:       "google",
 		ProviderUserID: "google-user-123",
 		Username:       "mason",
 		Email:          "mason@example.com",
+		EmailVerified:  true,
 	})
 	if err != nil {
 		t.Fatalf("resolve oauth user: %v", err)

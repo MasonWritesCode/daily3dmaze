@@ -7,9 +7,11 @@ import {
   loginEndpoint,
   logoutEndpoint,
   meEndpoint,
+  requestEmailVerificationEndpoint,
   registerEndpoint,
   resetPasswordEndpoint,
-  runsEndpoint
+  runsEndpoint,
+  verifyEmailEndpoint
 } from "./config";
 import type { DailyMaze, ReplayTraceEvent } from "./game/maze";
 export type { ReplayTraceEvent } from "./game/maze";
@@ -63,6 +65,8 @@ export interface AuthUser {
   id: number;
   username: string;
   role: string;
+  email?: string;
+  emailVerified?: boolean;
 }
 
 export interface ForgotPasswordResponse {
@@ -70,6 +74,10 @@ export interface ForgotPasswordResponse {
 }
 
 export interface ResetPasswordResponse {
+  message: string;
+}
+
+export interface EmailVerificationResponse {
   message: string;
 }
 
@@ -411,6 +419,35 @@ export async function resetPassword(
   }
 
   return (await response.json()) as ResetPasswordResponse;
+}
+
+export async function requestEmailVerification(): Promise<EmailVerificationResponse> {
+  const response = await fetch(requestEmailVerificationEndpoint, {
+    method: "POST",
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw await readTextError(response, "Email verification request failed");
+  }
+
+  return (await response.json()) as EmailVerificationResponse;
+}
+
+export async function verifyEmail(token: string): Promise<EmailVerificationResponse> {
+  const response = await fetch(verifyEmailEndpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ token })
+  });
+
+  if (!response.ok) {
+    throw await readTextError(response, "Email verification failed");
+  }
+
+  return (await response.json()) as EmailVerificationResponse;
 }
 
 export async function fetchPlayerProfile(username: string): Promise<PlayerProfile> {

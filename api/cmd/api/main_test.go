@@ -1217,14 +1217,15 @@ func TestIsStalePendingReview(t *testing.T) {
 	}
 }
 
-func TestRateLimitKeyFromRequestPrefersForwardedHeaders(t *testing.T) {
+func TestRateLimitKeyFromRequestPrefersForwardedHeadersWhenTrusted(t *testing.T) {
 	t.Parallel()
 
+	application := app{trustProxyHeaders: true}
 	request := httptest.NewRequest("GET", "/health", nil)
 	request.RemoteAddr = "127.0.0.1:4000"
 	request.Header.Set("X-Forwarded-For", "203.0.113.10, 10.0.0.1")
 
-	if key := rateLimitKeyFromRequest(request); key != "203.0.113.10" {
+	if key := application.rateLimitKeyFromRequest(request); key != "203.0.113.10" {
 		t.Fatalf("expected forwarded IP, got %q", key)
 	}
 }

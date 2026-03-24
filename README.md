@@ -13,12 +13,11 @@ The goal is to create a small but serious product:
 - `web/`: Next.js frontend
 - `api/`: Go backend and background workers
 - Postgres for relational data
-- Redis for caching, queues, and rate limiting
 
 ## Local Development
 
 The local development setup will start small:
-- Postgres and Redis run through Docker Compose
+- Postgres runs through Docker Compose
 - the frontend and backend applications will run directly on the host during development
 - the frontend uses `pnpm` as its package manager
 
@@ -26,11 +25,21 @@ Planned local ports:
 - `3000`: Next.js web app
 - `8080`: Go API
 - `5432`: Postgres
-- `6379`: Redis
 
 Local backend configuration:
 - `DATABASE_URL` should point at the local Postgres instance
 - `API_BASE_URL` and `WEB_BASE_URL` should match your local callback origins if using OAuth
+- `WEB_ALLOWED_ORIGINS` controls which web origins may send credentialed API requests
+- `TRUST_PROXY_HEADERS` should stay `false` unless the API is behind a trusted proxy that rewrites forwarded IP headers
+
+Password reset configuration:
+- in development, reset links fall back to API log output when SMTP is not configured
+- in production, configure:
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_FROM_EMAIL`
+  - `SMTP_USERNAME`
+  - `SMTP_PASSWORD`
 
 Current helper commands:
 - `make infra-up`
@@ -46,4 +55,4 @@ Optional OAuth configuration:
 - `NEXT_PUBLIC_GITHUB_OAUTH_ENABLED=true`
 - `NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED=true`
 
-At this stage, Compose is only responsible for local infrastructure services.
+At this stage, Compose is only responsible for the local Postgres service.

@@ -497,15 +497,25 @@ export const enUSMessages = {
       creatingAccount: "Creating account...",
       loginSuccess: "Signed in successfully.",
       registerSuccess: "Account created and signed in.",
+      registerSuccessWithVerification:
+        "Account created and signed in. Check your email for a verification link.",
       continueWithGitHub: "Continue with GitHub",
-      continueWithGoogle: "Continue with Google"
+      continueWithGoogle: "Continue with Google",
+      emailUnverifiedTitle: "Verify your email",
+      emailUnverifiedBody:
+        "Verify your email address to enable password reset for this account.",
+      sendVerification: "Send verification link",
+      verificationSent: "Verification link sent.",
+      alreadyVerified: "Email verified"
     },
     authHelper:
       "Usernames support letters, numbers, underscores, and hyphens. Passwords must be at least 10 characters long.",
     registerEmailHelper: "Add an email if you want password reset links later.",
     authErrors: {
       authenticationFailed: "Authentication failed",
-      logoutFailed: "Logout failed"
+      logoutFailed: "Logout failed",
+      usernameUnavailable: "That username is already in use.",
+      emailUnavailable: "That email address is already in use."
     },
     authLinks: {
       internalReviews: "Internal reviews",
@@ -560,6 +570,16 @@ export const enUSMessages = {
         "Your password has been reset. You can return to the challenge and sign in.",
       tokenMissing:
         "No reset token was found in the link. Request a new password reset email below."
+    },
+    emailVerification: {
+      title: "Verify email",
+      intro: "Confirm your email address to enable account recovery for local sign-ins.",
+      verifying: "Verifying your email...",
+      success:
+        "Your email has been verified. You can return to the challenge.",
+      error:
+        "This verification link is invalid or expired. Request a new one from the challenge page.",
+      action: "Return to challenge"
     },
     verification: {
       pending: "pending",
