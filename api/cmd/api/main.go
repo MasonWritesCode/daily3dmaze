@@ -53,10 +53,21 @@ type replayTraceEvent struct {
 
 type runSubmissionResponse struct {
 	Status             string   `json:"status"`
+	PublicID           string   `json:"publicId"`
 	Date               string   `json:"date"`
 	Seed               string   `json:"seed"`
 	MoveCount          int      `json:"moveCount"`
 	ElapsedTimeMs      int      `json:"elapsedTimeMs"`
+	AcceptedAt         string   `json:"acceptedAt"`
+	SuspicionScore     int      `json:"suspicionScore"`
+	SuspicionReasons   []string `json:"suspicionReasons"`
+	VerificationStatus string   `json:"verificationStatus"`
+	VerificationNotes  []string `json:"verificationNotes"`
+}
+
+type runStatusResponse struct {
+	PublicID           string   `json:"publicId"`
+	Status             string   `json:"status"`
 	AcceptedAt         string   `json:"acceptedAt"`
 	SuspicionScore     int      `json:"suspicionScore"`
 	SuspicionReasons   []string `json:"suspicionReasons"`
@@ -203,6 +214,7 @@ func main() {
 	mux.HandleFunc("/api/history", application.historyHandler)
 	mux.HandleFunc("/api/history/day", application.historyDayHandler)
 	mux.HandleFunc("/api/runs", application.runSubmissionHandler)
+	mux.HandleFunc("/api/runs/", application.runStatusHandler)
 	mux.HandleFunc("/api/admin/run-reviews", application.recentRunReviewsHandler)
 	mux.HandleFunc("/api/admin/run-reviews/recompute", application.recomputeRunReviewsHandler)
 	mux.HandleFunc("/api/admin/run-reviews/", application.runReviewDetailHandler)
@@ -305,13 +317,15 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		userID = &user.ID
 	}
 
-	if err := a.insertRun(request, userID, suspicionScore, suspicionReasons, verificationStatus, verificationNotes, acceptedAt); err != nil {
+	publicID, err := a.insertRun(request, userID, suspicionScore, suspicionReasons, verificationStatus, verificationNotes, acceptedAt)
+	if err != nil {
 		http.Error(w, "failed to persist run", http.StatusInternalServerError)
 		return
 	}
 
 	response := runSubmissionResponse{
 		Status:             "accepted",
+		PublicID:           publicID,
 		Date:               request.Date,
 		Seed:               request.Seed,
 		MoveCount:          request.MoveCount,
@@ -327,6 +341,40 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func (a app) runStatusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	runPublicID := strings.TrimPrefix(r.URL.Path, "/api/runs/")
+	if strings.TrimSpace(runPublicID) == "" || strings.Contains(runPublicID, "/") {
+		http.Error(w, "run public id is required", http.StatusBadRequest)
+		return
+	}
+
+	status, err := a.loadRunStatus(runPublicID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "run not found", http.StatusNotFound)
+			return
+		}
+
+		http.Error(w, "failed to load run status", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(status); err != nil {
 		http.Error(w, "failed to encode response", http.StatusInternalServerError)
 	}
 }
@@ -402,9 +450,9 @@ func openDatabase() (*sql.DB, error) {
 	return db, nil
 }
 
-func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionScore int, suspicionReasons []string, verificationStatus VerificationStatus, verificationNotes []string, acceptedAt time.Time) error {
+func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionScore int, suspicionReasons []string, verificationStatus VerificationStatus, verificationNotes []string, acceptedAt time.Time) (string, error) {
 	if a.db == nil {
-		return errors.New("database unavailable")
+		return "", errors.New("database unavailable")
 	}
 
 	const query = `
@@ -414,24 +462,73 @@ func (a app) insertRun(request runSubmissionRequest, userID *int64, suspicionSco
 
 	replayTraceJSON, err := json.Marshal(request.ReplayTrace)
 	if err != nil {
-		return err
+		return "", err
 	}
 	suspicionReasonsJSON, err := json.Marshal(suspicionReasons)
 	if err != nil {
-		return err
+		return "", err
 	}
 	verificationNotesJSON, err := json.Marshal(verificationNotes)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	publicID, err := newRunPublicID()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	_, err = a.db.Exec(query, publicID, userID, request.Date, request.Seed, request.MoveCount, request.ElapsedTimeMs, replayTraceJSON, suspicionScore, suspicionReasonsJSON, string(verificationStatus), verificationNotesJSON, acceptedAt)
-	return err
+	if err != nil {
+		return "", err
+	}
+
+	return publicID, nil
+}
+
+func (a app) loadRunStatus(runPublicID string) (runStatusResponse, error) {
+	if a.db == nil {
+		return runStatusResponse{}, errors.New("database unavailable")
+	}
+
+	const query = `
+		SELECT public_id, accepted_at, suspicion_score, suspicion_reasons_json, verification_status, verification_notes_json
+		FROM runs
+		WHERE public_id = $1
+	`
+
+	var (
+		response             runStatusResponse
+		acceptedAt           time.Time
+		suspicionReasonsJSON []byte
+		verificationNotesJSON []byte
+	)
+
+	if err := a.db.QueryRow(query, runPublicID).Scan(
+		&response.PublicID,
+		&acceptedAt,
+		&response.SuspicionScore,
+		&suspicionReasonsJSON,
+		&response.VerificationStatus,
+		&verificationNotesJSON,
+	); err != nil {
+		return runStatusResponse{}, err
+	}
+
+	if len(suspicionReasonsJSON) > 0 {
+		if err := json.Unmarshal(suspicionReasonsJSON, &response.SuspicionReasons); err != nil {
+			return runStatusResponse{}, err
+		}
+	}
+	if len(verificationNotesJSON) > 0 {
+		if err := json.Unmarshal(verificationNotesJSON, &response.VerificationNotes); err != nil {
+			return runStatusResponse{}, err
+		}
+	}
+
+	response.Status = "accepted"
+	response.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
+	return response, nil
 }
 
 func (a app) recentRunReviewsHandler(w http.ResponseWriter, r *http.Request) {

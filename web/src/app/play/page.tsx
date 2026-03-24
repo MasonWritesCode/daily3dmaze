@@ -13,6 +13,7 @@ import {
   fetchCurrentUser,
   fetchDailyMaze,
   fetchLeaderboard,
+  fetchRunStatus,
   logout,
   ROLE_ADMIN,
   roleAllows,
@@ -283,7 +284,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
   }, [maze, startingDirectionIndex]);
 
   useEffect(() => {
-    if (!runStartTime || hasFinished) {
+    if (!runStartTime || hasFinished || finishTime) {
       return undefined;
     }
 
@@ -294,7 +295,7 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [hasFinished, runStartTime]);
+  }, [finishTime, hasFinished, runStartTime]);
 
   useEffect(() => {
     if (!hasFinished || !finishTime || !runStartTime) {
@@ -331,6 +332,60 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
 
     void submitCompletedRun();
   }, [finishTime, hasFinished, maze.date, maze.seed, moveCount, onRunSubmitted, runStartTime]);
+
+  useEffect(() => {
+    if (submissionStatus !== "submitted" || !submissionSummary) {
+      return undefined;
+    }
+
+    if (submissionSummary.verificationStatus !== "pending") {
+      return undefined;
+    }
+
+    const submittedPublicId = submissionSummary.publicId;
+    let isCancelled = false;
+    let pollTimeoutId: number | null = null;
+
+    async function pollStatus() {
+      try {
+        const latestStatus = await fetchRunStatus(submittedPublicId);
+        if (isCancelled) {
+          return;
+        }
+
+        setSubmissionSummary((currentSummary) =>
+          currentSummary
+            ? {
+                ...currentSummary,
+                acceptedAt: latestStatus.acceptedAt,
+                suspicionScore: latestStatus.suspicionScore,
+                suspicionReasons: latestStatus.suspicionReasons,
+                verificationStatus: latestStatus.verificationStatus,
+                verificationNotes: latestStatus.verificationNotes
+              }
+            : currentSummary
+        );
+
+        if (latestStatus.verificationStatus === "pending") {
+          pollTimeoutId = window.setTimeout(pollStatus, 2000);
+          return;
+        }
+
+        onRunSubmitted();
+      } catch (error) {
+        console.error("Failed to poll run status", error);
+      }
+    }
+
+    pollTimeoutId = window.setTimeout(pollStatus, 2000);
+
+    return () => {
+      isCancelled = true;
+      if (pollTimeoutId !== null) {
+        window.clearTimeout(pollTimeoutId);
+      }
+    };
+  }, [onRunSubmitted, submissionStatus, submissionSummary]);
 
   useEffect(() => {
     return () => {
@@ -468,11 +523,11 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       const completedAt = Date.now();
       actionLockRef.current = true;
       setMoveCount((currentCount) => currentCount + 1);
+      setFinishTime(completedAt);
       setElapsedMs(completedAt - startedAtForRun);
 
       if (prefersReducedMotion) {
         setHasFinished(true);
-        setFinishTime(completedAt);
         actionLockRef.current = false;
         return;
       }
@@ -486,7 +541,6 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
 
       completionTimeoutRef.current = window.setTimeout(() => {
         setHasFinished(true);
-        setFinishTime(completedAt);
         actionLockRef.current = false;
       }, SCENE_ANIMATION_DURATION_MS);
     }
@@ -631,6 +685,10 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
       window.cancelAnimationFrame(animationRef.current);
     }
 
+    if (completionTimeoutRef.current !== null) {
+      window.clearTimeout(completionTimeoutRef.current);
+    }
+
     setPlayerPosition(maze.start);
     setDirectionIndex(startingDirectionIndex);
     setRenderPosition(maze.start);
@@ -761,13 +819,14 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
             )}
           </div>
         </div>
-        <div className="play-focus-main" ref={viewportRef}>
+        <div className="play-focus-main">
           <FirstPersonView
             maze={maze}
             playerPosition={renderPosition}
             playerAngle={renderAngle}
             introSequence={introSequence}
             animationMode={sceneAnimationMode}
+            viewportRef={viewportRef}
             onSwipeAction={(action) => {
               const key =
                 action === "turn_left"

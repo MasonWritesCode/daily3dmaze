@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import {
+  DIRECTION_ORDER,
   getAccentWallCells,
   getAmbientRatPath,
+  getStartingDirectionIndex,
   getStartingBillboardPoint,
   normalizeAngle
 } from "../../lib/game/maze";
@@ -50,6 +52,7 @@ interface SpriteDefinition {
   scale: number;
   alpha: number;
   verticalAnchor: number;
+  horizontalOffset: number;
 }
 
 interface SpriteProjection extends SpriteDefinition {
@@ -63,6 +66,7 @@ interface FirstPersonViewProps {
   playerAngle: number;
   introSequence: number;
   animationMode: "intro" | "outro";
+  viewportRef?: RefObject<HTMLDivElement | null>;
   onSwipeAction?: (
     action: "turn_left" | "turn_right" | "move_forward" | "move_backward"
   ) => void;
@@ -218,6 +222,7 @@ export default function FirstPersonView({
   playerAngle,
   introSequence,
   animationMode,
+  viewportRef,
   onSwipeAction
 }: FirstPersonViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -309,6 +314,7 @@ export default function FirstPersonView({
     const accentWallCells = getAccentWallCells(maze);
     const ratPath = getAmbientRatPath(maze);
     const startingBillboardPoint = getStartingBillboardPoint(maze);
+    const startingDirection = DIRECTION_ORDER[getStartingDirectionIndex(maze)];
     const fieldOfView = FIELD_OF_VIEW;
     const maxDistance = 24;
     const horizon = height * 0.5;
@@ -446,6 +452,9 @@ export default function FirstPersonView({
       const wallHeight = Math.min(height, height / correctedDistance);
       const wallBottom = (height + wallHeight) / 2;
       const animatedWallHeight = Math.max(1, wallHeight * introProgress);
+      if (animationMode === "outro" && introProgress < 0.08) {
+        continue;
+      }
       const wallTop = wallBottom - animatedWallHeight;
       const shade = Math.max(50, Math.min(200, 215 - correctedDistance * 18));
       const useAccentWall = accentWallCells.has(`${hitCellX},${hitCellY}`);
@@ -502,6 +511,7 @@ export default function FirstPersonView({
               scale: 0.42,
               alpha: 1,
               verticalAnchor: 1.08,
+              horizontalOffset: 0,
               angle: 0,
               distance: 0
             };
@@ -510,11 +520,12 @@ export default function FirstPersonView({
       textures.start
         ? {
             image: textures.start,
-            worldX: startingBillboardPoint.x + 0.5,
-            worldY: startingBillboardPoint.y + 0.5,
-            scale: 0.52,
+            worldX: startingBillboardPoint.x + 0.5 + startingDirection.vector.x * 0.12,
+            worldY: startingBillboardPoint.y + 0.5 + startingDirection.vector.y * 0.12,
+            scale: 0.45,
             alpha: 0.42,
             verticalAnchor: 0.5,
+            horizontalOffset: 0.08,
             angle: 0,
             distance: 0
           }
@@ -524,9 +535,10 @@ export default function FirstPersonView({
             image: textures.exit,
             worldX: maze.exit.x + 0.5,
             worldY: maze.exit.y + 0.5,
-            scale: 0.94,
+            scale: 0.75,
             alpha: 0.78,
             verticalAnchor: 0.5,
+            horizontalOffset: 0,
             angle: 0,
             distance: 0
           }
@@ -568,7 +580,8 @@ export default function FirstPersonView({
       const animatedBottom =
         hiddenBottom - (hiddenBottom - projectedBottom) * introProgress;
       const top = animatedBottom - animatedSpriteHeight;
-      const left = projectedCenter - animatedSpriteWidth / 2;
+      const left =
+        projectedCenter - animatedSpriteWidth / 2 + animatedSpriteWidth * sprite.horizontalOffset;
 
       for (let stripe = 0; stripe < animatedSpriteWidth; stripe += 1) {
         const screenX = Math.floor(left + stripe);
@@ -604,7 +617,7 @@ export default function FirstPersonView({
     context.moveTo(0, height / 2);
     context.lineTo(width, height / 2);
     context.stroke();
-  }, [introProgress, maze, playerAngle, playerPosition, prefersReducedMotion, ratTick, textures]);
+  }, [animationMode, introProgress, maze, playerAngle, playerPosition, prefersReducedMotion, ratTick, textures]);
 
   function handleTouchStart(event: React.TouchEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -653,6 +666,7 @@ export default function FirstPersonView({
 
   return (
     <div
+      ref={viewportRef}
       className="raycast-panel"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}

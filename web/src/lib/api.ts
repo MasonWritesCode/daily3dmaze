@@ -39,6 +39,17 @@ export interface RunSubmissionPayload {
 
 export interface RunSubmissionResponse extends RunSubmissionPayload {
   status: string;
+  publicId: string;
+  acceptedAt: string;
+  suspicionScore: number;
+  suspicionReasons: string[];
+  verificationStatus: string;
+  verificationNotes: string[];
+}
+
+export interface RunStatusResponse {
+  publicId: string;
+  status: string;
   acceptedAt: string;
   suspicionScore: number;
   suspicionReasons: string[];
@@ -286,6 +297,21 @@ export async function submitRun(
   }
 
   return (await response.json()) as RunSubmissionResponse;
+}
+
+export async function fetchRunStatus(publicId: string): Promise<RunStatusResponse> {
+  const response = await fetch(`${runsEndpoint}/${encodeURIComponent(publicId)}`, {
+    credentials: "include"
+  });
+
+  if (!response.ok) {
+    throw await readTextError(
+      response,
+      `Run status request failed with status ${response.status}`
+    );
+  }
+
+  return (await response.json()) as RunStatusResponse;
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
