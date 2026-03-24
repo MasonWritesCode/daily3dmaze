@@ -340,6 +340,7 @@
 }
 
 :global(.raycast-panel) {
+  position: relative;
   margin-bottom: 0;
   border: 2px solid var(--panel-dark);
   border-top-color: var(--panel-light);
@@ -351,6 +352,15 @@
   box-shadow:
     inset 1px 1px 0 rgba(255, 255, 255, 0.8),
     inset -1px -1px 0 var(--panel-darker);
+}
+
+:global(.raycast-fullscreen-exit) {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  min-height: 36px;
+  padding: 0 12px;
 }
 
 :global(.raycast-panel-loading) {
@@ -388,6 +398,11 @@
   border: 0;
   background: #000;
   box-shadow: none;
+}
+
+:global(.raycast-panel:fullscreen .raycast-fullscreen-exit),
+:global(.raycast-panel:-webkit-full-screen .raycast-fullscreen-exit) {
+  position: fixed;
 }
 
 :global(.raycast-panel:fullscreen .raycast-canvas),

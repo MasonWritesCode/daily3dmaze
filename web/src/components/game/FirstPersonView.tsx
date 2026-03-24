@@ -77,6 +77,9 @@ interface FirstPersonViewProps {
   introSequence: number;
   animationMode: "intro" | "outro";
   viewportRef?: RefObject<HTMLDivElement | null>;
+  isFullscreen?: boolean;
+  onExitFullscreen?: () => void;
+  exitFullscreenLabel?: string;
   onSwipeAction?: (
     action: "turn_left" | "turn_right" | "move_forward" | "move_backward"
   ) => void;
@@ -271,6 +274,9 @@ function FirstPersonView({
   introSequence,
   animationMode,
   viewportRef,
+  isFullscreen,
+  onExitFullscreen,
+  exitFullscreenLabel,
   onSwipeAction
 }: FirstPersonViewProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -760,6 +766,15 @@ function FirstPersonView({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {isFullscreen && onExitFullscreen && (
+        <button
+          type="button"
+          className="secondary-button raycast-fullscreen-exit"
+          onClick={onExitFullscreen}
+        >
+          {exitFullscreenLabel ?? "Exit fullscreen"}
+        </button>
+      )}
       <canvas
         ref={canvasRef}
         className="raycast-canvas"
@@ -782,7 +797,10 @@ function areEqualProps(
     previous.playerAngle === next.playerAngle &&
     previous.introSequence === next.introSequence &&
     previous.animationMode === next.animationMode &&
-    previous.viewportRef === next.viewportRef
+    previous.viewportRef === next.viewportRef &&
+    previous.isFullscreen === next.isFullscreen &&
+    previous.onExitFullscreen === next.onExitFullscreen &&
+    previous.exitFullscreenLabel === next.exitFullscreenLabel
   );
 }
 

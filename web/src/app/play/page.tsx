@@ -800,6 +800,11 @@ function MazeDetails({ maze, isAdmin, onRunSubmitted }: MazeDetailsProps) {
             introSequence={introSequence}
             animationMode={sceneAnimationMode}
             viewportRef={viewportRef}
+            isFullscreen={isFullscreen}
+            onExitFullscreen={() => {
+              void handleFullscreenToggle();
+            }}
+            exitFullscreenLabel={uiText.actions.exitFullscreen}
             onSwipeAction={(action) => {
               const key =
                 action === "turn_left"
