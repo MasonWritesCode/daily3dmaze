@@ -32,5 +32,12 @@ Object.defineProperty(window, "localStorage", {
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  document.cookie.split(";").forEach((cookie) => {
+    const name = cookie.split("=")[0]?.trim();
+    if (!name) {
+      return;
+    }
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+  });
   document.documentElement.lang = "en-US";
 });

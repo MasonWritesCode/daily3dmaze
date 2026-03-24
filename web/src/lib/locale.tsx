@@ -4,53 +4,21 @@ import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 import { createFormatters, type LocaleFormatters } from "./i18n";
-import { enUSMessages, esESMessages, type AppMessages } from "./messages";
+import {
+  availableLocales,
+  defaultLocale,
+  localeCookieName,
+  localeStorageKey,
+  normalizeLocale,
+  resolveMessages
+} from "./locale-config";
+import { enUSMessages, type AppMessages } from "./messages";
 
 interface LocaleContextValue extends LocaleFormatters {
   locale: string;
   messages: AppMessages;
   setLocale: (nextLocale: string) => void;
   availableLocales: Array<{ code: string; label: string }>;
-}
-
-const defaultLocale = "en-US";
-const localeStorageKey = "daily3dmaze.locale";
-const availableLocales = [
-  { code: "en-US", label: "English" },
-  { code: "es-ES", label: "Español" }
-] as const;
-
-function isSupportedLocale(candidate: string): boolean {
-  return availableLocales.some((locale) => locale.code === candidate);
-}
-
-function normalizeLocale(candidate: string | null | undefined): string {
-  if (!candidate) {
-    return defaultLocale;
-  }
-
-  try {
-    const canonical = Intl.getCanonicalLocales(candidate)[0] || defaultLocale;
-    if (isSupportedLocale(canonical)) {
-      return canonical;
-    }
-
-    if (canonical.startsWith("es")) {
-      return "es-ES";
-    }
-
-    return defaultLocale;
-  } catch {
-    return defaultLocale;
-  }
-}
-
-function resolveMessages(locale: string): AppMessages {
-  if (locale.startsWith("es")) {
-    return esESMessages;
-  }
-
-  return enUSMessages;
 }
 
 const LocaleContext = createContext<LocaleContextValue>({
@@ -63,13 +31,14 @@ const LocaleContext = createContext<LocaleContextValue>({
 
 interface LocaleProviderProps {
   children: ReactNode;
+  initialLocale?: string;
 }
 
-export function LocaleProvider({ children }: LocaleProviderProps) {
-  const [locale, setLocale] = useState<string>(defaultLocale);
+export function LocaleProvider({ children, initialLocale }: LocaleProviderProps) {
+  const [locale, setLocale] = useState<string>(normalizeLocale(initialLocale ?? defaultLocale));
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || initialLocale) {
       return;
     }
 
@@ -82,7 +51,7 @@ export function LocaleProvider({ children }: LocaleProviderProps) {
     if (typeof navigator !== "undefined" && navigator.language) {
       setLocale(normalizeLocale(navigator.language));
     }
-  }, []);
+  }, [initialLocale]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -91,6 +60,7 @@ export function LocaleProvider({ children }: LocaleProviderProps) {
 
     window.localStorage.setItem(localeStorageKey, locale);
     document.documentElement.lang = locale;
+    document.cookie = `${localeCookieName}=${encodeURIComponent(locale)}; Path=/; Max-Age=31536000; SameSite=Lax`;
   }, [locale]);
 
   const value = useMemo(
