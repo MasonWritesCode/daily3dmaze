@@ -20,6 +20,7 @@ export const enUSMessages = {
     actions: {
       launchChallenge: "Launch challenge",
       openArchive: "Open archive",
+      sendFeedback: "Send feedback",
       reviewQueue: "Review queue",
       userManager: "User manager"
     }

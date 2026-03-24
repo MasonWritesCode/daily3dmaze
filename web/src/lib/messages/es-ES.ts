@@ -10,6 +10,7 @@ export const esESMessages = {
     actions: {
       launchChallenge: "Iniciar reto",
       openArchive: "Abrir archivo",
+      sendFeedback: "Enviar comentarios",
       reviewQueue: "Cola de revisión",
       userManager: "Usuarios"
     }

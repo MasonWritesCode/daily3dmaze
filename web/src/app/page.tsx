@@ -17,6 +17,13 @@ export default function HomePage() {
   const { messages } = useLocale();
   const uiText = messages.home;
   const [user, setUser] = useState<AuthUser | null>(null);
+  const feedbackHref =
+    "mailto:masonsideprojects@pm.me?subject=" +
+    encodeURIComponent("daily3dmaze feedback") +
+    "&body=" +
+    encodeURIComponent(
+      "What were you doing?\n\nWhat happened?\n\nWhat would you like improved?\n"
+    );
 
   useEffect(() => {
     let isMounted = true;
@@ -70,6 +77,9 @@ export default function HomePage() {
           <Link href="/history" className="secondary-link">
             {uiText.actions.openArchive}
           </Link>
+          <a href={feedbackHref} className="secondary-link">
+            {uiText.actions.sendFeedback}
+          </a>
           {canAccessReviews && (
             <Link href="/admin/reviews" className="secondary-link">
               {uiText.actions.reviewQueue}
