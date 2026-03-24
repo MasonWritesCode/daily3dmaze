@@ -181,6 +181,58 @@ func TestParseLeaderboardScope(t *testing.T) {
 	}
 }
 
+func TestListLeaderboardUsesFirstRunScopeQuery(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	acceptedAt := time.Date(2026, 3, 21, 12, 0, 0, 0, time.UTC)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+			WITH first_runs AS (
+				SELECT DISTINCT ON (COALESCE(users.username, ''), runs.user_id)
+					runs.run_date::text,
+					COALESCE(users.username, ''),
+					COALESCE(users.role, ''),
+					runs.seed,
+					runs.move_count,
+					runs.elapsed_time_ms,
+					runs.accepted_at
+				FROM runs
+				LEFT JOIN users ON users.id = runs.user_id
+				WHERE runs.run_date = $1::date AND runs.verification_status = 'verified'
+				ORDER BY COALESCE(users.username, ''), runs.user_id, runs.accepted_at ASC
+			)
+			SELECT *
+			FROM first_runs
+			ORDER BY elapsed_time_ms ASC, move_count ASC, accepted_at ASC
+			LIMIT 10
+	`)).
+		WithArgs("2026-03-21").
+		WillReturnRows(
+			sqlmock.NewRows([]string{"run_date", "username", "role", "seed", "move_count", "elapsed_time_ms", "accepted_at"}).
+				AddRow("2026-03-21", "mason_dev", "moderator", "daily3dmaze:2026-03-21", 42, 12345, acceptedAt),
+		)
+
+	entries, err := application.listLeaderboard("2026-03-21", "first")
+	if err != nil {
+		t.Fatalf("list leaderboard first scope: %v", err)
+	}
+
+	if len(entries) != 1 || entries[0].Username != "mason_dev" || entries[0].Rank != 1 {
+		t.Fatalf("unexpected first-scope leaderboard entries %#v", entries)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
 func TestGenerateDailyMazeIsDeterministic(t *testing.T) {
 	t.Parallel()
 
@@ -229,6 +281,181 @@ func TestDailyMazeHandlerSupportsExplicitDate(t *testing.T) {
 
 	if payload.Seed != "daily3dmaze:2026-03-19" {
 		t.Fatalf("expected seed for archived date, got %q", payload.Seed)
+	}
+}
+
+func TestRunSubmissionHandlerReturnsPublicID(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectExec(regexp.QuoteMeta(`
+		INSERT INTO runs (public_id, user_id, run_date, seed, move_count, elapsed_time_ms, replay_trace_json, suspicion_score, suspicion_reasons_json, verification_status, verification_notes_json, accepted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`)).
+		WithArgs(
+			sqlmock.AnyArg(),
+			nil,
+			"2026-03-21",
+			"daily3dmaze:2026-03-21",
+			42,
+			12345,
+			[]byte(`[{"elapsedTimeMs":0,"action":"move_forward"}]`),
+			0,
+			[]byte(`[]`),
+			string(VerificationStatusPending),
+			[]byte(`["queued_for_async_verification"]`),
+			sqlmock.AnyArg(),
+		).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	request := httptest.NewRequest(http.MethodPost, "/api/runs", strings.NewReader(`{
+		"date":"2026-03-21",
+		"seed":"daily3dmaze:2026-03-21",
+		"moveCount":42,
+		"elapsedTimeMs":12345,
+		"replayTrace":[{"elapsedTimeMs":0,"action":"move_forward"}]
+	}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	application.runSubmissionHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected status %d, got %d", http.StatusAccepted, response.StatusCode)
+	}
+
+	var payload runSubmissionResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode submission response: %v", err)
+	}
+
+	if payload.PublicID == "" || !strings.HasPrefix(payload.PublicID, "run_") {
+		t.Fatalf("expected run public id in response, got %q", payload.PublicID)
+	}
+	if payload.VerificationStatus != string(VerificationStatusPending) {
+		t.Fatalf("expected pending verification status, got %q", payload.VerificationStatus)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestRunStatusHandlerReturnsStoredVerificationState(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+	acceptedAt := time.Date(2026, 3, 23, 19, 37, 0, 0, time.UTC)
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT public_id, accepted_at, suspicion_score, suspicion_reasons_json, verification_status, verification_notes_json
+		FROM runs
+		WHERE public_id = $1
+	`)).
+		WithArgs("run_0123456789abcdef0123456789abcdef").
+		WillReturnRows(
+			sqlmock.NewRows([]string{"public_id", "accepted_at", "suspicion_score", "suspicion_reasons_json", "verification_status", "verification_notes_json"}).
+				AddRow("run_0123456789abcdef0123456789abcdef", acceptedAt, 0, []byte(`[]`), string(VerificationStatusVerified), []byte(`["simulation_matches_expected_outcome"]`)),
+		)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/runs/run_0123456789abcdef0123456789abcdef", nil)
+	recorder := httptest.NewRecorder()
+
+	application.runStatusHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, response.StatusCode)
+	}
+
+	var payload runStatusResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode run status response: %v", err)
+	}
+
+	if payload.PublicID != "run_0123456789abcdef0123456789abcdef" {
+		t.Fatalf("unexpected public id %q", payload.PublicID)
+	}
+	if payload.VerificationStatus != string(VerificationStatusVerified) {
+		t.Fatalf("expected verified status, got %q", payload.VerificationStatus)
+	}
+	if len(payload.VerificationNotes) != 1 || payload.VerificationNotes[0] != "simulation_matches_expected_outcome" {
+		t.Fatalf("unexpected verification notes %#v", payload.VerificationNotes)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
+	}
+}
+
+func TestRunStatusHandlerRejectsInvalidPublicIDPath(t *testing.T) {
+	t.Parallel()
+
+	application := app{}
+	request := httptest.NewRequest(http.MethodGet, "/api/runs/", nil)
+	recorder := httptest.NewRecorder()
+
+	application.runStatusHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, response.StatusCode)
+	}
+}
+
+func TestRunStatusHandlerReturnsNotFoundForUnknownRun(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	application := app{db: db}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`
+		SELECT public_id, accepted_at, suspicion_score, suspicion_reasons_json, verification_status, verification_notes_json
+		FROM runs
+		WHERE public_id = $1
+	`)).
+		WithArgs("run_0123456789abcdef0123456789abcdef").
+		WillReturnError(sql.ErrNoRows)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/runs/run_0123456789abcdef0123456789abcdef", nil)
+	recorder := httptest.NewRecorder()
+
+	application.runStatusHandler(recorder, request)
+
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d", http.StatusNotFound, response.StatusCode)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet sql expectations: %v", err)
 	}
 }
 
