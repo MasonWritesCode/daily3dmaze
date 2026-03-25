@@ -80,17 +80,21 @@ export default function HomePage() {
           <a href={feedbackHref} className="secondary-link">
             {uiText.actions.sendFeedback}
           </a>
-          {canAccessReviews && (
-            <Link href="/admin/reviews" className="secondary-link">
-              {uiText.actions.reviewQueue}
-            </Link>
-          )}
-          {roleAllows(user?.role, ROLE_ADMIN) && (
-            <Link href="/admin/users" className="secondary-link">
-              {uiText.actions.userManager}
-            </Link>
-          )}
         </div>
+        {(canAccessReviews || roleAllows(user?.role, ROLE_ADMIN)) && (
+          <div className="actions home-admin-actions">
+            {canAccessReviews && (
+              <Link href="/admin/reviews" className="secondary-link">
+                {uiText.actions.reviewQueue}
+              </Link>
+            )}
+            {roleAllows(user?.role, ROLE_ADMIN) && (
+              <Link href="/admin/users" className="secondary-link">
+                {uiText.actions.userManager}
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </main>
   );

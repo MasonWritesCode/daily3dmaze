@@ -506,7 +506,7 @@ export default function MazeSessionView({
         {uiText.gameplay.summaryHeading}
       </h2>
       <div className="play-focus-layout">
-        <div className="play-focus-sidebar">
+        <div className="play-focus-sidebar play-focus-sidebar-top">
           <dl className="gameplay-hud" aria-label={uiText.gameplay.currentRunStatus}>
             <div className="gameplay-hud-item gameplay-hud-item-primary">
               <dt>{hasFinished ? uiText.gameplay.winTitle : uiText.labels.time}</dt>
@@ -526,6 +526,35 @@ export default function MazeSessionView({
           <p className="gameplay-controls" aria-label={uiText.labels.controls}>
             {uiText.gameplay.controls}
           </p>
+        </div>
+        <div className="play-focus-main">
+          <FirstPersonView
+            maze={maze}
+            playerPosition={renderPosition}
+            playerAngle={renderAngle}
+            introSequence={introSequence}
+            animationMode={sceneAnimationMode}
+            viewportRef={viewportRef}
+            isFullscreen={isFullscreen}
+            onExitFullscreen={() => {
+              void handleFullscreenToggle();
+            }}
+            exitFullscreenLabel={uiText.actions.exitFullscreen}
+            onSwipeAction={(action) => {
+              const key =
+                action === "turn_left"
+                  ? "ArrowLeft"
+                  : action === "turn_right"
+                    ? "ArrowRight"
+                    : action === "move_forward"
+                      ? "ArrowUp"
+                      : "ArrowDown";
+
+              window.dispatchEvent(new KeyboardEvent("keydown", { key }));
+            }}
+          />
+        </div>
+        <div className="play-focus-sidebar play-focus-sidebar-bottom">
           <div className="actions play-focus-actions">
             <button type="button" className="secondary-button" onClick={handleReset}>
               {uiText.actions.resetRun}
@@ -577,33 +606,6 @@ export default function MazeSessionView({
               <p className="body-copy status-copy">{uiText.gameplay.introStatus}</p>
             )}
           </div>
-        </div>
-        <div className="play-focus-main">
-          <FirstPersonView
-            maze={maze}
-            playerPosition={renderPosition}
-            playerAngle={renderAngle}
-            introSequence={introSequence}
-            animationMode={sceneAnimationMode}
-            viewportRef={viewportRef}
-            isFullscreen={isFullscreen}
-            onExitFullscreen={() => {
-              void handleFullscreenToggle();
-            }}
-            exitFullscreenLabel={uiText.actions.exitFullscreen}
-            onSwipeAction={(action) => {
-              const key =
-                action === "turn_left"
-                  ? "ArrowLeft"
-                  : action === "turn_right"
-                    ? "ArrowRight"
-                    : action === "move_forward"
-                      ? "ArrowUp"
-                      : "ArrowDown";
-
-              window.dispatchEvent(new KeyboardEvent("keydown", { key }));
-            }}
-          />
         </div>
       </div>
       {isAdmin && (

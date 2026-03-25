@@ -16,6 +16,9 @@
 :global(.play-focus-layout) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+  grid-template-areas:
+    "main sidebar-top"
+    "main sidebar-bottom";
   gap: 12px;
   align-items: start;
 }
@@ -23,13 +26,20 @@
 :global(.play-focus-sidebar) {
   display: grid;
   gap: 12px;
-  order: 2;
   align-content: start;
+}
+
+:global(.play-focus-sidebar-top) {
+  grid-area: sidebar-top;
+}
+
+:global(.play-focus-sidebar-bottom) {
+  grid-area: sidebar-bottom;
 }
 
 :global(.play-focus-main) {
   min-width: 0;
-  order: 1;
+  grid-area: main;
 }
 
 :global(.play-focus-actions) {
@@ -458,11 +468,14 @@
 @media (max-width: 1080px) {
   :global(.play-focus-layout) {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "sidebar-top"
+      "main"
+      "sidebar-bottom";
   }
 
-  :global(.play-focus-sidebar),
-  :global(.play-focus-main) {
-    order: initial;
+  :global(.play-focus-sidebar-bottom) {
+    margin-top: 4px;
   }
 
   :global(.play-focus-sidebar .gameplay-hud) {
@@ -490,18 +503,16 @@
 
   :global(.play-focus-layout) {
     grid-template-columns: minmax(0, 1fr) 240px;
+    grid-template-areas:
+      "main sidebar-top"
+      "main sidebar-bottom";
     gap: 12px;
     align-items: start;
   }
 
   :global(.play-focus-sidebar) {
-    order: 2;
     position: sticky;
     top: 10px;
-  }
-
-  :global(.play-focus-main) {
-    order: 1;
   }
 
   :global(.gameplay-hud) {

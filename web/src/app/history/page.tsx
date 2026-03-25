@@ -51,6 +51,37 @@ export default function HistoryPage() {
     return title === "Daily Maze" ? uiText.defaultChallengeTitle : title;
   }
 
+  function renderBestRunSummary(entry: HistoryEntry) {
+    if (!entry.bestRun) {
+      return uiText.bestRunNoSubmissions;
+    }
+
+    const bestRun = entry.bestRun;
+    const template = uiText.bestRunSummary
+      .replace("{elapsed}", formatElapsedTime(bestRun.elapsedTimeMs))
+      .replace("{moves}", formatCount(bestRun.moveCount));
+
+    const [prefix, suffix = ""] = template.split("{player}");
+    const playerLabel = bestRun.username || uiText.anonymous;
+
+    if (!bestRun.username) {
+      return `${prefix}${playerLabel}${suffix}`;
+    }
+
+    return (
+      <>
+        {prefix}
+        <span className="player-link-with-badge">
+          <Link href={`/profile/${bestRun.username}`} className="inline-link">
+            {bestRun.username}
+          </Link>
+          <RoleBadge role={bestRun.role} labels={messages.play.auth.roles} />
+        </span>
+        {suffix}
+      </>
+    );
+  }
+
   return (
     <main className="page-shell">
       <div className="content-card">
@@ -116,63 +147,7 @@ export default function HistoryPage() {
                       </div>
                       <div className="metadata-row">
                         <dt>{uiText.labels.bestRun}</dt>
-                        <dd>
-                          {entry.bestRun ? (
-                            (() => {
-                              const bestRun = entry.bestRun;
-
-                              if (bestRun.username) {
-                                return (
-                                  <>
-                                    {uiText.bestRunSummary
-                                      .replace("{player}", bestRun.username)
-                                      .replace(
-                                        "{elapsed}",
-                                        formatElapsedTime(bestRun.elapsedTimeMs)
-                                      )
-                                      .replace(
-                                        "{moves}",
-                                        formatCount(bestRun.moveCount)
-                                      )
-                                      .split(bestRun.username)
-                                      .map((segment, index, segments) => (
-                                        <span key={`${entry.date}-best-run-${index}`}>
-                                          {segment}
-                                          {index < segments.length - 1 && (
-                                            <span className="player-link-with-badge">
-                                              <Link
-                                                href={`/profile/${bestRun.username}`}
-                                                className="inline-link"
-                                              >
-                                                {bestRun.username}
-                                              </Link>
-                                              <RoleBadge
-                                                role={bestRun.role}
-                                                labels={messages.play.auth.roles}
-                                              />
-                                            </span>
-                                          )}
-                                        </span>
-                                      ))}
-                                  </>
-                                );
-                              }
-
-                              return uiText.bestRunSummary
-                                .replace("{player}", uiText.anonymous)
-                                .replace(
-                                  "{elapsed}",
-                                  formatElapsedTime(bestRun.elapsedTimeMs)
-                                )
-                                .replace(
-                                  "{moves}",
-                                  formatCount(bestRun.moveCount)
-                                );
-                            })()
-                          ) : (
-                            uiText.bestRunNoSubmissions
-                          )}
-                        </dd>
+                        <dd>{renderBestRunSummary(entry)}</dd>
                       </div>
                     </dl>
                   </article>

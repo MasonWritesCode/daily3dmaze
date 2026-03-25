@@ -123,6 +123,8 @@ export default function AdminReviewsPage() {
     () => sortRunReviewEntries(filteredEntries, sortMode),
     [filteredEntries, sortMode]
   );
+  const canManageUsers = roleAllows(user?.role, ROLE_ADMIN);
+  const canRecompute = roleAllows(user?.role, ROLE_ADMIN);
 
   async function handleRecompute() {
     setRecomputeStatus("submitting");
@@ -210,25 +212,27 @@ export default function AdminReviewsPage() {
               <p className="assistive-copy admin-toolbar-copy">
                 {uiText.signedInAs} <strong>{user.username}</strong>.
               </p>
-              <div className="actions admin-toolbar-actions">
-                {roleAllows(user.role, ROLE_ADMIN) && (
-                  <Link href="/admin/users" className="secondary-link">
-                    {uiText.actions.manageUsers}
-                  </Link>
-                )}
-                {roleAllows(user.role, ROLE_ADMIN) && (
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={handleRecompute}
-                    disabled={recomputeStatus === "submitting"}
-                  >
-                    {recomputeStatus === "submitting"
-                      ? uiText.actions.recomputing
-                      : uiText.actions.recomputeVerification}
-                  </button>
-                )}
-              </div>
+              {(canManageUsers || canRecompute) && (
+                <div className="actions admin-toolbar-actions">
+                  {canManageUsers && (
+                    <Link href="/admin/users" className="secondary-link">
+                      {uiText.actions.manageUsers}
+                    </Link>
+                  )}
+                  {canRecompute && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleRecompute}
+                      disabled={recomputeStatus === "submitting"}
+                    >
+                      {recomputeStatus === "submitting"
+                        ? uiText.actions.recomputing
+                        : uiText.actions.recomputeVerification}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <p className="assistive-copy admin-sort-hint">{uiText.sortHint}</p>
             {recomputeMessage && (

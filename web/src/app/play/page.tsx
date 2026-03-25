@@ -204,7 +204,7 @@ export default function PlayPage() {
         <main className="page-shell">
           <div className="content-card content-card-wide play-window">
             <p className="eyebrow">{uiText.eyebrow}</p>
-            <h1>{uiText.title}</h1>
+            <h1 className="sr-only">{uiText.title}</h1>
             <p className="body-copy status-copy" aria-live="polite">
               {uiText.loadingMaze}
             </p>

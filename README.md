@@ -31,6 +31,7 @@ Local backend configuration:
 - `API_BASE_URL` and `WEB_BASE_URL` should match your local callback origins if using OAuth
 - `WEB_ALLOWED_ORIGINS` controls which web origins may send credentialed API requests
 - `TRUST_PROXY_HEADERS` should stay `false` unless the API is behind a trusted proxy that rewrites forwarded IP headers
+- `NEXT_DEV_ALLOWED_ORIGINS` is only for local Next.js dev access from additional LAN origins; leave it empty in production
 
 Password reset configuration:
 - in development, reset links fall back to API log output when SMTP is not configured
@@ -56,3 +57,9 @@ Optional OAuth configuration:
 - `NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED=true`
 
 At this stage, Compose is only responsible for the local Postgres service.
+
+## Pre-Deploy Checklist
+
+See [`docs/pre-deploy-checklist.md`](/Users/mason/git/daily3dmaze/docs/pre-deploy-checklist.md) for the production security, configuration, QA, and rollout checklist.
+
+If you are setting up the first hosted environment, start with [`docs/staging-config-checklist.md`](/Users/mason/git/daily3dmaze/docs/staging-config-checklist.md).

@@ -90,7 +90,7 @@ code {
 
 .locale-switcher {
   position: fixed;
-  top: 10px;
+  bottom: 10px;
   right: 10px;
   z-index: 20;
   display: inline-flex;
@@ -600,6 +600,11 @@ h1 {
   padding-top: 0;
 }
 
+.home-admin-actions {
+  margin-top: 12px;
+  justify-content: center;
+}
+
 .primary-link,
 .secondary-link {
   display: inline-flex;
@@ -670,7 +675,7 @@ h1 {
 
 @media (max-width: 640px) {
   .locale-switcher {
-    top: 6px;
+    bottom: 6px;
     right: 6px;
     padding: 4px 6px;
     gap: 6px;

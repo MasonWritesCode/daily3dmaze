@@ -1,3 +1,15 @@
+const isProduction = process.env.NODE_ENV === "production";
+const devAllowedOrigins = (process.env.NEXT_DEV_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const scriptSrc = ["'self'", "'unsafe-inline'"];
+
+if (!isProduction) {
+  scriptSrc.push("'unsafe-eval'");
+}
+
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -5,14 +17,14 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  `script-src ${scriptSrc.join(" ")}`,
   "connect-src 'self' http: https: ws: wss:",
   "form-action 'self'"
 ].join("; ");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  allowedDevOrigins: ["192.168.101.196"],
+  allowedDevOrigins: devAllowedOrigins,
   async headers() {
     return [
       {
