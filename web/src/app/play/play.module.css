@@ -384,7 +384,6 @@
 }
 
 :global(.raycast-canvas) {
-  width: 100%;
   height: auto;
   display: block;
   margin: 8px;

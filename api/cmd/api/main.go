@@ -21,6 +21,7 @@ type app struct {
 	webBaseURL          string
 	allowedOrigins      map[string]struct{}
 	trustProxyHeaders   bool
+	secureCookies       bool
 }
 
 const (
@@ -57,6 +58,7 @@ func main() {
 		webBaseURL:          envOrDefault("WEB_BASE_URL", "http://localhost:3000"),
 		allowedOrigins:      configuredAllowedOrigins(),
 		trustProxyHeaders:   configuredTrustProxyHeaders(),
+		secureCookies:       os.Getenv("APP_ENV") == "production",
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -69,17 +68,11 @@ func (a app) profileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(profile); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	writeJSON(w, http.StatusOK, profile)
 }
 
 func validateProfileUsername(username string) error {
-	return validateAuthRequest(authRequest{
-		Username: username,
-		Password: strings.Repeat("x", minPasswordLength),
-	})
+	return validateUsername(username)
 }
 
 func (a app) loadProfile(username string) (profileResponse, error) {

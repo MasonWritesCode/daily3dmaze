@@ -256,13 +256,10 @@ export default function MazeSessionView({
     }
 
     function recordReplayAction(action: ReplayTraceEvent["action"], startedAtForRun: number) {
-      replayTraceRef.current = [
-        ...replayTraceRef.current,
-        {
-          action,
-          elapsedTimeMs: Math.max(0, Date.now() - startedAtForRun)
-        }
-      ];
+      replayTraceRef.current.push({
+        action,
+        elapsedTimeMs: Math.max(0, Date.now() - startedAtForRun)
+      });
     }
 
     function animateMovement(nextPosition: MazePoint) {

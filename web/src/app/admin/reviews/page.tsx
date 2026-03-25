@@ -124,7 +124,6 @@ export default function AdminReviewsPage() {
     [filteredEntries, sortMode]
   );
   const canManageUsers = roleAllows(user?.role, ROLE_ADMIN);
-  const canRecompute = roleAllows(user?.role, ROLE_ADMIN);
 
   async function handleRecompute() {
     setRecomputeStatus("submitting");
@@ -212,14 +211,14 @@ export default function AdminReviewsPage() {
               <p className="assistive-copy admin-toolbar-copy">
                 {uiText.signedInAs} <strong>{user.username}</strong>.
               </p>
-              {(canManageUsers || canRecompute) && (
+              {(canManageUsers || canManageUsers) && (
                 <div className="actions admin-toolbar-actions">
                   {canManageUsers && (
                     <Link href="/admin/users" className="secondary-link">
                       {uiText.actions.manageUsers}
                     </Link>
                   )}
-                  {canRecompute && (
+                  {canManageUsers && (
                     <button
                       type="button"
                       className="secondary-button"

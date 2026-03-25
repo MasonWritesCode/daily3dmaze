@@ -32,7 +32,7 @@ function ResetPasswordContent() {
       setRequestMessage(response.message || uiText.requestSuccess);
     } catch (error) {
       setRequestStatus("error");
-      setRequestMessage(error instanceof Error ? error.message : uiText.requestSuccess);
+      setRequestMessage(error instanceof Error ? error.message : uiText.requestError);
     }
   }
 
@@ -48,7 +48,7 @@ function ResetPasswordContent() {
       setNewPassword("");
     } catch (error) {
       setResetStatus("error");
-      setResetMessage(error instanceof Error ? error.message : uiText.resetSuccess);
+      setResetMessage(error instanceof Error ? error.message : uiText.resetError);
     }
   }
 

@@ -93,16 +93,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
-	response := map[string]string{
-		"service": "api",
-		"status":  "ok",
-	}
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	writeJSON(w, http.StatusOK, map[string]string{"service": "api", "status": "ok"})
 }
 
 func dailyMazeHandler(w http.ResponseWriter, r *http.Request) {
@@ -116,29 +107,18 @@ func dailyMazeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-
 	challengeTime := time.Now().UTC()
 	if date := r.URL.Query().Get("date"); date != "" {
-		if err := validateLeaderboardDate(date); err != nil {
+		parsed, err := validateLeaderboardDate(date)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		parsedDate, err := time.Parse(dateLayoutISO, date)
-		if err != nil {
-			http.Error(w, "date must use YYYY-MM-DD format", http.StatusBadRequest)
-			return
-		}
-
-		challengeTime = parsedDate.UTC()
+		challengeTime = parsed
 	}
 
-	response := generateDailyMaze(challengeTime)
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	writeJSON(w, http.StatusOK, generateDailyMaze(challengeTime))
 }
 
 func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
@@ -180,7 +160,7 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := runSubmissionResponse{
+	writeJSON(w, http.StatusAccepted, runSubmissionResponse{
 		Status:             "accepted",
 		PublicID:           publicID,
 		Date:               request.Date,
@@ -192,14 +172,7 @@ func (a app) runSubmissionHandler(w http.ResponseWriter, r *http.Request) {
 		SuspicionReasons:   suspicionReasons,
 		VerificationStatus: string(verificationStatus),
 		VerificationNotes:  verificationNotes,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	})
 }
 
 func (a app) runStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -230,10 +203,7 @@ func (a app) runStatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(status); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -252,7 +222,7 @@ func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
 		date = time.Now().UTC().Format(dateLayoutISO)
 	}
 
-	if err := validateLeaderboardDate(date); err != nil {
+	if _, err := validateLeaderboardDate(date); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -269,16 +239,11 @@ func (a app) leaderboardHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := leaderboardResponse{
+	writeJSON(w, http.StatusOK, leaderboardResponse{
 		Date:    date,
 		Scope:   scope,
 		Entries: entries,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	})
 }
 
 func openDatabase() (*sql.DB, error) {
@@ -551,12 +516,13 @@ func validateRunSubmission(request runSubmissionRequest) error {
 	return nil
 }
 
-func validateLeaderboardDate(date string) error {
-	if _, err := time.Parse(dateLayoutISO, date); err != nil {
-		return errors.New("date must use YYYY-MM-DD format")
+func validateLeaderboardDate(date string) (time.Time, error) {
+	t, err := time.Parse(dateLayoutISO, date)
+	if err != nil {
+		return time.Time{}, errors.New("date must use YYYY-MM-DD format")
 	}
 
-	return nil
+	return t, nil
 }
 
 func rankLeaderboardEntries(entries []leaderboardEntry) []leaderboardEntry {

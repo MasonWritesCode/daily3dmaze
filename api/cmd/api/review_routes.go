@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+const (
+	reviewStatusUnreviewed         = "unreviewed"
+	reviewStatusReviewedClean      = "reviewed_clean"
+	reviewStatusConfirmedSuspicious = "confirmed_suspicious"
+)
+
 type recentRunReviewEntry struct {
 	PublicID              string   `json:"publicId"`
 	Date                  string   `json:"date"`
@@ -108,13 +114,10 @@ func (a app) recentRunReviewsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(recentRunReviewsResponse{
+	writeJSON(w, http.StatusOK, recentRunReviewsResponse{
 		Summary: summary,
 		Entries: entries,
-	}); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	})
 }
 
 func (a app) recomputeRunReviewsHandler(w http.ResponseWriter, r *http.Request) {
@@ -144,13 +147,10 @@ func (a app) recomputeRunReviewsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(recomputeRunReviewsResponse{
+	writeJSON(w, http.StatusOK, recomputeRunReviewsResponse{
 		UpdatedCount: updatedCount,
 		SkippedCount: skippedCount,
-	}); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	})
 }
 
 func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
@@ -193,14 +193,11 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(requeueRunReviewResponse{
+		writeJSON(w, http.StatusOK, requeueRunReviewResponse{
 			RunPublicID:          runPublicID,
 			VerificationStatus:   string(VerificationStatusPending),
 			VerificationAttempts: attempts,
-		}); err != nil {
-			http.Error(w, "failed to encode response", http.StatusInternalServerError)
-		}
+		})
 		return
 	}
 
@@ -244,22 +241,19 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 			reviewedAtValue = &value
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(updateRunReviewResponse{
-			RunPublicID:  runPublicID,
-			ReviewStatus: request.ReviewStatus,
-			ReviewNotes:  strings.TrimSpace(request.ReviewNotes),
-			ReviewedAt:   reviewedAtValue,
-			ReviewedByUsername: func() *string {
-				if request.ReviewStatus == "unreviewed" {
-					return nil
-				}
-				value := reviewer.Username
-				return &value
-			}(),
-		}); err != nil {
-			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		var reviewedByUsername *string
+		if request.ReviewStatus != reviewStatusUnreviewed {
+			value := reviewer.Username
+			reviewedByUsername = &value
 		}
+
+		writeJSON(w, http.StatusOK, updateRunReviewResponse{
+			RunPublicID:        runPublicID,
+			ReviewStatus:       request.ReviewStatus,
+			ReviewNotes:        strings.TrimSpace(request.ReviewNotes),
+			ReviewedAt:         reviewedAtValue,
+			ReviewedByUsername: reviewedByUsername,
+		})
 		return
 	}
 
@@ -285,10 +279,46 @@ func (a app) runReviewDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(detail); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	writeJSON(w, http.StatusOK, detail)
+}
+
+func populateRunReviewEntry(
+	entry *recentRunReviewEntry,
+	acceptedAt time.Time,
+	verificationStartedAt, verifiedAt, reviewedAt sql.NullTime,
+	verificationError, reviewedByUsername sql.NullString,
+	suspicionReasonsJSON, verificationNotesJSON []byte,
+	now time.Time,
+) error {
+	if err := json.Unmarshal(suspicionReasonsJSON, &entry.SuspicionReasons); err != nil {
+		return err
 	}
+	if err := json.Unmarshal(verificationNotesJSON, &entry.VerificationNotes); err != nil {
+		return err
+	}
+	if verificationStartedAt.Valid {
+		value := verificationStartedAt.Time.UTC().Format(time.RFC3339)
+		entry.VerificationStartedAt = &value
+	}
+	if verifiedAt.Valid {
+		value := verifiedAt.Time.UTC().Format(time.RFC3339)
+		entry.VerifiedAt = &value
+	}
+	if verificationError.Valid && strings.TrimSpace(verificationError.String) != "" {
+		value := verificationError.String
+		entry.VerificationError = &value
+	}
+	if reviewedAt.Valid {
+		value := reviewedAt.Time.UTC().Format(time.RFC3339)
+		entry.ReviewedAt = &value
+	}
+	if reviewedByUsername.Valid && strings.TrimSpace(reviewedByUsername.String) != "" {
+		value := reviewedByUsername.String
+		entry.ReviewedByUsername = &value
+	}
+	entry.IsStalePending = isStalePendingReview(entry.VerificationStatus, acceptedAt.UTC(), verificationStartedAt, now)
+	entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
+	return nil
 }
 
 func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
@@ -330,6 +360,7 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 	}
 	defer rows.Close()
 
+	now := a.currentTime()
 	entries := make([]recentRunReviewEntry, 0, 20)
 	for rows.Next() {
 		var entry recentRunReviewEntry
@@ -365,39 +396,16 @@ func (a app) listRecentRunReviews() ([]recentRunReviewEntry, error) {
 			return nil, err
 		}
 
-		if err := json.Unmarshal(suspicionReasonsJSON, &entry.SuspicionReasons); err != nil {
+		if err := populateRunReviewEntry(
+			&entry, acceptedAt,
+			verificationStartedAt, verifiedAt, reviewedAt,
+			verificationError, reviewedByUsername,
+			suspicionReasonsJSON, verificationNotesJSON,
+			now,
+		); err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal(verificationNotesJSON, &entry.VerificationNotes); err != nil {
-			return nil, err
-		}
-		if verificationStartedAt.Valid {
-			value := verificationStartedAt.Time.UTC().Format(time.RFC3339)
-			entry.VerificationStartedAt = &value
-		}
-		if verifiedAt.Valid {
-			value := verifiedAt.Time.UTC().Format(time.RFC3339)
-			entry.VerifiedAt = &value
-		}
-		if verificationError.Valid && strings.TrimSpace(verificationError.String) != "" {
-			value := verificationError.String
-			entry.VerificationError = &value
-		}
-		if reviewedAt.Valid {
-			value := reviewedAt.Time.UTC().Format(time.RFC3339)
-			entry.ReviewedAt = &value
-		}
-		if reviewedByUsername.Valid && strings.TrimSpace(reviewedByUsername.String) != "" {
-			value := reviewedByUsername.String
-			entry.ReviewedByUsername = &value
-		}
-		entry.IsStalePending = isStalePendingReview(
-			entry.VerificationStatus,
-			acceptedAt.UTC(),
-			verificationStartedAt,
-			a.currentTime(),
-		)
-		entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
+
 		entries = append(entries, entry)
 	}
 
@@ -493,7 +501,7 @@ func (a app) requeueRunReview(runPublicID string) (int, error) {
 
 func validateRunReviewUpdate(request updateRunReviewRequest) error {
 	switch request.ReviewStatus {
-	case "unreviewed", "reviewed_clean", "confirmed_suspicious":
+	case reviewStatusUnreviewed, reviewStatusReviewedClean, reviewStatusConfirmedSuspicious:
 	default:
 		return errors.New("reviewStatus must be unreviewed, reviewed_clean, or confirmed_suspicious")
 	}
@@ -512,7 +520,7 @@ func (a app) updateRunReview(runPublicID string, reviewer currentUser, request u
 
 	reviewedAt := a.currentTime()
 	var reviewedByUserID *int64
-	if request.ReviewStatus == "unreviewed" {
+	if request.ReviewStatus == reviewStatusUnreviewed {
 		reviewedAt = time.Time{}
 	} else {
 		reviewedByUserID = &reviewer.ID
@@ -736,38 +744,22 @@ func (a app) loadRunReviewDetail(runPublicID string) (runReviewDetailResponse, e
 		return runReviewDetailResponse{}, err
 	}
 
-	if err := json.Unmarshal(suspicionReasonsJSON, &detail.Entry.SuspicionReasons); err != nil {
-		return runReviewDetailResponse{}, err
-	}
-	if err := json.Unmarshal(verificationNotesJSON, &detail.Entry.VerificationNotes); err != nil {
-		return runReviewDetailResponse{}, err
-	}
 	if len(replayTraceJSON) > 0 {
 		if err := json.Unmarshal(replayTraceJSON, &detail.ReplayTrace); err != nil {
 			return runReviewDetailResponse{}, err
 		}
 	}
-	if verificationStartedAt.Valid {
-		value := verificationStartedAt.Time.UTC().Format(time.RFC3339)
-		detail.Entry.VerificationStartedAt = &value
+
+	if err := populateRunReviewEntry(
+		&detail.Entry, acceptedAt,
+		verificationStartedAt, verifiedAt, reviewedAt,
+		verificationError, reviewedByUsername,
+		suspicionReasonsJSON, verificationNotesJSON,
+		a.currentTime(),
+	); err != nil {
+		return runReviewDetailResponse{}, err
 	}
-	if verifiedAt.Valid {
-		value := verifiedAt.Time.UTC().Format(time.RFC3339)
-		detail.Entry.VerifiedAt = &value
-	}
-	if verificationError.Valid && strings.TrimSpace(verificationError.String) != "" {
-		value := verificationError.String
-		detail.Entry.VerificationError = &value
-	}
-	if reviewedAt.Valid {
-		value := reviewedAt.Time.UTC().Format(time.RFC3339)
-		detail.Entry.ReviewedAt = &value
-	}
-	if reviewedByUsername.Valid && strings.TrimSpace(reviewedByUsername.String) != "" {
-		value := reviewedByUsername.String
-		detail.Entry.ReviewedByUsername = &value
-	}
-	detail.Entry.AcceptedAt = acceptedAt.UTC().Format(time.RFC3339)
+
 	challengeDate, err := time.Parse(dateLayoutISO, detail.Entry.Date)
 	if err != nil {
 		return runReviewDetailResponse{}, err

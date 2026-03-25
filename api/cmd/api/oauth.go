@@ -148,7 +148,7 @@ func (a app) oauthStartHandler(w http.ResponseWriter, r *http.Request, provider 
 		return
 	}
 
-	if err := setOAuthStateCookie(w, provider.Name, state); err != nil {
+	if err := setOAuthStateCookie(w, provider.Name, state, a.secureCookies); err != nil {
 		http.Error(w, "failed to store oauth state", http.StatusInternalServerError)
 		return
 	}
@@ -157,7 +157,7 @@ func (a app) oauthStartHandler(w http.ResponseWriter, r *http.Request, provider 
 }
 
 func (a app) oauthCallbackHandler(w http.ResponseWriter, r *http.Request, provider oauthProvider) {
-	defer clearOAuthStateCookie(w)
+	defer clearOAuthStateCookie(w, a.secureCookies)
 
 	if !validateOAuthStateCookie(r, provider.Name, r.URL.Query().Get("state")) {
 		http.Error(w, "invalid oauth state", http.StatusBadRequest)

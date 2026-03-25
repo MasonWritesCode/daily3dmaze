@@ -566,7 +566,7 @@ func TestOAuthCallbackHandlerReturnsForbiddenForBannedAccount(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "role", "is_banned"}).AddRow(7, "mason_dev", roleUser, true))
 
 	stateRecorder := httptest.NewRecorder()
-	if err := setOAuthStateCookie(stateRecorder, "google", "test-state"); err != nil {
+	if err := setOAuthStateCookie(stateRecorder, "google", "test-state", false); err != nil {
 		t.Fatalf("set oauth state cookie: %v", err)
 	}
 
@@ -642,7 +642,7 @@ func TestOAuthCallbackHandlerReturnsServerErrorWhenSessionCreationFails(t *testi
 		WillReturnError(errors.New("db unavailable"))
 
 	stateRecorder := httptest.NewRecorder()
-	if err := setOAuthStateCookie(stateRecorder, "google", "test-state"); err != nil {
+	if err := setOAuthStateCookie(stateRecorder, "google", "test-state", false); err != nil {
 		t.Fatalf("set oauth state cookie: %v", err)
 	}
 
@@ -720,11 +720,11 @@ func TestOAuthCallbackHandlerCreatesSessionAndRedirects(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	request := httptest.NewRequest(http.MethodGet, "/api/auth/oauth/google/callback?state=test-state&code=oauth-code", nil)
-	if err := setOAuthStateCookie(httptest.NewRecorder(), "google", "test-state"); err != nil {
+	if err := setOAuthStateCookie(httptest.NewRecorder(), "google", "test-state", false); err != nil {
 		t.Fatalf("set oauth state cookie: %v", err)
 	}
 	stateRecorder := httptest.NewRecorder()
-	if err := setOAuthStateCookie(stateRecorder, "google", "test-state"); err != nil {
+	if err := setOAuthStateCookie(stateRecorder, "google", "test-state", false); err != nil {
 		t.Fatalf("set oauth state cookie: %v", err)
 	}
 	for _, cookie := range stateRecorder.Result().Cookies() {

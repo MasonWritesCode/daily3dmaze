@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef, useState, type RefObject } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import type { DailyMaze, MazePoint } from "../../lib/game/maze";
 import { getAccentWallCells } from "../../lib/game/maze";
@@ -73,6 +73,7 @@ function FirstPersonView({
     depthBuffer: null,
     rowDistanceByY: null
   });
+  const accentWallCells = useMemo(() => getAccentWallCells(maze), [maze]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -153,7 +154,6 @@ function FirstPersonView({
     const height = canvas.height;
     const originX = playerPosition.x + 0.5;
     const originY = playerPosition.y + 0.5;
-    const accentWallCells = getAccentWallCells(maze);
     const fieldOfView = FIELD_OF_VIEW;
     const maxDistance = 24;
     const horizon = height * 0.5;
@@ -310,7 +310,7 @@ function FirstPersonView({
 
       if (wallSurface && wallImage) {
         const textureColumn = getTextureColumn(wallSurface, hitPointX, hitPointY);
-        context.save();
+        const prevAlpha = context.globalAlpha;
         context.globalAlpha = Math.max(0.55, Math.min(1, shade / 180));
         context.drawImage(
           wallImage,
@@ -323,7 +323,7 @@ function FirstPersonView({
           1,
           animatedWallHeight
         );
-        context.restore();
+        context.globalAlpha = prevAlpha;
       } else {
         context.fillStyle = `rgb(${shade}, ${shade + 10}, ${shade + 24})`;
         context.fillRect(column, wallTop, 1, animatedWallHeight);
@@ -369,7 +369,7 @@ function FirstPersonView({
         }
 
         const textureX = Math.floor((stripe / animatedSpriteWidth) * sprite.image.width);
-        context.save();
+        const prevAlpha = context.globalAlpha;
         context.globalAlpha = sprite.alpha;
         context.drawImage(
           sprite.image,
@@ -382,7 +382,7 @@ function FirstPersonView({
           1,
           animatedSpriteHeight
         );
-        context.restore();
+        context.globalAlpha = prevAlpha;
       }
     }
 

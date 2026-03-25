@@ -144,28 +144,27 @@ function PlayPageContent() {
         )}
 
         {status === "success" && maze && (
-          <MazeSessionView
-            maze={maze}
-            userRole={user?.role}
-            onRunSubmitted={() =>
-              setLeaderboardRefreshKey((currentKey) => currentKey + 1)
-            }
-          />
-        )}
-
-        {status === "success" && maze && (
-          <PlaySidebarPanels
-            mazeDate={maze.date}
-            user={user}
-            authStatus={authStatus}
-            leaderboardRefreshKey={leaderboardRefreshKey}
-            isCompactLandscape={isCompactLandscape}
-            onAuthChange={(nextUser) => {
-              setUser(nextUser);
-              setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
-              setLeaderboardRefreshKey((currentKey) => currentKey + 1);
-            }}
-          />
+          <>
+            <MazeSessionView
+              maze={maze}
+              userRole={user?.role}
+              onRunSubmitted={() =>
+                setLeaderboardRefreshKey((currentKey) => currentKey + 1)
+              }
+            />
+            <PlaySidebarPanels
+              mazeDate={maze.date}
+              user={user}
+              authStatus={authStatus}
+              leaderboardRefreshKey={leaderboardRefreshKey}
+              isCompactLandscape={isCompactLandscape}
+              onAuthChange={(nextUser) => {
+                setUser(nextUser);
+                setAuthStatus(nextUser ? "authenticated" : "unauthenticated");
+                setLeaderboardRefreshKey((currentKey) => currentKey + 1);
+              }}
+            />
+          </>
         )}
 
         {status === "error" && (

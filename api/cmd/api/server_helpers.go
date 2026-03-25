@@ -109,6 +109,11 @@ func (l *authRateLimiter) allow(action, key string) bool {
 		return false
 	}
 
+	if len(kept) == 0 {
+		delete(l.requestsByKey, bucketKey)
+		kept = nil
+	}
+
 	l.requestsByKey[bucketKey] = append(kept, now)
 	return true
 }

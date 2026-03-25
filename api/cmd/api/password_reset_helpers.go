@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -56,14 +55,27 @@ func (unavailablePasswordResetSender) SendEmailVerification(toEmail, username, v
 	return errors.New("email verification delivery is not configured")
 }
 
-func (s smtpPasswordResetSender) SendPasswordReset(toEmail, username, resetURL string, expiresAt time.Time) error {
-	body := strings.Join([]string{
+func (s smtpPasswordResetSender) sendEmail(toEmail, subject, body string) error {
+	message := strings.Join([]string{
 		fmt.Sprintf("To: %s", toEmail),
 		fmt.Sprintf("From: %s", s.from),
-		"Subject: Reset your daily3dmaze password",
+		fmt.Sprintf("Subject: %s", subject),
 		"MIME-Version: 1.0",
 		"Content-Type: text/plain; charset=UTF-8",
 		"",
+		body,
+	}, "\r\n")
+
+	var auth smtp.Auth
+	if s.username != "" {
+		auth = smtp.PlainAuth("", s.username, s.password, s.host)
+	}
+
+	return smtp.SendMail(s.addr, auth, s.from, []string{toEmail}, []byte(message))
+}
+
+func (s smtpPasswordResetSender) SendPasswordReset(toEmail, username, resetURL string, expiresAt time.Time) error {
+	body := strings.Join([]string{
 		fmt.Sprintf("Hi %s,", username),
 		"",
 		"Use the link below to reset your daily3dmaze password:",
@@ -74,22 +86,11 @@ func (s smtpPasswordResetSender) SendPasswordReset(toEmail, username, resetURL s
 		"",
 	}, "\r\n")
 
-	var auth smtp.Auth
-	if s.username != "" {
-		auth = smtp.PlainAuth("", s.username, s.password, s.host)
-	}
-
-	return smtp.SendMail(s.addr, auth, s.from, []string{toEmail}, []byte(body))
+	return s.sendEmail(toEmail, "Reset your daily3dmaze password", body)
 }
 
 func (s smtpPasswordResetSender) SendEmailVerification(toEmail, username, verificationURL string, expiresAt time.Time) error {
 	body := strings.Join([]string{
-		fmt.Sprintf("To: %s", toEmail),
-		fmt.Sprintf("From: %s", s.from),
-		"Subject: Verify your daily3dmaze email",
-		"MIME-Version: 1.0",
-		"Content-Type: text/plain; charset=UTF-8",
-		"",
 		fmt.Sprintf("Hi %s,", username),
 		"",
 		"Use the link below to verify your daily3dmaze email address:",
@@ -100,12 +101,7 @@ func (s smtpPasswordResetSender) SendEmailVerification(toEmail, username, verifi
 		"",
 	}, "\r\n")
 
-	var auth smtp.Auth
-	if s.username != "" {
-		auth = smtp.PlainAuth("", s.username, s.password, s.host)
-	}
-
-	return smtp.SendMail(s.addr, auth, s.from, []string{toEmail}, []byte(body))
+	return s.sendEmail(toEmail, "Verify your daily3dmaze email", body)
 }
 
 func configuredPasswordResetSender() passwordResetSender {
@@ -142,11 +138,10 @@ func (a app) findUserForPasswordReset(identifier string) (passwordResetUser, err
 		LIMIT 1
 	`
 
-	normalizedUsername := strings.ToLower(identifier)
-	normalizedEmail := strings.ToLower(identifier)
+	normalized := strings.ToLower(identifier)
 
 	var user passwordResetUser
-	err := a.db.QueryRow(query, normalizedUsername, normalizedEmail).Scan(
+	err := a.db.QueryRow(query, normalized, normalized).Scan(
 		&user.ID,
 		&user.Username,
 		&user.Email,
@@ -169,7 +164,7 @@ func (a app) issuePasswordReset(user passwordResetUser) error {
 		return err
 	}
 
-	expiresAt := a.now().UTC().Add(passwordResetLifetime)
+	expiresAt := a.currentTime().Add(passwordResetLifetime)
 	if _, err := a.db.Exec(`DELETE FROM password_reset_tokens WHERE user_id = $1 OR expires_at <= NOW()`, user.ID); err != nil {
 		return err
 	}
@@ -231,6 +226,8 @@ func (a app) completePasswordReset(token, newPassword string) error {
 		}
 	}()
 
+	tokenHash := hashToken(token)
+
 	var userID int64
 	var isBanned bool
 	if err = tx.QueryRow(`
@@ -240,7 +237,7 @@ func (a app) completePasswordReset(token, newPassword string) error {
 		WHERE password_reset_tokens.token_hash = $1
 			AND password_reset_tokens.used_at IS NULL
 			AND password_reset_tokens.expires_at > NOW()
-	`, hashToken(token)).Scan(&userID, &isBanned); err != nil {
+	`, tokenHash).Scan(&userID, &isBanned); err != nil {
 		return err
 	}
 	if isBanned {
@@ -251,11 +248,11 @@ func (a app) completePasswordReset(token, newPassword string) error {
 		return err
 	}
 
-	if _, err = tx.Exec(`UPDATE password_reset_tokens SET used_at = NOW() WHERE token_hash = $1`, hashToken(token)); err != nil {
+	if _, err = tx.Exec(`UPDATE password_reset_tokens SET used_at = NOW() WHERE token_hash = $1`, tokenHash); err != nil {
 		return err
 	}
 
-	if _, err = tx.Exec(`DELETE FROM password_reset_tokens WHERE user_id = $1 AND token_hash <> $2`, userID, hashToken(token)); err != nil {
+	if _, err = tx.Exec(`DELETE FROM password_reset_tokens WHERE user_id = $1 AND token_hash <> $2`, userID, tokenHash); err != nil {
 		return err
 	}
 
@@ -277,6 +274,8 @@ func (a app) completeEmailVerification(token string) (err error) {
 		}
 	}()
 
+	tokenHash := hashToken(token)
+
 	var userID int64
 	var isBanned bool
 	if err = tx.QueryRow(`
@@ -286,7 +285,7 @@ func (a app) completeEmailVerification(token string) (err error) {
 		WHERE email_verification_tokens.token_hash = $1
 			AND email_verification_tokens.used_at IS NULL
 			AND email_verification_tokens.expires_at > NOW()
-	`, hashToken(token)).Scan(&userID, &isBanned); err != nil {
+	`, tokenHash).Scan(&userID, &isBanned); err != nil {
 		return err
 	}
 	if isBanned {
@@ -301,33 +300,13 @@ func (a app) completeEmailVerification(token string) (err error) {
 		return err
 	}
 
-	if _, err = tx.Exec(`UPDATE email_verification_tokens SET used_at = NOW() WHERE token_hash = $1`, hashToken(token)); err != nil {
+	if _, err = tx.Exec(`UPDATE email_verification_tokens SET used_at = NOW() WHERE token_hash = $1`, tokenHash); err != nil {
 		return err
 	}
 
-	if _, err = tx.Exec(`DELETE FROM email_verification_tokens WHERE user_id = $1 AND token_hash <> $2`, userID, hashToken(token)); err != nil {
+	if _, err = tx.Exec(`DELETE FROM email_verification_tokens WHERE user_id = $1 AND token_hash <> $2`, userID, tokenHash); err != nil {
 		return err
 	}
 
 	return tx.Commit()
-}
-
-func (a app) passwordResetSenderConfigured() bool {
-	return a.passwordResetSender != nil
-}
-
-func (a app) passwordResetSenderName() string {
-	switch a.passwordResetSender.(type) {
-	case smtpPasswordResetSender:
-		return "smtp"
-	default:
-		return "log"
-	}
-}
-
-func (a app) passwordResetDebugInfo() string {
-	payload, _ := json.Marshal(map[string]string{
-		"sender": a.passwordResetSenderName(),
-	})
-	return string(payload)
 }

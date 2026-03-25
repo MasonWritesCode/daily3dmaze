@@ -25,6 +25,15 @@ import {
   type ReplayFrame
 } from "../../../../lib/game/maze";
 import { useLocale } from "../../../../lib/locale";
+import {
+  getSuspicionTone,
+  getVerificationTone,
+  getLocalizedRoleLabel,
+  getLocalizedVerificationStatus,
+  getLocalizedReviewStatus,
+  getLocalizedSuspicionReason
+} from "../helpers";
+import { getLocalizedDirectionLabel } from "../../../play/helpers";
 
 void styles;
 
@@ -36,58 +45,6 @@ interface ReviewDetailPageProps {
   params: Promise<{
     id: string;
   }>;
-}
-
-function getSuspicionTone(score: number): string {
-  if (score >= 50) {
-    return "high";
-  }
-
-  if (score >= 20) {
-    return "medium";
-  }
-
-  return "low";
-}
-
-function getVerificationTone(status: string): string {
-  if (status === "pending") {
-    return "pending";
-  }
-
-  if (status === "invalid") {
-    return "high";
-  }
-
-  if (status === "suspicious") {
-    return "medium";
-  }
-
-  return "low";
-}
-
-function getLocalizedDirectionLabel(
-  directionName: string | undefined,
-  labels: {
-    north: string;
-    east: string;
-    south: string;
-    west: string;
-  },
-  fallback: string
-): string {
-  switch (directionName) {
-    case "North":
-      return labels.north;
-    case "East":
-      return labels.east;
-    case "South":
-      return labels.south;
-    case "West":
-      return labels.west;
-    default:
-      return directionName ?? fallback;
-  }
 }
 
 function getLocalizedReplayActionLabel(
@@ -110,100 +67,6 @@ function getLocalizedReplayActionLabel(
       return labels.turnRight;
     default:
       return action;
-  }
-}
-
-function getLocalizedRoleLabel(
-  role: string | undefined,
-  labels: {
-    user: string;
-    moderator: string;
-    admin: string;
-  }
-): string {
-  switch (role) {
-    case "user":
-      return labels.user;
-    case "moderator":
-      return labels.moderator;
-    case "admin":
-      return labels.admin;
-    default:
-      return role ?? "";
-  }
-}
-
-function getLocalizedVerificationStatus(
-  status: string,
-  labels: {
-    pending: string;
-    verified: string;
-    suspicious: string;
-    invalid: string;
-  }
-): string {
-  switch (status) {
-    case "pending":
-      return labels.pending;
-    case "verified":
-      return labels.verified;
-    case "suspicious":
-      return labels.suspicious;
-    case "invalid":
-      return labels.invalid;
-    default:
-      return status;
-  }
-}
-
-function getLocalizedReviewStatus(
-  status: string,
-  labels: {
-    unreviewed: string;
-    reviewedClean: string;
-    confirmedSuspicious: string;
-  }
-): string {
-  if (status === "reviewed_clean") {
-    return labels.reviewedClean;
-  }
-
-  if (status === "confirmed_suspicious") {
-    return labels.confirmedSuspicious;
-  }
-
-  return labels.unreviewed;
-}
-
-function getLocalizedSuspicionReason(
-  reason: string,
-  labels: {
-    replayLengthMismatch: string;
-    timestampDrift: string;
-    highActionDensity: string;
-    rapidRepeatedTurns: string;
-    blockedMoveAttempts: string;
-    replayDoesNotReachExit: string;
-    actionsAfterExit: string;
-  }
-): string {
-  switch (reason) {
-    case "replay_length_mismatch":
-      return labels.replayLengthMismatch;
-    case "timestamp_drift":
-      return labels.timestampDrift;
-    case "high_action_density":
-      return labels.highActionDensity;
-    case "rapid_repeated_turns":
-      return labels.rapidRepeatedTurns;
-    case "blocked_move_attempts":
-      return labels.blockedMoveAttempts;
-    case "replay_does_not_reach_exit":
-      return labels.replayDoesNotReachExit;
-    case "actions_after_exit":
-      return labels.actionsAfterExit;
-    default:
-      return reason;
   }
 }
 

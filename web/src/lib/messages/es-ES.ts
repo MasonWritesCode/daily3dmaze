@@ -403,7 +403,9 @@ export const esESMessages = {
       resetSuccess:
         "Tu contraseña se ha restablecido. Puedes volver al reto e iniciar sesión.",
       tokenMissing:
-        "No se encontró un token de restablecimiento en el enlace. Solicita un nuevo correo de restablecimiento abajo."
+        "No se encontró un token de restablecimiento en el enlace. Solicita un nuevo correo de restablecimiento abajo.",
+      requestError: "No se pudo enviar el enlace de restablecimiento ahora mismo.",
+      resetError: "No se pudo restablecer la contraseña ahora mismo."
     },
     emailVerification: {
       title: "Verificar correo",

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -48,7 +47,7 @@ func (a app) oauthHTTPClient() *http.Client {
 	return http.DefaultClient
 }
 
-func setOAuthStateCookie(w http.ResponseWriter, providerName, state string) error {
+func setOAuthStateCookie(w http.ResponseWriter, providerName, state string, secure bool) error {
 	payload, err := json.Marshal(oauthStateCookieValue{
 		Provider: providerName,
 		State:    state,
@@ -63,7 +62,7 @@ func setOAuthStateCookie(w http.ResponseWriter, providerName, state string) erro
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   os.Getenv("APP_ENV") == "production",
+		Secure:   secure,
 		Expires:  time.Now().UTC().Add(oauthStateLifetime),
 		MaxAge:   int(oauthStateLifetime.Seconds()),
 	})
@@ -94,14 +93,14 @@ func validateOAuthStateCookie(r *http.Request, providerName, state string) bool 
 	return payload.Provider == providerName && payload.State == state
 }
 
-func clearOAuthStateCookie(w http.ResponseWriter) {
+func clearOAuthStateCookie(w http.ResponseWriter, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     oauthStateCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   os.Getenv("APP_ENV") == "production",
+		Secure:   secure,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
@@ -444,9 +443,10 @@ func (a app) usernameExists(username string) (bool, error) {
 }
 
 func normalizeOAuthUsername(candidate, providerName string) string {
+	fallback := providerName + "_user"
 	lower := strings.ToLower(strings.TrimSpace(candidate))
 	if lower == "" {
-		return providerName + "_user"
+		return fallback
 	}
 
 	var builder strings.Builder
@@ -466,7 +466,7 @@ func normalizeOAuthUsername(candidate, providerName string) string {
 
 	normalized := strings.Trim(builder.String(), "_-")
 	if normalized == "" {
-		normalized = providerName + "_user"
+		normalized = fallback
 	}
 	if len(normalized) > maxUsernameLength {
 		normalized = normalized[:maxUsernameLength]

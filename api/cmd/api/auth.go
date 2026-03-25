@@ -192,7 +192,7 @@ func (a app) logoutHandler(w http.ResponseWriter, r *http.Request) {
 		_ = a.deleteSessionByToken(cookie.Value)
 	}
 
-	clearSessionCookie(w)
+	clearSessionCookie(w, a.secureCookies)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -229,15 +229,8 @@ func (a app) meHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func validateAuthRequest(request authRequest) error {
-	username := strings.TrimSpace(request.Username)
-	if len(username) < minUsernameLength || len(username) > maxUsernameLength {
-		return errors.New("username must be between 3 and 32 characters")
-	}
-
-	for _, char := range username {
-		if !strings.ContainsRune(usernameAllowedChars, char) {
-			return errors.New("username contains invalid characters")
-		}
+	if err := validateUsername(request.Username); err != nil {
+		return err
 	}
 
 	if len(request.Password) < minPasswordLength {

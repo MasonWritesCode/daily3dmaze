@@ -569,7 +569,9 @@ export const enUSMessages = {
       resetSuccess:
         "Your password has been reset. You can return to the challenge and sign in.",
       tokenMissing:
-        "No reset token was found in the link. Request a new password reset email below."
+        "No reset token was found in the link. Request a new password reset email below.",
+      requestError: "Unable to send a reset link right now.",
+      resetError: "Unable to reset your password right now."
     },
     emailVerification: {
       title: "Verify email",

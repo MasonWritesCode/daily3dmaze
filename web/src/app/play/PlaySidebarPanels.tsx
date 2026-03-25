@@ -149,7 +149,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
       default:
         return {
           message,
-          invalidFields: mode === "login" ? ["username", "password"] : ["username", "password"]
+          invalidFields: ["username", "password"]
         };
     }
   }
@@ -195,7 +195,7 @@ function AuthPanel({ user, onAuthChange }: AuthPanelProps) {
           ? describeAuthError(error.message)
           : {
               message: uiText.authErrors.authenticationFailed,
-              invalidFields: mode === "login" ? ["username", "password"] : ["username", "password"]
+              invalidFields: ["username", "password"]
             };
       setStatus("error");
       setErrorMessage(describedError.message);

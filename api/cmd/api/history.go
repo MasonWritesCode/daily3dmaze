@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -62,10 +61,7 @@ func (a app) historyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(historyResponse{Entries: entries}); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	writeJSON(w, http.StatusOK, historyResponse{Entries: entries})
 }
 
 func (a app) historyDayHandler(w http.ResponseWriter, r *http.Request) {
@@ -80,14 +76,9 @@ func (a app) historyDayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	date := r.URL.Query().Get("date")
-	if err := validateLeaderboardDate(date); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	challengeDate, err := time.Parse(dateLayoutISO, date)
+	challengeDate, err := validateLeaderboardDate(date)
 	if err != nil {
-		http.Error(w, "date must use YYYY-MM-DD format", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -97,18 +88,13 @@ func (a app) historyDayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := historyDayResponse{
-		Challenge: generateDailyMaze(challengeDate.UTC()),
+	writeJSON(w, http.StatusOK, historyDayResponse{
+		Challenge: generateDailyMaze(challengeDate),
 		Leaderboard: leaderboardResponse{
 			Date:    date,
 			Entries: entries,
 		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-	}
+	})
 }
 
 func parseHistoryLimit(raw string) (int, error) {

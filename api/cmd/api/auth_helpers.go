@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -74,7 +73,7 @@ func (a app) startSession(w http.ResponseWriter, user currentUser) error {
 	}
 
 	tokenHash := hashToken(token)
-	expiresAt := time.Now().UTC().Add(sessionLifetime)
+	expiresAt := a.currentTime().Add(sessionLifetime)
 
 	const query = `
 		INSERT INTO sessions (user_id, token_hash, expires_at)
@@ -85,7 +84,7 @@ func (a app) startSession(w http.ResponseWriter, user currentUser) error {
 		return err
 	}
 
-	setSessionCookie(w, token, expiresAt)
+	setSessionCookie(w, token, expiresAt, a.secureCookies)
 	return nil
 }
 
@@ -164,14 +163,14 @@ func hashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func setSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
+func setSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   os.Getenv("APP_ENV") == "production",
+		Secure:   secure,
 		Expires:  expiresAt,
 		MaxAge:   int(sessionLifetime.Seconds()),
 	})
@@ -201,14 +200,14 @@ func registrationConflictMessage(err error) string {
 	}
 }
 
-func clearSessionCookie(w http.ResponseWriter) {
+func clearSessionCookie(w http.ResponseWriter, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   os.Getenv("APP_ENV") == "production",
+		Secure:   secure,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
@@ -218,6 +217,21 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func validateUsername(username string) error {
+	trimmed := strings.TrimSpace(username)
+	if len(trimmed) < minUsernameLength || len(trimmed) > maxUsernameLength {
+		return errors.New("username must be between 3 and 32 characters")
+	}
+
+	for _, char := range trimmed {
+		if !strings.ContainsRune(usernameAllowedChars, char) {
+			return errors.New("username contains invalid characters")
+		}
+	}
+
+	return nil
 }
 
 func roleAllows(userRole string, allowedRoles ...string) bool {

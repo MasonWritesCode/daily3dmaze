@@ -11,24 +11,9 @@ import {
 } from "../../../lib/api";
 import { formatElapsedTime } from "../../../lib/game/maze";
 import { useLocale } from "../../../lib/locale";
+import { getLeaderboardRankTone } from "../../play/helpers";
 
 type PageStatus = "loading" | "success" | "error";
-
-function getLeaderboardRankTone(rank: number): string {
-  if (rank === 1) {
-    return "gold";
-  }
-
-  if (rank === 2) {
-    return "silver";
-  }
-
-  if (rank === 3) {
-    return "bronze";
-  }
-
-  return "standard";
-}
 
 export default function HistoryDayPage() {
   const { formatCount, messages } = useLocale();

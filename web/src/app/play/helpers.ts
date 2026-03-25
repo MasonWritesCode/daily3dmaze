@@ -22,7 +22,8 @@ export interface VerificationLabels {
 
 export function getLocalizedDirectionLabel(
   directionName: string | undefined,
-  directions: DirectionLabels
+  directions: DirectionLabels,
+  fallback = ""
 ): string {
   switch (directionName) {
     case "North":
@@ -34,7 +35,7 @@ export function getLocalizedDirectionLabel(
     case "West":
       return directions.west;
     default:
-      return directionName ?? "";
+      return directionName ?? fallback;
   }
 }
 

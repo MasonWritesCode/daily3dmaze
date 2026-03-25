@@ -133,11 +133,11 @@ func TestValidateRunSubmission(t *testing.T) {
 func TestValidateLeaderboardDate(t *testing.T) {
 	t.Parallel()
 
-	if err := validateLeaderboardDate("2026-03-21"); err != nil {
+	if _, err := validateLeaderboardDate("2026-03-21"); err != nil {
 		t.Fatalf("expected valid leaderboard date, got error: %v", err)
 	}
 
-	if err := validateLeaderboardDate("21/03/2026"); err == nil {
+	if _, err := validateLeaderboardDate("21/03/2026"); err == nil {
 		t.Fatal("expected invalid leaderboard date to fail validation")
 	}
 }
