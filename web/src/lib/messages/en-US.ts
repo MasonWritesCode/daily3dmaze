@@ -439,7 +439,7 @@ export const enUSMessages = {
     loadingLeaderboard: "Loading leaderboard...",
     leaderboardError: "Unable to load the leaderboard right now.",
     mazeError:
-      "Unable to load the daily maze metadata. Make sure the API is running on http://localhost:8080.",
+      "Unable to load the daily maze metadata. Check that the API is reachable at the configured API base URL.",
     archiveViewing: "Viewing archived challenge",
     archiveStatusToday: "Today",
     archiveStatusPrefix: "Archive",

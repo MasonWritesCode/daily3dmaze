@@ -63,3 +63,11 @@ At this stage, Compose is only responsible for the local Postgres service.
 See [`docs/pre-deploy-checklist.md`](/Users/mason/git/daily3dmaze/docs/pre-deploy-checklist.md) for the production security, configuration, QA, and rollout checklist.
 
 If you are setting up the first hosted environment, start with [`docs/staging-config-checklist.md`](/Users/mason/git/daily3dmaze/docs/staging-config-checklist.md).
+
+## Hosting
+
+Production hosting assets live in:
+
+- [docker-compose.hosting.yml](/Users/mason/git/daily3dmaze/docker-compose.hosting.yml)
+- [docs/hosting.md](/Users/mason/git/daily3dmaze/docs/hosting.md)
+- [.env.localhost.example](/Users/mason/git/daily3dmaze/.env.localhost.example) for local Docker-based hosting smoke tests

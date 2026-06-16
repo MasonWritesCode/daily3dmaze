@@ -3,7 +3,9 @@
 # Environment files
 .env
 .env.local
+.env.localhost
 .env.*.local
+hosting.env
 
 # Node / frontend
 node_modules/

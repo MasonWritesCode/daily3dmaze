@@ -1,0 +1,114 @@
+name: daily3dmaze
+
+services:
+  daily3dmaze-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+        NEXT_PUBLIC_GITHUB_OAUTH_ENABLED: ${NEXT_PUBLIC_GITHUB_OAUTH_ENABLED:-false}
+        NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED: ${NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED:-false}
+    depends_on:
+      daily3dmaze-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000 >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    ports:
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_HOST_PORT:-3001}:3000"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  daily3dmaze-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    depends_on:
+      daily3dmaze-postgres:
+        condition: service_healthy
+    environment:
+      API_BASE_URL: ${API_BASE_URL}
+      API_PORT: "8080"
+      APP_ENV: ${APP_ENV:-production}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@daily3dmaze-postgres:5432/${POSTGRES_DB}?sslmode=disable
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-true}
+      WEB_ALLOWED_ORIGINS: ${WEB_ALLOWED_ORIGINS}
+      WEB_BASE_URL: ${WEB_BASE_URL}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    ports:
+      - "${API_BIND_IP:-127.0.0.1}:${API_HOST_PORT:-8081}:8080"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  daily3dmaze-worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.worker
+    depends_on:
+      daily3dmaze-api:
+        condition: service_healthy
+      daily3dmaze-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@daily3dmaze-postgres:5432/${POSTGRES_DB}?sslmode=disable
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  daily3dmaze-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth=scram-sha-256
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - daily3dmaze-postgres-data:/var/lib/postgresql/data
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    depends_on:
+      daily3dmaze-web:
+        condition: service_healthy
+      daily3dmaze-api:
+        condition: service_healthy
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  daily3dmaze-postgres-data:

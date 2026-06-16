@@ -25,6 +25,8 @@ const contentSecurityPolicy = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   allowedDevOrigins: devAllowedOrigins,
+  output: "standalone",
+  poweredByHeader: false,
   async headers() {
     return [
       {
