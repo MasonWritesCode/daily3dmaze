@@ -38,6 +38,8 @@ Recommended defaults to keep:
 - `TRUST_PROXY_HEADERS=true`
 - `WEB_BIND_IP=127.0.0.1`
 - `API_BIND_IP=127.0.0.1`
+- `POSTGRES_BIND_IP=127.0.0.1`
+- `POSTGRES_HOST_PORT=5433`
 
 ## Local smoke testing on a laptop
 
@@ -47,6 +49,7 @@ Important local values:
 
 - `WEB_BASE_URL=http://localhost:3001`
 - `API_BASE_URL=http://localhost:8081`
+- `POSTGRES_HOST_PORT=5433`
 - `WEB_ALLOWED_ORIGINS=http://localhost:3001`
 - `NEXT_PUBLIC_API_BASE_URL=http://localhost:8081`
 - `TRUST_PROXY_HEADERS=false`
@@ -59,6 +62,8 @@ docker compose -f docker-compose.hosting.yml --env-file .env.localhost up --buil
 ```
 
 Why the ports matter: the hosting compose stack publishes the web app on `3001` and the API on `8081`. If you leave `NEXT_PUBLIC_API_BASE_URL` set to `http://localhost:8080`, the browser will call the wrong port even if the API container is healthy.
+
+The stack also publishes Postgres on `127.0.0.1:5433` by default. That keeps the database off your LAN and WAN while still allowing host-local tools such as DBeaver to connect.
 
 ## 2. Cloudflare Tunnel routes
 
@@ -80,6 +85,7 @@ In Dockge, paste the stack YAML from [docker-compose.hosting.yml](/Users/mason/g
 ```bash
 curl http://127.0.0.1:3001
 curl http://127.0.0.1:8081/health
+pg_isready -h 127.0.0.1 -p 5433 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 ```
 
 If you change any `NEXT_PUBLIC_*` value, rebuild `daily3dmaze-web`. Those values are baked into the Next.js build output.
@@ -89,7 +95,50 @@ Then verify the public hosts:
 - `https://daily3dmaze.masonwritescode.com`
 - `https://daily3dmaze-api.masonwritescode.com/health`
 
-## 5. App-specific production notes
+## 5. Private DBeaver access on TrueNAS
+
+Use DBeaver through an SSH tunnel over Tailscale rather than publishing Postgres on your WAN IP or putting it behind Cloudflare Tunnel.
+
+### Server-side expectations
+
+- `POSTGRES_BIND_IP=127.0.0.1`
+- `POSTGRES_HOST_PORT=5433`
+- no pfSense port forward for `5432` or `5433`
+- no Cloudflare public hostname for Postgres
+- SSH enabled on the TrueNAS host
+- Tailscale running on the TrueNAS host and on the client machine
+
+With that setup, Postgres only listens on the TrueNAS host loopback interface, so it is reachable from:
+
+- containers in the compose network via `daily3dmaze-postgres:5432`
+- the TrueNAS host itself via `127.0.0.1:5433`
+- remote admin machines only through an authenticated SSH tunnel
+
+### DBeaver connection settings
+
+Main PostgreSQL tab:
+
+- Host: `127.0.0.1`
+- Port: `5433`
+- Database: your `POSTGRES_DB` value
+- Username: your `POSTGRES_USER` value
+- Password: your `POSTGRES_PASSWORD` value
+
+SSH tab:
+
+- Host/IP: your TrueNAS Tailscale IP or MagicDNS hostname
+- Port: `22`
+- Username: your TrueNAS admin user
+- Authentication: SSH key preferred
+
+### Security notes
+
+- Keep SSH key-based if possible.
+- Restrict SSH to Tailscale or management VLAN access in pfSense where practical.
+- Use a dedicated Postgres user for day-to-day DB inspection instead of a superuser if you do not need schema-changing access.
+- Leave `POSTGRES_BIND_IP` on `127.0.0.1` unless you have a very specific reason to widen it.
+
+## 6. App-specific production notes
 
 - The API already runs embedded migrations on startup.
 - The worker must be deployed alongside the API or runs will stay in `pending`.
@@ -97,7 +146,7 @@ Then verify the public hosts:
 - If SMTP is not configured in production, local signup can still create accounts, but password reset and email verification delivery will not function.
 - OAuth should stay disabled until callback URLs and credentials are configured for the deployed hosts.
 
-## 6. Rollout checklist
+## 7. Rollout checklist
 
 After the stack is live, work through:
 
